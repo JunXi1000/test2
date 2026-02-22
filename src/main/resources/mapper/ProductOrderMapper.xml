@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.ProductOrderMapper">
+    <!-- 分页查询 -->
+    <select id="queryPage"  resultType="com.project.platform.entity.ProductOrder">
+        SELECT product_order.*
+        ,product.name AS productName
+        ,shop.name AS shopName
+        ,user.username AS username
+        FROM product_order
+        LEFT JOIN product ON product_order.product_id=product.id
+        LEFT JOIN shop ON product_order.shop_id=shop.id
+        LEFT JOIN user ON product_order.user_id=user.id
+        <include refid="queryConditions"/>
+        ORDER BY product_order.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+    <!-- 查询总数 -->
+    <select id="queryCount"  resultType="int">
+        SELECT count(product_order.id) FROM product_order
+        LEFT JOIN product ON product_order.product_id=product.id
+        LEFT JOIN shop ON product_order.shop_id=shop.id
+        LEFT JOIN user ON product_order.user_id=user.id
+        <include refid="queryConditions"/>
+    </select>
+
+    <!-- 查询条件 -->
+    <sql id="queryConditions">
+        <where>
+            <if test="query.productId != null and query.productId != 0">
+                AND product_order.product_id = #{query.productId}
+            </if>
+            <if test="query.shopId != null and query.shopId != 0">
+                AND product_order.shop_id = #{query.shopId}
+            </if>
+            <if test="query.userId != null and query.userId != 0">
+                AND product_order.user_id = #{query.userId}
+            </if>
+            <if test="query.username != null and query.username.trim() != ''">
+                AND user.username LIKE CONCAT('%', #{query.username}, '%')
+            </if>
+            <if test="query.status != null and query.status.trim() != ''">
+                AND product_order.status = #{query.status}
+            </if>
+            <if test="query.consigneeName != null and query.consigneeName.trim() != ''">
+                AND product_order.consignee_name LIKE CONCAT('%', #{query.consigneeName}, '%')
+            </if>
+            <if test="query.consigneeTel != null and query.consigneeTel.trim() != ''">
+                AND product_order.consignee_tel LIKE CONCAT('%', #{query.consigneeTel}, '%')
+            </if>
+            <if test="query.consigneeAddress != null and query.consigneeAddress.trim() != ''">
+                AND product_order.consignee_address LIKE CONCAT('%', #{query.consigneeAddress}, '%')
+            </if>
+            <if test="query.remark != null and query.remark.trim() != ''">
+                AND product_order.remark LIKE CONCAT('%', #{query.remark}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.project.platform.entity.ProductOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_order
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="productId != null">product_id,</if>
+            <if test="shopId != null">shop_id,</if>
+            <if test="totalMoney != null">total_money,</if>
+            <if test="quantity != null">quantity,</if>
+            <if test="userId != null">user_id,</if>
+            <if test="status != null">status,</if>
+            <if test="consigneeName != null">consignee_name,</if>
+            <if test="consigneeTel != null">consignee_tel,</if>
+            <if test="consigneeAddress != null">consignee_address,</if>
+            <if test="trackingNumber != null">tracking_number,</if>
+            <if test="remark != null">remark,</if>
+            <if test="orderEvaluateId != null">order_evaluate_id,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="productId != null">#{productId},</if>
+            <if test="shopId != null">#{shopId},</if>
+            <if test="totalMoney != null">#{totalMoney},</if>
+            <if test="quantity != null">#{quantity},</if>
+            <if test="userId != null">#{userId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="consigneeName != null">#{consigneeName},</if>
+            <if test="consigneeTel != null">#{consigneeTel},</if>
+            <if test="consigneeAddress != null">#{consigneeAddress},</if>
+            <if test="trackingNumber != null">#{trackingNumber},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="orderEvaluateId != null">#{orderEvaluateId},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+
+
+    </insert>
+
+    <!-- 更新 -->
+    <update id="updateById" parameterType="com.project.platform.entity.ProductOrder">
+        UPDATE product_order
+        <set>
+            <if test="productId != null">
+                product_id = #{productId},
+            </if>
+            <if test="shopId != null">
+                shop_id = #{shopId},
+            </if>
+            <if test="totalMoney != null">
+                total_money = #{totalMoney},
+            </if>
+            <if test="quantity != null">
+                quantity = #{quantity},
+            </if>
+            <if test="userId != null">
+                user_id = #{userId},
+            </if>
+            <if test="status != null">
+                status = #{status},
+            </if>
+            <if test="consigneeName != null">
+                consignee_name = #{consigneeName},
+            </if>
+            <if test="consigneeTel != null">
+                consignee_tel = #{consigneeTel},
+            </if>
+            <if test="consigneeAddress != null">
+                consignee_address = #{consigneeAddress},
+            </if>
+            <if test="trackingNumber != null">
+                tracking_number = #{trackingNumber},
+            </if>
+            <if test="remark != null">
+                remark = #{remark},
+            </if>
+            <if test="orderEvaluateId != null">
+                order_evaluate_id = #{orderEvaluateId},
+            </if>
+            <if test="createTime != null">
+                create_time = #{createTime},
+            </if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+
+    <!-- 根据ID列表删除 -->
+    <delete id="removeByIds">
+        DELETE FROM product_order
+        WHERE id IN
+        <foreach item="id" collection="list" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

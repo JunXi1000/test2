@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.ProductCollectMapper">
+    <!-- 分页查询 -->
+    <select id="queryPage"  resultType="com.project.platform.entity.ProductCollect">
+        SELECT product_collect.*
+        ,product.name AS productName
+        ,product.main_img AS productMainImg
+        ,user.username AS username
+        FROM product_collect
+        LEFT JOIN product ON product_collect.product_id=product.id
+        LEFT JOIN user ON product_collect.user_id=user.id
+        <include refid="queryConditions"/>
+        ORDER BY product_collect.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+    <!-- 查询总数 -->
+    <select id="queryCount"  resultType="int">
+        SELECT count(product_collect.id) FROM product_collect
+        LEFT JOIN product ON product_collect.product_id=product.id
+        LEFT JOIN user ON product_collect.user_id=user.id
+        <include refid="queryConditions"/>
+    </select>
+
+    <!-- 查询条件 -->
+    <sql id="queryConditions">
+        <where>
+            <if test="query.productId != null and query.productId != 0">
+                AND product_collect.product_id = #{query.productId}
+            </if>
+            <if test="query.productName != null and query.productName.trim() != ''">
+                AND product.name LIKE CONCAT('%', #{query.productName}, '%')
+            </if>
+            <if test="query.userId != null and query.userId != 0">
+                AND product_collect.user_id = #{query.userId}
+            </if>
+            <if test="query.username != null and query.username.trim() != ''">
+                AND user.username LIKE CONCAT('%', #{query.username}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.project.platform.entity.ProductCollect" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_collect
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="productId != null">product_id,</if>
+            <if test="userId != null">user_id,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="productId != null">#{productId},</if>
+            <if test="userId != null">#{userId},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+
+
+    </insert>
+
+    <!-- 更新 -->
+    <update id="updateById" parameterType="com.project.platform.entity.ProductCollect">
+        UPDATE product_collect
+        <set>
+            <if test="productId != null">
+                product_id = #{productId},
+            </if>
+            <if test="userId != null">
+                user_id = #{userId},
+            </if>
+            <if test="createTime != null">
+                create_time = #{createTime},
+            </if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+
+    <!-- 根据ID列表删除 -->
+    <delete id="removeByIds">
+        DELETE FROM product_collect
+        WHERE id IN
+        <foreach item="id" collection="list" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

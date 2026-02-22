@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.ShopCollectMapper">
+    <!-- 分页查询 -->
+    <select id="queryPage"  resultType="com.project.platform.entity.ShopCollect">
+        SELECT shop_collect.*
+        ,shop.name AS shopName
+        ,shop.avatar_url AS shopAvatar
+        ,user.username AS userName
+        FROM shop_collect
+        LEFT JOIN shop ON shop_collect.shop_id=shop.id
+        LEFT JOIN user ON shop_collect.user_id=user.id
+        <include refid="queryConditions"/>
+        ORDER BY shop_collect.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+    <!-- 查询总数 -->
+    <select id="queryCount"  resultType="int">
+        SELECT count(shop_collect.id) FROM shop_collect
+        LEFT JOIN shop ON shop_collect.shop_id=shop.id
+        LEFT JOIN user ON shop_collect.user_id=user.id
+        <include refid="queryConditions"/>
+    </select>
+
+    <!-- 查询条件 -->
+    <sql id="queryConditions">
+        <where>
+            <if test="query.shopId != null and query.shopId != 0">
+                AND shop_collect.shop_id = #{query.shopId}
+            </if>
+            <if test="query.shopName != null and query.shopName.trim() != ''">
+                AND shop.name LIKE CONCAT('%', #{query.shopName}, '%')
+            </if>
+            <if test="query.userId != null and query.userId != 0">
+                AND shop_collect.user_id = #{query.userId}
+            </if>
+            <if test="query.userName != null and query.userName.trim() != ''">
+                AND user.username LIKE CONCAT('%', #{query.userName}, '%')
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.project.platform.entity.ShopCollect" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO shop_collect
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="shopId != null">shop_id,</if>
+            <if test="userId != null">user_id,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="shopId != null">#{shopId},</if>
+            <if test="userId != null">#{userId},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+
+
+    </insert>
+
+    <!-- 更新 -->
+    <update id="updateById" parameterType="com.project.platform.entity.ShopCollect">
+        UPDATE shop_collect
+        <set>
+            <if test="shopId != null">
+                shop_id = #{shopId},
+            </if>
+            <if test="userId != null">
+                user_id = #{userId},
+            </if>
+            <if test="createTime != null">
+                create_time = #{createTime},
+            </if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+
+    <!-- 根据ID列表删除 -->
+    <delete id="removeByIds">
+        DELETE FROM shop_collect
+        WHERE id IN
+        <foreach item="id" collection="list" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
