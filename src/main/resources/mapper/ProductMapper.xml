@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.ProductMapper">
+    <!-- 分页查询 -->
+    <select id="queryPage"  resultType="com.project.platform.entity.Product">
+        SELECT product.*
+        ,shop.name AS shopName
+        ,product_type.name AS productTypeName
+        FROM product
+        LEFT JOIN shop ON product.shop_id=shop.id
+        LEFT JOIN product_type ON product.product_type_id=product_type.id
+        <include refid="queryConditions"/>
+        ORDER BY product.id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+    <!-- 查询总数 -->
+    <select id="queryCount"  resultType="int">
+        SELECT count(product.id) FROM product
+        LEFT JOIN shop ON product.shop_id=shop.id
+        LEFT JOIN product_type ON product.product_type_id=product_type.id
+        <include refid="queryConditions"/>
+    </select>
+
+    <!-- 查询条件 -->
+    <sql id="queryConditions">
+        <where>
+            <if test="query.name != null and query.name.trim() != ''">
+                AND product.name LIKE CONCAT('%', #{query.name}, '%')
+            </if>
+            <if test="query.productTypeId != null and query.productTypeId != 0">
+                AND product.product_type_id = #{query.productTypeId}
+            </if>
+            <if test="query.shopId != null and query.shopId != 0">
+                AND product.shop_id = #{query.shopId}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 插入 -->
+    <insert id="insert" parameterType="com.project.platform.entity.Product" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null">name,</if>
+            <if test="mainImg != null">main_img,</if>
+            <if test="imgList != null">img_list,</if>
+            <if test="productTypeId != null">product_type_id,</if>
+            <if test="price != null">price,</if>
+            <if test="stock != null">stock,</if>
+            <if test="salesVolume != null">sales_volume,</if>
+            <if test="intro != null">intro,</if>
+            <if test="shopId != null">shop_id,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="name != null">#{name},</if>
+            <if test="mainImg != null">#{mainImg},</if>
+            <if test="imgList != null">#{imgList},</if>
+            <if test="productTypeId != null">#{productTypeId},</if>
+            <if test="price != null">#{price},</if>
+            <if test="stock != null">#{stock},</if>
+            <if test="salesVolume != null">#{salesVolume},</if>
+            <if test="intro != null">#{intro},</if>
+            <if test="shopId != null">#{shopId},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+
+
+    </insert>
+
+    <!-- 更新 -->
+    <update id="updateById" parameterType="com.project.platform.entity.Product">
+        UPDATE product
+        <set>
+            <if test="name != null">
+                name = #{name},
+            </if>
+            <if test="mainImg != null">
+                main_img = #{mainImg},
+            </if>
+            <if test="imgList != null">
+                img_list = #{imgList},
+            </if>
+            <if test="productTypeId != null">
+                product_type_id = #{productTypeId},
+            </if>
+            <if test="price != null">
+                price = #{price},
+            </if>
+            <if test="stock != null">
+                stock = #{stock},
+            </if>
+            <if test="salesVolume != null">
+                sales_volume = #{salesVolume},
+            </if>
+            <if test="intro != null">
+                intro = #{intro},
+            </if>
+            <if test="shopId != null">
+                shop_id = #{shopId},
+            </if>
+            <if test="createTime != null">
+                create_time = #{createTime},
+            </if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+
+    <!-- 根据ID列表删除 -->
+    <delete id="removeByIds">
+        DELETE FROM product
+        WHERE id IN
+        <foreach item="id" collection="list" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>
