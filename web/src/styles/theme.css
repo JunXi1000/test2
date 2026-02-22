@@ -1,0 +1,219 @@
+/* B站风格主题配色文件 */
+:root {
+  /* 主色调 - B站粉色系 */
+  --primary-color: #fb7299;
+  --primary-light: #ff9db4;
+  --primary-dark: #e85d7a;
+  --primary-hover: #ff8fa3;
+  
+  /* B站特色渐变 */
+  --primary-gradient: linear-gradient(135deg, #fb7299, #ff9db4);
+  --bilibili-gradient: linear-gradient(45deg, #fb7299 0%, #00a1d6 100%);
+  --card-gradient: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  --danger-gradient: linear-gradient(135deg, #f56c6c, #f78989);
+  --bg-gradient: linear-gradient(to bottom, #f4f5f7, #ffffff);
+  --header-gradient: linear-gradient(90deg, #ffffff 0%, #fafbfc 100%);
+  
+  /* B站辅助色 */
+  --secondary-color: #00a1d6;
+  --secondary-light: #33b3e0;
+  --secondary-dark: #0088b8;
+  --accent-color: #ff6b35;
+  
+  /* 功能色 */
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --danger-color: #ff4d4f;
+  --info-color: #1890ff;
+  
+  /* 中性色 - B站风格 */
+  --text-primary: #18191c;
+  --text-regular: #61666d;
+  --text-secondary: #9499a0;
+  --text-placeholder: #c9ccd0;
+  --text-light: #ffffff;
+  
+  /* 边框颜色 */
+  --border-color: #e3e5e7;
+  --border-light: #f1f2f3;
+  --border-lighter: #f6f7f8;
+  --border-primary: #fb7299;
+  
+  /* 背景色 - B站风格 */
+  --bg-color: #ffffff;
+  --bg-light: #f4f5f7;
+  --bg-lighter: #fafbfc;
+  --bg-dark: #f1f2f3;
+  --bg-hover: #f6f7f8;
+  --primary-bg-light: rgba(251, 114, 153, 0.08);
+  --secondary-bg-light: rgba(0, 161, 214, 0.08);
+  
+  /* B站特色阴影 */
+  --box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --box-shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --box-shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+  --primary-shadow: 0 4px 12px rgba(251, 114, 153, 0.3);
+  --secondary-shadow: 0 4px 12px rgba(0, 161, 214, 0.3);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.08);
+  
+  /* B站圆角设计 */
+  --border-radius-small: 4px;
+  --border-radius: 8px;
+  --border-radius-large: 12px;
+  --border-radius-xl: 16px;
+  --border-radius-round: 50%;
+
+  /* 动画效果 */
+  --transition-duration: 0.3s;
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Element Plus B站风格主题覆盖 */
+.el-button--primary {
+  background: var(--primary-gradient) !important;
+  border-color: var(--primary-color) !important;
+  border-radius: var(--border-radius) !important;
+  transition: all var(--transition-duration) var(--transition-timing);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  box-shadow: var(--box-shadow-light);
+}
+
+.el-button--primary:hover {
+  background: var(--primary-hover) !important;
+  transform: translateY(-2px);
+  box-shadow: var(--primary-shadow);
+}
+
+.el-button {
+  border-radius: var(--border-radius) !important;
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.el-card {
+  border-radius: var(--border-radius-large) !important;
+  box-shadow: var(--card-shadow) !important;
+  border: 1px solid var(--border-light) !important;
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.el-card:hover {
+  box-shadow: var(--card-shadow-hover) !important;
+  transform: translateY(-2px);
+}
+
+.el-pagination.is-background .el-pager li:not(.is-disabled).is-active {
+  background-color: var(--primary-color) !important;
+  border-radius: var(--border-radius) !important;
+}
+
+.el-menu-item.is-active {
+  color: var(--primary-color) !important;
+  background-color: var(--primary-bg-light) !important;
+  border-radius: var(--border-radius) !important;
+}
+
+.el-menu-item:hover {
+  background-color: var(--bg-hover) !important;
+  border-radius: var(--border-radius) !important;
+}
+
+.el-tabs__active-bar {
+  background-color: var(--primary-color) !important;
+}
+
+.el-tabs__item.is-active {
+  color: var(--primary-color) !important;
+}
+
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.el-radio__input.is-checked .el-radio__inner {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.el-input__wrapper {
+  border-radius: var(--border-radius) !important;
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.el-input__wrapper:hover {
+  box-shadow: var(--box-shadow-light) !important;
+}
+
+.el-switch.is-checked .el-switch__core {
+  border-color: var(--primary-color) !important;
+  background-color: var(--primary-color) !important;
+}
+
+/* 全局样式增强 */
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-light);
+  transition: background-color var(--transition-duration) ease;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-duration) ease;
+}
+
+a:hover {
+  color: var(--primary-light);
+}
+
+/* 卡片样式增强 */
+.el-card {
+  border-radius: var(--border-radius);
+  transition: transform var(--transition-duration) ease, box-shadow var(--transition-duration) ease;
+  overflow: hidden;
+}
+
+.el-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--box-shadow);
+}
+
+/* 输入框样式增强 */
+.el-input__inner:focus {
+  border-color: var(--primary-color) !important;
+}
+
+/* 按钮样式增强 */
+.el-button {
+  border-radius: var(--border-radius);
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--box-shadow-light);
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-duration) ease;
+}
+
+.slide-up {
+  animation: slideUp var(--transition-duration) ease;
+}

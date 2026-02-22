@@ -1,0 +1,265 @@
+/* UI视觉优化规则 */
+
+/* 1. 颜色系统优化 */
+:root {
+  /* 主色（品牌色）占15%~25%，用于按钮、重点标记 */
+  --primary-color: #1e50a2;
+  --primary-light: #3b7ada;
+  --primary-dark: #0c3b82;
+  --primary-gradient: linear-gradient(135deg, #1e50a2, #3b7ada);
+  
+  /* 辅助色（对比色）占5%~10%，用于提示、价格等 */
+  --secondary-color: #ff9500;
+  --secondary-light: #ffb340;
+  --secondary-dark: #e67e00;
+  
+  /* 中性色（灰白黑）用于背景、文本、分割线 */
+  --neutral-100: #ffffff; /* 最浅 - 背景 */
+  --neutral-200: #f5f7fa; /* 浅色背景 */
+  --neutral-300: #ebeef5; /* 分割线、边框 */
+  --neutral-400: #e4e7ed; /* 深色边框 */
+  --neutral-500: #c0c4cc; /* 占位文本 */
+  --neutral-600: #909399; /* 次要文本 */
+  --neutral-700: #606266; /* 常规文本 */
+  --neutral-800: #303133; /* 主要文本 */
+}
+
+/* 2. 留白与分割 - 使用8的倍数 */
+.spacing-8 { margin: 8px; padding: 8px; }
+.spacing-16 { margin: 16px; padding: 16px; }
+.spacing-24 { margin: 24px; padding: 24px; }
+.spacing-32 { margin: 32px; padding: 32px; }
+
+/* 卡片间距 */
+.card-container > * {
+  margin-bottom: 16px;
+}
+
+/* 3. 卡片式布局 */
+.ui-card {
+  border-radius: 10px; /* 圆角建议8px~12px */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* 轻微阴影 */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+  background-color: var(--neutral-100);
+}
+
+.ui-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09);
+}
+
+/* 4. 字体层级 */
+.text-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--neutral-800);
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.text-subtitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--neutral-700);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.text-body {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--neutral-700);
+  line-height: 1.6;
+}
+
+.text-small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--neutral-600);
+  line-height: 1.5;
+}
+
+/* 5. 图标与插画 */
+.svg-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  fill: currentColor;
+  overflow: hidden;
+}
+
+/* 6. 交互体验优化 */
+
+/* 动效节奏 */
+.transition-small {
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+.transition-medium {
+  transition: all 0.35s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+.transition-large {
+  transition: all 0.45s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+/* 状态反馈 */
+.ui-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.ui-button:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 可点击区域 */
+.clickable-area {
+  min-height: 44px; /* 触控端 */
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clickable-area-desktop {
+  min-height: 32px; /* 桌面端 */
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 7. 响应式断点 */
+/* 桌面宽版 ≥1200px */
+@media screen and (min-width: 1200px) {
+  .container {
+    max-width: 1140px;
+    margin: 0 auto;
+  }
+}
+
+/* 平板 768px~1199px */
+@media screen and (min-width: 768px) and (max-width: 1199px) {
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  
+  .text-title {
+    font-size: 18px;
+  }
+}
+
+/* 手机 <768px */
+@media screen and (max-width: 767px) {
+  .container {
+    width: 100%;
+    padding: 0 12px;
+  }
+  
+  .text-title {
+    font-size: 16px;
+  }
+  
+  .text-subtitle {
+    font-size: 14px;
+  }
+  
+  .text-body {
+    font-size: 13px;
+  }
+}
+
+/* 8. 搜索与筛选体验 */
+.search-container {
+  position: relative;
+}
+
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background-color: var(--neutral-100);
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  box-shadow: var(--box-shadow-light);
+  z-index: 10;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--neutral-200);
+  border-radius: 16px;
+  padding: 4px 12px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--neutral-700);
+  transition: all 0.25s ease;
+}
+
+.filter-tag .close-icon {
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.filter-tag:hover {
+  background-color: var(--neutral-300);
+}
+
+/* 9. 性能优化相关样式 */
+/* 图片容器 - 用于懒加载 */
+.img-container {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--neutral-200);
+}
+
+.img-container img {
+  transition: opacity 0.3s ease;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+.img-container.loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 1.5s infinite;
+  transform: translateX(-100%);
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 骨架屏 */
+.skeleton {
+  background: linear-gradient(90deg, var(--neutral-200) 25%, var(--neutral-300) 37%, var(--neutral-200) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
