@@ -2,12 +2,12 @@ package com.project.platform.service.impl;
 
 import com.project.platform.entity.Shop;
 import com.project.platform.entity.ShopCollect;
-import com.project.platform.entity.ShopCollect;
 import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.ShopCollectMapper;
 import com.project.platform.mapper.ShopMapper;
 import com.project.platform.service.ShopCollectService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -32,7 +32,8 @@ public class ShopCollectServiceImpl implements ShopCollectService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ShopCollect> list = shopCollectMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ShopCollect> list = shopCollectMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(shopCollectMapper.queryCount(query));
         return page;

@@ -13,6 +13,7 @@ import com.project.platform.service.ShoppingCartService;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 
 import java.util.ArrayList;
@@ -39,7 +40,8 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ShoppingCart> list = shoppingCartMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ShoppingCart> list = shoppingCartMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(shoppingCartMapper.queryCount(query));
         return page;

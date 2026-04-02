@@ -7,6 +7,7 @@ import com.project.platform.mapper.ProductOrderEvaluateMapper;
 import com.project.platform.mapper.ProductOrderMapper;
 import com.project.platform.service.ProductOrderEvaluateService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -31,7 +32,8 @@ public class ProductOrderEvaluateServiceImpl implements ProductOrderEvaluateServ
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ProductOrderEvaluate> list = productOrderEvaluateMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ProductOrderEvaluate> list = productOrderEvaluateMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(productOrderEvaluateMapper.queryCount(query));
         return page;

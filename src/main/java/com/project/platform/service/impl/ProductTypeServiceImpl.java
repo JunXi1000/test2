@@ -5,6 +5,7 @@ import com.project.platform.mapper.ProductTypeMapper;
 import com.project.platform.service.ProductTypeService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 
 import java.util.List;
@@ -21,7 +22,8 @@ public class ProductTypeServiceImpl  implements ProductTypeService {
     @Override
     public PageVO<ProductType> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<ProductType> page = new PageVO();
-        List<ProductType> list = productTypeMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ProductType> list = productTypeMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(productTypeMapper.queryCount(query));
         return page;

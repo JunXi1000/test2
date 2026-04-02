@@ -8,6 +8,7 @@ import com.project.platform.service.ProductOrderService;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.UserService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -39,7 +40,8 @@ public class ProductOrderServiceImpl implements ProductOrderService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ProductOrder> list = productOrderMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ProductOrder> list = productOrderMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(productOrderMapper.queryCount(query));
         return page;

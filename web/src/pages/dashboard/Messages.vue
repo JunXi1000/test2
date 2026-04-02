@@ -1,0 +1,761 @@
+<script setup lang="ts">
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import {
+  Search,
+  Send,
+  MessageSquare,
+  Image as ImageIcon,
+  Paperclip,
+  Check,
+  CheckCheck,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Columns2,
+  Columns3,
+  Star,
+  ShieldCheck,
+  Clock,
+  ExternalLink,
+  MapPin,
+  Truck,
+  RotateCcw,
+  ThumbsUp,
+  Users,
+  Package
+} from 'lucide-vue-next'
+import Button from '@/components/ui/button/Button.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
+import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
+import { useMessagesLayout } from '@/composables/useMessagesLayout'
+import { useChatUploads, type UploadMessage } from '@/composables/useChatUploads'
+import { getMerchantPublicProfile, type MerchantPublicProfile } from '@/api/modules/merchantPublic'
+
+// Mock Data for now as backend integration is simulated
+type Message = UploadMessage & { sender: 'user' | 'merchant' }
+
+interface Conversation {
+  id: string
+  merchantId: string
+  merchantName: string
+  merchantAvatar: string
+  lastMessage: string
+  lastMessageTime: Date
+  unread: number
+  online: boolean
+  messages: Message[]
+}
+
+const authStore = useAuthStore()
+const { toast } = useToast()
+const searchQuery = ref('')
+const activeConversationId = ref<string | null>(null)
+const newMessage = ref('')
+const chatContainerRef = ref<HTMLElement | null>(null)
+const isLoading = ref(true)
+const merchantInfoVisible = ref(false)
+const merchantInfoTargetId = ref<string | null>(null)
+const LAYOUT_PREFERENCES_KEY = 'dashboard-messages-layout-preferences-v1'
+
+const {
+  sidebarWidth,
+  isSidebarCollapsed,
+  mobileViewMode,
+  ultraWideMode,
+  isResizingSidebar,
+  isMobile,
+  isUltraWide,
+  showSidebar,
+  showChat,
+  showInspector,
+  sidebarStyle,
+  toggleSidebarCollapse,
+  startSidebarResize
+} = useMessagesLayout({
+  preferencesKey: LAYOUT_PREFERENCES_KEY,
+  defaultSidebarWidth: 300,
+  minSidebarWidth: 260,
+  maxSidebarWidth: 400
+})
+
+// Mock Conversations
+const conversations = ref<Conversation[]>([
+  {
+    id: 'c1',
+    merchantId: 'm1',
+    merchantName: 'Nike Official Store',
+    merchantAvatar: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=200&auto=format&fit=crop',
+    lastMessage: 'Your order has been shipped!',
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
+    unread: 2,
+    online: true,
+    messages: [
+      { id: 'm1', content: 'Hi, is the Air Max 90 in stock?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), read: true },
+      { id: 'm2', content: 'Yes, we have all sizes available.', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5), read: true },
+      { id: 'm3', content: 'Great! I just placed an order.', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60), read: true },
+      { id: 'm4', content: 'Thanks for your purchase! We will ship it today.', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 45), read: true },
+      { id: 'm5', content: 'Your order has been shipped!', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 30), read: false }
+    ]
+  },
+  {
+    id: 'c2',
+    merchantId: 'm2',
+    merchantName: 'Adidas Originals',
+    merchantAvatar: 'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=200&auto=format&fit=crop',
+    lastMessage: 'Thanks for contacting us.',
+    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
+    unread: 0,
+    online: false,
+    messages: [
+      { id: 'm1', content: 'Do you ship to Canada?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 25), read: true },
+      { id: 'm2', content: 'Thanks for contacting us. Yes we do!', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), read: true }
+    ]
+  }
+])
+
+const activeConversation = computed(() => 
+  conversations.value.find(c => c.id === activeConversationId.value)
+)
+
+const activeMerchantInfo = computed(() => {
+  const conv =
+    conversations.value.find((c) => c.id === merchantInfoTargetId.value) ||
+    conversations.value.find((c) => c.id === activeConversationId.value)
+  return conv || null
+})
+
+const filteredConversations = computed(() => 
+  conversations.value.filter(c => 
+    c.merchantName.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+)
+
+onMounted(() => {
+  setTimeout(() => {
+    isLoading.value = false
+    // Auto-select first conversation on desktop
+    if (window.innerWidth >= 1024 && conversations.value.length > 0) {
+      selectConversation(conversations.value[0].id)
+    }
+  }, 500)
+})
+
+function selectConversation(id: string) {
+  activeConversationId.value = id
+  if (isMobile.value) {
+    mobileViewMode.value = 'chat'
+  }
+  const conv = conversations.value.find(c => c.id === id)
+  if (conv) {
+    conv.unread = 0
+    scrollToBottom()
+  }
+}
+
+const merchantProfile = ref<MerchantPublicProfile | null>(null)
+const merchantProfileLoading = ref(false)
+
+function openMerchantInfo(conversationId?: string) {
+  merchantInfoTargetId.value = conversationId || activeConversationId.value
+  merchantInfoVisible.value = true
+  loadMerchantProfile()
+}
+
+async function loadMerchantProfile() {
+  const conv = activeMerchantInfo.value
+  if (!conv) return
+  merchantProfileLoading.value = true
+  merchantProfile.value = null
+  try {
+    merchantProfile.value = await getMerchantPublicProfile(conv.merchantId)
+  } catch {
+    toast({ title: 'Error', description: 'Failed to load merchant info', variant: 'destructive' })
+  } finally {
+    merchantProfileLoading.value = false
+  }
+}
+
+function formatNumber(n: number): string {
+  if (n >= 10000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return n.toString()
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (chatContainerRef.value) {
+      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
+    }
+  })
+}
+
+function sendMessage() {
+  if (!newMessage.value.trim() || !activeConversation.value) return
+
+  pushOutgoingMessage({ content: newMessage.value })
+  newMessage.value = ''
+  // scroll handled in pushOutgoingMessage
+  
+  // Mock Merchant Reply
+  setTimeout(() => {
+    if (activeConversation.value) {
+      activeConversation.value.messages.push({
+        id: (Date.now() + 1).toString(),
+        content: 'Thanks for your message! We will get back to you shortly.',
+        sender: 'merchant',
+        timestamp: new Date(),
+        read: false
+      })
+      activeConversation.value.lastMessage = 'Thanks for your message! We will get back to you shortly.'
+      activeConversation.value.lastMessageTime = new Date()
+      scrollToBottom()
+      toast({ title: 'New message', description: `Reply from ${activeConversation.value.merchantName}` })
+    }
+  }, 2000)
+}
+
+function formatTime(date: Date) {
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
+}
+
+function formatDate(date: Date) {
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  
+  if (days === 0) return formatTime(date)
+  if (days === 1) return 'Yesterday'
+  return date.toLocaleDateString()
+}
+
+const {
+  attachmentInputRef,
+  imageInputRef,
+  CHAT_IMAGE_ACCEPT,
+  CHAT_ATTACHMENT_ACCEPT,
+  pushOutgoingMessage,
+  triggerAttachmentPicker,
+  triggerImagePicker,
+  onAttachmentChange,
+  onImageChange
+} = useChatUploads({
+  sender: 'user',
+  getActiveConversation: () => activeConversation.value,
+  toast,
+  scrollToBottom
+})
+</script>
+
+<template>
+  <div
+    class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 md:flex-row md:items-stretch"
+  >
+    <div
+      v-if="showSidebar"
+      class="flex w-full min-h-0 flex-col border-zinc-200/80 bg-zinc-100/95 dark:border-zinc-800 dark:bg-zinc-900/90 md:h-full md:max-h-full md:shrink-0 md:border-r"
+      :style="sidebarStyle"
+      :class="isMobile ? 'max-h-[min(52vh,28rem)] border-b md:max-h-none md:border-b-0' : ''"
+    >
+      <div class="shrink-0 border-b border-zinc-200/70 px-3 pb-2 pt-3 dark:border-zinc-800 sm:px-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <h2 class="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Messages</h2>
+          <div class="flex items-center gap-0.5">
+            <button
+              v-if="!isMobile"
+              type="button"
+              class="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/80 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+              :aria-label="isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+              @click="toggleSidebarCollapse"
+            >
+              <PanelLeftOpen v-if="isSidebarCollapsed" class="h-4 w-4" />
+              <PanelLeftClose v-else class="h-4 w-4" />
+            </button>
+            <button
+              v-if="isUltraWide"
+              type="button"
+              class="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/80 dark:hover:bg-zinc-800"
+              :aria-label="ultraWideMode === 'three' ? 'Switch to two columns' : 'Switch to three columns'"
+              @click="ultraWideMode = ultraWideMode === 'three' ? 'two' : 'three'"
+            >
+              <Columns2 v-if="ultraWideMode === 'three'" class="h-4 w-4" />
+              <Columns3 v-else class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div class="relative">
+          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search stores..."
+            class="h-10 w-full rounded-xl border border-zinc-200/80 bg-white pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none ring-violet-500/0 transition-all placeholder:text-zinc-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/25 dark:border-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          />
+        </div>
+        <div v-if="isMobile" class="mt-3 flex justify-end gap-1">
+          <button
+            type="button"
+            class="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+            :class="
+              mobileViewMode === 'list'
+                ? 'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300'
+                : 'border-zinc-200 text-zinc-500 dark:border-zinc-700'
+            "
+            @click="mobileViewMode = 'list'"
+          >
+            List
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors"
+            :class="
+              mobileViewMode === 'chat'
+                ? 'border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-300'
+                : 'border-zinc-200 text-zinc-500 dark:border-zinc-700'
+            "
+            @click="mobileViewMode = 'chat'"
+          >
+            Chat
+          </button>
+        </div>
+      </div>
+
+      <div class="custom-scrollbar flex-1 overflow-y-auto p-2">
+        <div v-if="isLoading" class="space-y-3 p-2">
+          <div v-for="i in 3" :key="i" class="flex gap-3 rounded-xl bg-white/60 p-3 dark:bg-zinc-800/40">
+            <Skeleton class="h-12 w-12 rounded-full" />
+            <div class="flex-1 space-y-2">
+              <Skeleton class="h-4 w-24 rounded-md" />
+              <Skeleton class="h-3 w-full rounded-md" />
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-else-if="filteredConversations.length === 0"
+          class="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400"
+        >
+          No conversations found
+        </div>
+
+        <div v-else class="space-y-1.5 px-1 pb-2">
+          <button
+            v-for="conv in filteredConversations"
+            :key="conv.id"
+            type="button"
+            class="relative w-full rounded-xl px-3 py-3 text-left transition-all duration-200"
+            :class="[
+              activeConversationId === conv.id
+                ? 'bg-white shadow-md ring-1 ring-zinc-200/90 dark:bg-zinc-800 dark:ring-zinc-600/80'
+                : 'hover:bg-white/70 dark:hover:bg-zinc-800/50'
+            ]"
+            :aria-current="activeConversationId === conv.id ? 'true' : 'false'"
+            @click="selectConversation(conv.id)"
+          >
+            <div class="flex items-start gap-3">
+              <div class="relative shrink-0">
+                <div
+                  class="h-12 w-12 overflow-hidden rounded-full border border-zinc-200/80 bg-white dark:border-zinc-600 dark:bg-zinc-800"
+                >
+                  <button
+                    type="button"
+                    class="block h-full w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded-full"
+                    :aria-label="`View merchant info: ${conv.merchantName}`"
+                    @click.stop="openMerchantInfo(conv.id)"
+                  >
+                    <img :src="conv.merchantAvatar" class="h-full w-full object-cover" alt="" />
+                  </button>
+                </div>
+                <span
+                  v-if="conv.online"
+                  class="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-800"
+                />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="mb-0.5 flex items-start justify-between gap-2">
+                  <span class="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{{
+                    conv.merchantName
+                  }}</span>
+                  <span class="shrink-0 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">{{
+                    formatDate(conv.lastMessageTime)
+                  }}</span>
+                </div>
+                <p
+                  class="line-clamp-2 text-xs leading-snug text-zinc-500 dark:text-zinc-400"
+                  :class="conv.unread > 0 ? 'font-medium text-zinc-800 dark:text-zinc-200' : ''"
+                >
+                  <span v-if="conv.messages[conv.messages.length - 1]?.sender === 'user'">You: </span>
+                  {{ conv.lastMessage }}
+                </p>
+              </div>
+            </div>
+            <div
+              v-if="conv.unread > 0"
+              class="absolute bottom-3 right-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white shadow-sm"
+            >
+              {{ conv.unread }}
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showSidebar && !isMobile && !isSidebarCollapsed"
+      class="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-violet-400/25 dark:hover:bg-violet-500/20"
+      :class="isResizingSidebar ? 'bg-violet-400/40 dark:bg-violet-500/30' : ''"
+      @mousedown.prevent="startSidebarResize"
+    />
+
+    <div
+      v-if="showChat"
+      class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-50/90 dark:bg-zinc-950/40"
+    >
+      <div
+        v-if="!isMobile && isSidebarCollapsed"
+        class="group absolute left-0 top-3 z-20 h-12 w-5"
+      >
+        <button
+          type="button"
+          class="absolute left-0 top-0 -translate-x-2 rounded-r-lg border border-zinc-200 bg-white/95 p-2 opacity-20 shadow-sm backdrop-blur-sm transition-all duration-200 hover:translate-x-0 hover:opacity-100 dark:border-zinc-700 dark:bg-zinc-900/95"
+          aria-label="Expand sidebar"
+          @click="toggleSidebarCollapse"
+        >
+          <PanelLeftOpen class="h-4 w-4 text-zinc-600 dark:text-zinc-300" />
+        </button>
+      </div>
+
+      <div
+        v-if="!activeConversation"
+        class="flex flex-1 flex-col items-center justify-center p-8 text-zinc-500 dark:text-zinc-400"
+      >
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-950/50">
+          <MessageSquare class="h-8 w-8 text-violet-500 opacity-80" />
+        </div>
+        <h3 class="mb-1 text-lg font-bold text-zinc-800 dark:text-zinc-100">Select a conversation</h3>
+        <p class="max-w-xs text-center text-sm">Choose a merchant from the list to start chatting</p>
+      </div>
+
+      <template v-else>
+        <div
+          class="flex h-14 shrink-0 items-center border-b border-zinc-200/80 bg-white/90 px-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/90 sm:h-16 sm:px-6"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              class="rounded-lg p-1.5 text-zinc-600 md:hidden dark:text-zinc-300"
+              @click="mobileViewMode = 'list'; activeConversationId = null"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div class="relative shrink-0">
+              <div class="h-10 w-10 overflow-hidden rounded-full border border-zinc-200 bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800">
+                <button
+                  type="button"
+                  class="block h-full w-full focus:outline-none"
+                  aria-label="View merchant info"
+                  @click="openMerchantInfo()"
+                >
+                  <img :src="activeConversation.merchantAvatar" class="h-full w-full object-cover" alt="" />
+                </button>
+              </div>
+              <span
+                v-if="activeConversation.online"
+                class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900"
+              />
+            </div>
+            <div class="min-w-0">
+              <h3 class="truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                {{ activeConversation.merchantName }}
+              </h3>
+              <p class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                {{ activeConversation.online ? 'Online' : 'Offline' }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          ref="chatContainerRef"
+          class="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 sm:px-6 sm:py-4"
+        >
+          <div
+            v-for="msg in activeConversation.messages"
+            :key="msg.id"
+            class="flex max-w-[min(100%,28rem)] gap-2.5 sm:max-w-[min(100%,32rem)]"
+            :class="msg.sender === 'user' ? 'ml-auto flex-row-reverse' : ''"
+          >
+            <div
+              v-if="msg.sender === 'merchant'"
+              class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-zinc-800"
+            >
+              <img :src="activeConversation.merchantAvatar" class="h-full w-full object-cover" alt="" />
+            </div>
+
+            <div
+              class="rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm"
+              :class="
+                msg.sender === 'user'
+                  ? 'rounded-tr-md bg-violet-600 text-white'
+                  : 'rounded-tl-md border border-zinc-200/90 bg-zinc-200/90 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100'
+              "
+            >
+              <template v-if="msg.type === 'image' && msg.fileUrl">
+                <img
+                  :src="msg.fileUrl"
+                  :alt="msg.fileName || 'image'"
+                  class="max-h-[220px] max-w-[220px] rounded-lg border border-white/20 object-cover"
+                />
+                <p v-if="msg.fileName" class="mt-2 break-all text-xs opacity-90">{{ msg.fileName }}</p>
+              </template>
+              <template v-else-if="msg.type === 'attachment' && msg.fileUrl">
+                <a
+                  :href="msg.fileUrl"
+                  :download="msg.fileName || 'attachment'"
+                  class="inline-flex items-center gap-2 break-all underline-offset-2 hover:underline"
+                  :class="msg.sender === 'user' ? 'text-white' : ''"
+                >
+                  <Paperclip class="h-4 w-4 shrink-0" />
+                  <span>{{ msg.fileName || msg.content }}</span>
+                </a>
+              </template>
+              <p v-else>{{ msg.content }}</p>
+              <div
+                class="mt-1.5 flex items-center justify-end gap-1 text-[10px]"
+                :class="msg.sender === 'user' ? 'text-violet-100/90' : 'text-zinc-500 dark:text-zinc-400'"
+              >
+                {{ formatTime(msg.timestamp) }}
+                <span v-if="msg.sender === 'user'" class="inline-flex">
+                  <CheckCheck v-if="msg.read" class="h-3.5 w-3.5" />
+                  <Check v-else class="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="shrink-0 border-t border-zinc-200/80 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/80 sm:px-5 sm:py-2.5">
+          <div
+            class="flex items-end gap-1 rounded-2xl border-2 border-violet-400/45 bg-white px-1 py-1 shadow-sm transition-shadow focus-within:border-violet-500 focus-within:shadow-md focus-within:shadow-violet-500/10 dark:border-violet-500/35 dark:bg-zinc-900"
+          >
+            <button
+              type="button"
+              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
+              @click="triggerAttachmentPicker"
+            >
+              <Paperclip class="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
+              @click="triggerImagePicker"
+            >
+              <ImageIcon class="h-5 w-5" />
+            </button>
+            <textarea
+              v-model="newMessage"
+              rows="1"
+              placeholder="Type a message..."
+              class="max-h-32 min-h-[40px] flex-1 resize-none border-0 bg-transparent py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              @keydown.enter.prevent="sendMessage"
+            />
+            <button
+              type="button"
+              class="mb-0.5 mr-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-md transition-all hover:bg-violet-700 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+              :disabled="!newMessage.trim()"
+              aria-label="Send"
+              @click="sendMessage"
+            >
+              <Send class="h-[18px] w-[18px]" />
+            </button>
+            <input
+              ref="attachmentInputRef"
+              type="file"
+              class="hidden"
+              :accept="CHAT_ATTACHMENT_ACCEPT"
+              @change="onAttachmentChange"
+            />
+            <input
+              ref="imageInputRef"
+              type="file"
+              :accept="CHAT_IMAGE_ACCEPT"
+              class="hidden"
+              @change="onImageChange"
+            />
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <aside
+      v-if="showInspector"
+      class="flex max-h-full min-h-0 w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-zinc-200/80 bg-white/80 p-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/70"
+    >
+      <h3 class="font-semibold text-sm">Conversation Details</h3>
+      <div class="rounded-lg border border-border p-3 space-y-2 text-sm">
+        <p><span class="text-muted-foreground">Merchant:</span> {{ activeConversation?.merchantName }}</p>
+        <p><span class="text-muted-foreground">Status:</span> {{ activeConversation?.online ? 'Online' : 'Offline' }}</p>
+        <p><span class="text-muted-foreground">Messages:</span> {{ activeConversation?.messages.length ?? 0 }}</p>
+      </div>
+      <div class="rounded-lg border border-border p-3">
+        <p class="text-xs text-muted-foreground">Ultra-wide mode enabled. Switch back to two columns with the top icon.</p>
+      </div>
+    </aside>
+
+    <el-drawer v-model="merchantInfoVisible" title="Store Profile" size="400px" destroy-on-close>
+      <!-- Loading state -->
+      <div v-if="merchantProfileLoading" class="space-y-5">
+        <div class="flex items-center gap-3">
+          <Skeleton class="w-14 h-14 rounded-full" />
+          <div class="flex-1 space-y-2">
+            <Skeleton class="h-5 w-32" />
+            <Skeleton class="h-3 w-48" />
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <Skeleton class="h-16 rounded-lg" />
+          <Skeleton class="h-16 rounded-lg" />
+          <Skeleton class="h-16 rounded-lg" />
+        </div>
+        <Skeleton class="h-24 rounded-lg" />
+        <Skeleton class="h-40 rounded-lg" />
+      </div>
+
+      <!-- Loaded profile -->
+      <div v-else-if="merchantProfile" class="space-y-5">
+        <!-- Header -->
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <div class="w-14 h-14 rounded-full bg-secondary overflow-hidden border-2 border-border">
+              <img :src="merchantProfile.avatar" class="w-full h-full object-cover" />
+            </div>
+            <span v-if="activeMerchantInfo?.online" class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-card rounded-full"></span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5">
+              <span class="font-bold truncate">{{ merchantProfile.storeName }}</span>
+              <ShieldCheck v-if="merchantProfile.verified" class="w-4 h-4 text-primary flex-shrink-0" />
+            </div>
+            <div class="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+              <span class="flex items-center gap-1"><Star class="w-3 h-3 text-amber-500 fill-amber-500" /> {{ merchantProfile.stats.rating }}</span>
+              <span>•</span>
+              <span class="flex items-center gap-1"><MapPin class="w-3 h-3" /> {{ merchantProfile.location }}</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-sm text-muted-foreground leading-relaxed">{{ merchantProfile.description }}</p>
+
+        <!-- Quick actions -->
+        <div class="flex gap-2">
+          <router-link :to="`/store/${merchantProfile.id}`" class="flex-1" @click="merchantInfoVisible = false">
+            <Button variant="outline" class="w-full h-9 text-sm gap-1.5">
+              <ExternalLink class="w-3.5 h-3.5" />
+              Visit Store
+            </Button>
+          </router-link>
+        </div>
+
+        <!-- Stats grid -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="rounded-lg border border-border p-2.5 text-center">
+            <p class="text-lg font-bold text-primary">{{ formatNumber(merchantProfile.stats.totalProducts) }}</p>
+            <p class="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Package class="w-3 h-3" /> Products</p>
+          </div>
+          <div class="rounded-lg border border-border p-2.5 text-center">
+            <p class="text-lg font-bold text-primary">{{ formatNumber(merchantProfile.stats.totalSales) }}</p>
+            <p class="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><ThumbsUp class="w-3 h-3" /> Sales</p>
+          </div>
+          <div class="rounded-lg border border-border p-2.5 text-center">
+            <p class="text-lg font-bold text-primary">{{ formatNumber(merchantProfile.stats.followers) }}</p>
+            <p class="text-[10px] text-muted-foreground flex items-center justify-center gap-1"><Users class="w-3 h-3" /> Followers</p>
+          </div>
+        </div>
+
+        <!-- Service indicators -->
+        <div class="flex gap-3 text-xs">
+          <div class="flex items-center gap-1.5 text-muted-foreground">
+            <Clock class="w-3.5 h-3.5 text-emerald-500" />
+            <span>Replies {{ merchantProfile.responseTime }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-muted-foreground">
+            <ThumbsUp class="w-3.5 h-3.5 text-emerald-500" />
+            <span>{{ merchantProfile.stats.satisfactionRate }}% satisfaction</span>
+          </div>
+        </div>
+
+        <!-- Featured Products -->
+        <div v-if="merchantProfile.featuredProducts.length > 0">
+          <h4 class="text-sm font-semibold mb-3">Popular Products</h4>
+          <div class="space-y-2.5">
+            <router-link
+              v-for="product in merchantProfile.featuredProducts"
+              :key="product.id"
+              :to="`/product/${product.id}`"
+              class="flex items-center gap-3 p-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-secondary/30 transition-all group"
+              @click="merchantInfoVisible = false"
+            >
+              <div class="w-12 h-12 rounded-md bg-secondary overflow-hidden flex-shrink-0 border border-border">
+                <img :src="product.image" :alt="product.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate group-hover:text-primary transition-colors">{{ product.title }}</p>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="text-xs font-bold text-primary">${{ product.price }}</span>
+                  <span class="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    <Star class="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> {{ product.rating }}
+                  </span>
+                  <span class="text-[10px] text-muted-foreground">{{ formatNumber(product.sales) }} sold</span>
+                </div>
+              </div>
+              <ExternalLink class="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+            </router-link>
+          </div>
+        </div>
+
+        <!-- Store policies -->
+        <div>
+          <h4 class="text-sm font-semibold mb-3">Store Policies</h4>
+          <div class="space-y-2.5">
+            <div class="flex gap-2.5 items-start rounded-lg border border-border p-3">
+              <Truck class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+              <div>
+                <p class="text-xs font-medium mb-0.5">Shipping</p>
+                <p class="text-xs text-muted-foreground leading-relaxed">{{ merchantProfile.policies.shipping }}</p>
+              </div>
+            </div>
+            <div class="flex gap-2.5 items-start rounded-lg border border-border p-3">
+              <RotateCcw class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+              <div>
+                <p class="text-xs font-medium mb-0.5">Returns</p>
+                <p class="text-xs text-muted-foreground leading-relaxed">{{ merchantProfile.policies.returns }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meta -->
+        <p class="text-[10px] text-muted-foreground text-center pt-2 border-t border-border">
+          Member since {{ merchantProfile.joinedDate }} • {{ formatNumber(merchantProfile.stats.totalReviews) }} reviews
+        </p>
+      </div>
+
+      <!-- Fallback -->
+      <div v-else class="py-12 text-center text-muted-foreground">
+        <p class="text-sm">No merchant information available.</p>
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 2px;
+}
+</style>

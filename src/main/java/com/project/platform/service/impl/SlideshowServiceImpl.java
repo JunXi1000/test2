@@ -5,6 +5,7 @@ import com.project.platform.mapper.SlideshowMapper;
 import com.project.platform.service.SlideshowService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 
 import java.util.List;
@@ -21,7 +22,8 @@ public class SlideshowServiceImpl  implements SlideshowService {
     @Override
     public PageVO<Slideshow> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<Slideshow> page = new PageVO();
-        List<Slideshow> list = slideshowMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<Slideshow> list = slideshowMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(slideshowMapper.queryCount(query));
         return page;

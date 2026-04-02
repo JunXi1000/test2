@@ -9,6 +9,7 @@ import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.ShopMapper;
 import com.project.platform.service.ShopService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +31,8 @@ public class ShopServiceImpl  implements ShopService {
     @Override
     public PageVO<Shop> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<Shop> page = new PageVO();
-        List<Shop> list = shopMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<Shop> list = shopMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(shopMapper.queryCount(query));
         return page;

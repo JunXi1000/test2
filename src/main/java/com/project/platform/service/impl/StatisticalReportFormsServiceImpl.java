@@ -31,15 +31,16 @@ public class StatisticalReportFormsServiceImpl implements StatisticalReportForms
 
 
     public EchartsDataVO getProductSalesTotalAmountChart(int day) {
+        int safeDay = Math.min(Math.max(day, 1), 90);
         //查询数据库中的数据
         List<ProductOrder> productOrderList;
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("SHOP")) {
-            productOrderList = productOrderMapper.selectRecentlyCompletedByShopId(day, CurrentUserThreadLocal.getCurrentUser().getId());
+            productOrderList = productOrderMapper.selectRecentlyCompletedByShopId(safeDay, CurrentUserThreadLocal.getCurrentUser().getId());
         } else {
-            productOrderList = productOrderMapper.selectRecentlyCompleted(day);
+            productOrderList = productOrderMapper.selectRecentlyCompleted(safeDay);
         }
 
-        List<LocalDateTime> recentSevenDays = TimeUtils.getRecentSevenDays(day);
+        List<LocalDateTime> recentSevenDays = TimeUtils.getRecentSevenDays(safeDay);
         EchartsDataVO echartsDataVO = new EchartsDataVO();
         for (LocalDateTime localDateTime : recentSevenDays) {
             echartsDataVO.getXData().add(TimeUtils.formatterDate(localDateTime));

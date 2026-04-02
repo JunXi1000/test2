@@ -9,6 +9,7 @@ import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.AdminMapper;
 import com.project.platform.service.AdminService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
@@ -35,7 +36,8 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public PageVO<Admin> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<Admin> page = new PageVO();
-        List<Admin> list = adminMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<Admin> list = adminMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(adminMapper.queryCount(query));
         return page;

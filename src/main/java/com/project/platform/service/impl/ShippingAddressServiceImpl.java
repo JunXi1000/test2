@@ -4,6 +4,7 @@ import com.project.platform.entity.ShippingAddress;
 import com.project.platform.mapper.ShippingAddressMapper;
 import com.project.platform.service.ShippingAddressService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -25,7 +26,8 @@ public class ShippingAddressServiceImpl  implements ShippingAddressService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ShippingAddress> list = shippingAddressMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ShippingAddress> list = shippingAddressMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(shippingAddressMapper.queryCount(query));
         return page;

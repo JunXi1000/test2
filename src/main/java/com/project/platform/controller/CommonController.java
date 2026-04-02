@@ -14,6 +14,7 @@ import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.utils.JwtUtils;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,7 +42,7 @@ public class CommonController {
      */
 
     @PostMapping("login")
-    public ResponseVO<String> login(@RequestBody LoginDTO loginDTO) {
+    public ResponseVO<String> login(@Valid @RequestBody LoginDTO loginDTO) {
         CommonService commonService = getCommonService(loginDTO.getType());
         CurrentUserDTO currentUserDTO = commonService.login(loginDTO.getUsername(), loginDTO.getPassword());
         currentUserDTO.setType(loginDTO.getType());
@@ -70,7 +71,7 @@ public class CommonController {
      */
 
     @PostMapping("updateCurrentUser")
-    public ResponseVO updateCurrentUser(@RequestBody CurrentUserDTO currentUserDTO) {
+    public ResponseVO updateCurrentUser(@Valid @RequestBody CurrentUserDTO currentUserDTO) {
         CommonService commonService = getCommonService(CurrentUserThreadLocal.getCurrentUser().getType());
         commonService.updateCurrentUserInfo(currentUserDTO);
         return ResponseVO.ok();
@@ -83,7 +84,7 @@ public class CommonController {
      */
 
     @PostMapping("updatePassword")
-    public ResponseVO updatePassword(@RequestBody UpdatePasswordDTO updatePassword) {
+    public ResponseVO updatePassword(@Valid @RequestBody UpdatePasswordDTO updatePassword) {
         CommonService commonService = getCommonService(CurrentUserThreadLocal.getCurrentUser().getType());
         commonService.updateCurrentUserPassword(updatePassword);
         return ResponseVO.ok();
@@ -96,7 +97,7 @@ public class CommonController {
      */
 
     @PostMapping("retrievePassword")
-    public ResponseVO retrievePassword(@RequestBody RetrievePasswordDTO retrievePasswordDTO) {
+    public ResponseVO retrievePassword(@Valid @RequestBody RetrievePasswordDTO retrievePasswordDTO) {
         CommonService commonService = getCommonService(retrievePasswordDTO.getType());
         commonService.retrievePassword(retrievePasswordDTO);
         return ResponseVO.ok();

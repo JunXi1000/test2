@@ -1,0 +1,9 @@
+# 本地开发：打印 SQL，便于调试
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+logging:
+  level:
+    root: INFO
+    com.project.platform.mapper: DEBUG

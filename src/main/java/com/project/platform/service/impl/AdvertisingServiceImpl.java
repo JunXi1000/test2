@@ -3,6 +3,7 @@ package com.project.platform.service.impl;
 import com.project.platform.entity.Advertising;
 import com.project.platform.mapper.AdvertisingMapper;
 import com.project.platform.service.AdvertisingService;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -21,7 +22,8 @@ public class AdvertisingServiceImpl  implements AdvertisingService {
     @Override
     public PageVO<Advertising> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<Advertising> page = new PageVO();
-        List<Advertising> list = advertisingMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<Advertising> list = advertisingMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(advertisingMapper.queryCount(query));
         return page;

@@ -5,11 +5,14 @@ import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+@Validated
 @RestController //@Controller+@Response
 @RequestMapping("/user")
 public class UserController {
@@ -97,7 +100,7 @@ public class UserController {
     }
 
     @PostMapping("/topUp/{amount}")
-    public ResponseVO topUp(@PathVariable Float amount) {
+    public ResponseVO topUp(@Positive(message = "充值金额必须大于 0") @PathVariable Float amount) {
         Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
         userService.topUp(userId, amount);
         return ResponseVO.ok();

@@ -9,6 +9,7 @@ import com.project.platform.mapper.ProductCollectMapper;
 import com.project.platform.mapper.ProductMapper;
 import com.project.platform.service.ProductService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.ValueNameVO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,6 @@ public class ProductServiceImpl implements ProductService {
     private ProductBrowsingHistoryMapper productBrowsingHistoryMapper;
     @Resource
     private ProductCollectMapper productCollectMapper;
-    ;
 
     @Override
     public PageVO<Product> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
@@ -39,7 +39,8 @@ public class ProductServiceImpl implements ProductService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("SHOP")) {
             query.put("shopId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<Product> list = productMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<Product> list = productMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(productMapper.queryCount(query));
         return page;
@@ -111,11 +112,13 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<Product> salesVolumeTop(int size) {
-        return productMapper.salesVolumeTop(size);
+        int n = clampTopSize(size);
+        return productMapper.salesVolumeTop(n);
     }
 
     @Override
     public List<Product> recommended(Integer size) {
+        int n = clampTopSize(size == null ? 10 : size);
         List<Product> productList = list();
         //浏览记录
         List<ValueNameVO> productBrowsingHistoryStatisticsList = productBrowsingHistoryMapper.statisticsProductTypeIdByUserId(CurrentUserThreadLocal.getCurrentUser().getId());
@@ -136,9 +139,15 @@ public class ProductServiceImpl implements ProductService {
         //根据权重排序
         return productList.stream()
                 .sorted(Comparator.comparing(Product::getWeight).reversed())
-                .limit(size)
+                .limit(n)
                 .collect(Collectors.toList());
     }
 
+    private static int clampTopSize(int size) {
+        if (size < 1) {
+            return 10;
+        }
+        return Math.min(size, 100);
+    }
 
 }

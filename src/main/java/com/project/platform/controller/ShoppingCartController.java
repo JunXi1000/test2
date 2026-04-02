@@ -6,6 +6,7 @@ import com.project.platform.service.ShoppingCartService;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -98,7 +99,7 @@ public class ShoppingCartController {
 
 
     @PostMapping("createOrder")
-    public ResponseVO createOrder(@RequestBody CreateOrderByShoppingCartDTO createOrderByShoppingCartDTO) {
+    public ResponseVO createOrder(@Valid @RequestBody CreateOrderByShoppingCartDTO createOrderByShoppingCartDTO) {
         shoppingCartService.createOrder(createOrderByShoppingCartDTO);
         return ResponseVO.ok();
 

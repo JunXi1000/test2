@@ -1,20 +1,11 @@
 package com.project.platform.utils;
 
-import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson2.JSON;
 import com.project.platform.dto.CurrentUserDTO;
-import com.project.platform.entity.Admin;
-import com.project.platform.service.AdminService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
@@ -25,11 +16,7 @@ import java.util.Map;
 /**
  * 生成jwt
  */
-@Slf4j
 public class JwtUtils {
-
-    @Resource
-    private static AdminService userService;
 
     /**
      * token 过期时间, 单位: 秒. 这个值表示 30 天

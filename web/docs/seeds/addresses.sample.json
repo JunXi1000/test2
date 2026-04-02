@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "type": "Home",
+    "isDefault": true,
+    "name": "Alex Doe",
+    "phone": "+1 (555) 123-4567",
+    "address": "123 Innovation Dr",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94103",
+    "country": "United States"
+  },
+  {
+    "id": 2,
+    "type": "Work",
+    "isDefault": false,
+    "name": "Alex Doe",
+    "phone": "+1 (555) 987-6543",
+    "address": "456 Tech Plaza, Suite 200",
+    "city": "San Jose",
+    "state": "CA",
+    "zip": "95110",
+    "country": "United States"
+  }
+]

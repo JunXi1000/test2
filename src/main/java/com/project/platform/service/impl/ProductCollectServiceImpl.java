@@ -5,6 +5,7 @@ import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.ProductCollectMapper;
 import com.project.platform.service.ProductCollectService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
@@ -26,7 +27,8 @@ public class ProductCollectServiceImpl implements ProductCollectService {
         if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
         }
-        List<ProductCollect> list = productCollectMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<ProductCollect> list = productCollectMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         page.setTotal(productCollectMapper.queryCount(query));
         return page;

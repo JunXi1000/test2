@@ -1,0 +1,10 @@
+# 生产：避免 stdout 刷 SQL，降低日志量与 I/O
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+logging:
+  level:
+    root: WARN
+    com.project.platform: INFO
+    com.project.platform.mapper: WARN

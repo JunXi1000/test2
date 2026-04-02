@@ -27,12 +27,11 @@ public class LoginInterceptor implements HandlerInterceptor {
             return true;
         }
         String path = request.getRequestURL().toString();
-        log.info("接口登录拦截：，path：{}", path);
-        //获取header的token参数
+        log.debug("接口登录拦截 path={}", path);
         String token = request.getHeader("token");
-        log.info("登录校验开始，token：{}", token);
+        log.debug("登录校验 token 是否为空={}", token == null || token.isEmpty());
         if (token == null || token.isEmpty()) {
-            log.info("token为空，请求被拦截");
+            log.debug("token 为空，请求被拦截");
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             return false;
         }
@@ -50,13 +49,14 @@ public class LoginInterceptor implements HandlerInterceptor {
 
     @Override
     public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
-        long startTime = (Long) request.getAttribute("requestStartTime");
-        log.info("------------- LoginInterceptor 结束 耗时：{} ms -------------", System.currentTimeMillis() - startTime);
+        Object start = request.getAttribute("requestStartTime");
+        if (start instanceof Long startTime) {
+            log.debug("LoginInterceptor 耗时 {} ms", System.currentTimeMillis() - startTime);
+        }
     }
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
         CurrentUserThreadLocal.clear();
-        log.info("LogInterceptor 结束");
     }
 }

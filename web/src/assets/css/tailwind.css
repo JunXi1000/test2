@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@config "../../../tailwind.config.js";
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 262 83% 58%; /* Violet-600 */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 263 70% 50%; /* Violet-500 optimized for dark */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 263 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+/* 管理后台：统一炭灰工具栏 / 表格壳 / 卡片（各列表页共用） */
+@layer components {
+  /** 顶栏外层：与表格区 #1a1a1c 同色 */
+  .admin-toolbar-shell {
+    @apply mb-6 rounded-2xl border border-zinc-800/80 bg-[#1a1a1c] p-3 shadow-lg shadow-black/25 ring-1 ring-white/[0.04] sm:p-3.5;
+  }
+
+  /** 顶栏内条：搜索 + 筛选 + 按钮 */
+  .admin-toolbar-inner {
+    @apply flex w-full min-w-0 flex-nowrap items-center gap-3 overflow-x-auto rounded-xl border border-zinc-800/50 bg-zinc-950/30 px-3 py-2.5 [scrollbar-width:thin] sm:gap-3.5 sm:px-3.5 sm:py-3 sm:overflow-visible;
+  }
+
+  .admin-toolbar-search {
+    @apply min-w-0 flex-1 basis-0;
+  }
+
+  .admin-toolbar-select {
+    @apply w-[11.5rem] min-w-[10.5rem] shrink-0 sm:w-44;
+  }
+
+  .admin-toolbar-refresh-btn {
+    @apply !h-9 shrink-0 !rounded-full !border !border-zinc-600/70 !bg-zinc-800/95 !text-zinc-200 hover:!border-zinc-500 hover:!bg-zinc-700 hover:!text-white;
+  }
+
+  .admin-toolbar-primary-btn {
+    @apply !h-9 shrink-0 !rounded-full !border-0 !px-5 !font-medium shadow-lg shadow-violet-950/40;
+  }
+
+  .admin-table-shell {
+    @apply overflow-x-auto overscroll-x-contain rounded-2xl border border-zinc-800/80 bg-[#1a1a1c] shadow-lg shadow-black/20 ring-1 ring-white/[0.04] [-webkit-overflow-scrolling:touch];
+  }
+
+  /** 无表格的内容区（如商品审核网格） */
+  .admin-grid-shell {
+    @apply min-h-[12rem] rounded-2xl border border-zinc-800/80 bg-[#1a1a1c] p-4 shadow-lg shadow-black/20 ring-1 ring-white/[0.04] sm:p-5;
+  }
+
+  .admin-panel-card {
+    @apply rounded-2xl border border-zinc-800/80 bg-[#1a1a1c] p-6 shadow-lg shadow-black/20 ring-1 ring-white/[0.04];
+  }
+
+  .admin-list-item-card {
+    @apply rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-4 shadow-md shadow-black/20 ring-1 ring-white/[0.03] transition-colors;
+  }
+}
+
+/* 管理后台：新增/编辑弹窗（挂载在 el-dialog 上） */
+.admin-dialog.el-dialog,
+.merchant-admin-dialog.el-dialog {
+  border-radius: 1rem;
+  border: 1px solid rgb(39 39 42 / 0.85);
+  background-color: #1a1a1c;
+  box-shadow:
+    0 25px 50px -12px rgb(0 0 0 / 0.5),
+    0 0 0 1px rgb(255 255 255 / 0.04);
+}
+.admin-dialog .el-dialog__header,
+.merchant-admin-dialog .el-dialog__header {
+  margin-right: 0;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgb(39 39 42 / 0.75);
+}
+.admin-dialog .el-dialog__title,
+.merchant-admin-dialog .el-dialog__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fafafa;
+}
+.admin-dialog .el-dialog__body,
+.merchant-admin-dialog .el-dialog__body {
+  padding-top: 1.25rem;
+  color: #d4d4d8;
+}
+.admin-dialog .el-form-item__label,
+.merchant-admin-dialog .el-form-item__label {
+  color: #a1a1aa;
+}
+.admin-dialog .el-dialog__footer,
+.merchant-admin-dialog .el-dialog__footer {
+  border-top: 1px solid rgb(39 39 42 / 0.6);
+  padding-top: 1rem;
+}
+
+/* Element Plus 暗色表格（挂载在 .admin-data-table 上） */
+.admin-data-table.el-table {
+  width: 100%;
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: #141416;
+  --el-table-text-color: #d4d4d8;
+  --el-table-header-text-color: #fafafa;
+  --el-table-row-hover-bg-color: rgb(63 63 70 / 0.42);
+  --el-fill-color-lighter: rgb(39 39 42 / 0.55);
+  --el-border-color-lighter: rgb(63 63 70 / 0.65);
+}
+
+.admin-data-table.el-table .el-table__header th.el-table__cell {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-data-table.el-table .el-table__cell {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+.admin-data-table.el-table .caret-wrapper {
+  height: 1.5rem;
+}
+

@@ -47,6 +47,8 @@
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js
+├── docs/                     # 项目文档
+│   └── API接口说明.md        # Nexus 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```

@@ -1,38 +1,46 @@
 server:
   ip: localhost
   port: 1000
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript
+    min-response-size: 1024
+
 spring:
+  profiles:
+    active: dev
   main:
-    allow-circular-references: true #允许循环引用
+    allow-circular-references: true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/template_v3?useUnicode=true&useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: template-hikari
   servlet:
     multipart:
-      max-file-size: 100MB # 文件上传大小限制，设置最大值，不能超过该值，否则报错
-      max-request-size: 1000MB # 文件最大请求限制，用于批量上传
-
-  jackson: # Jackson库配置
-    date-format: "yyyy-MM-dd HH:mm:ss" # 设置日期格式为"年-月-日 时:分:秒"
+      max-file-size: 100MB
+      max-request-size: 1000MB
+  jackson:
+    date-format: "yyyy-MM-dd HH:mm:ss"
     serialization:
-      write-dates-as-timestamps: false # 关闭日期序列化为时间戳的功能
+      write-dates-as-timestamps: false
     time-zone: Asia/Shanghai
+
 mybatis:
   mapper-locations: classpath:mapper/*Mapper.xml
   configuration:
-    map-underscore-to-camel-case: true #启用驼峰命名转换
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 打印SQL到控制台
-  logging:
-    level: debug # 设置MyBatis的日志级别为DEBUG以打印SQL语句
-resetPassword: 123456
-spring.main.all-circular-references: true
+    map-underscore-to-camel-case: true
 
+resetPassword: 123456
 
 files:
   uploads:
     path: uploads/
     baseUrl: http://localhost:1000/file
-
-

@@ -9,6 +9,7 @@ import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.UserMapper;
 import com.project.platform.service.UserService;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
@@ -38,8 +39,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public PageVO<User> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<User> page = new PageVO<>();
-        //获取列表数据
-        List<User> list = userMapper.queryPage((pageNum - 1) * pageSize, pageSize, query);
+        PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
+        List<User> list = userMapper.queryPage(p.offset(), p.pageSize(), query);
         page.setList(list);
         //获取分页总数
         page.setTotal(userMapper.queryCount(query));
