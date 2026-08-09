@@ -32,3 +32,7 @@ coverage
 
 yarn.lock
 package-lock.json
+
+# 测试产物 / 本地工具配置(不入库)
+test-results
+.workbuddy

@@ -1,4 +1,11 @@
 .idea/
 target/
 
+# Node 依赖(容器内构建,本地可删)
 web/node_modules/
+
+# 本地工具目录(与项目无关,不入库)
+.agents/
+
+# 运行时上传数据(不入库)
+uploads/*
