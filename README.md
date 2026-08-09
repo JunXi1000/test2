@@ -36,24 +36,32 @@
 
 ```
 .
-├── sql/                      # 数据库初始化脚本
-│   └── templatev3_s.sql
-├── src/                      # 后端 Java 源码
-│   └── main/
-│       ├── java/             # Java 代码
-│       └── resources/        # 配置文件和 Mapper.xml
+├── docker/                   # Docker 部署配置
+│   ├── maven/                # Maven 镜像加速配置
+│   ├── mysql/init/           # 建表 + 种子数据（01-schema.sql，权威来源）
+│   └── nginx.conf            # 前端 Nginx 配置
+├── sql/                      # 数据库脚本
+│   ├── templatev3_s.sql      # ⚠️ 已过时（仅 admin 表），勿导入
+│   ├── chat.sql              # 聊天表
+│   └── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
+├── src/                      # 后端 Java 源码（Spring Boot）
+│   └── main/java/com/project/platform/  # 33 个 Controller + service/mapper/entity
+├── uploads/                  # 上传文件（运行时数据，git 忽略）
 ├── web/                      # 前端 Vue 源码
-│   ├── public/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-├── docs/                     # 项目文档
+│   ├── src/                  # 页面 / api / stores / router
+│   ├── .env*                 # 环境变量（VITE_API_BASE_URL / VITE_USE_MOCK）
+│   ├── vite.config.ts        # 开发代理 /api → :1000
+│   └── package.json
+├── docs/                     # 项目文档（6 份）
 │   ├── ARCHITECTURE.md       # 系统架构（分层/认证/Docker 部署）
 │   ├── MODULES.md            # 功能模块与实现状态矩阵（真实/部分/占位）
 │   ├── DEVELOPMENT.md        # 开发指南与代码规范
 │   ├── backend-api.md        # 后端接口契约清单（端点×实现状态）
-│   ├── ROADMAP.md            # 开发路线图（Phase 1–4）
-│   └── API接口说明.md        # Nexus 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
+│   ├── ROADMAP.md            # 开发路线图（Phase 1 已完成，Phase 2–4）
+│   └── API接口说明.md        # 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
+├── docker-compose.yml        # 三容器编排（mysql / backend / frontend）
+├── Dockerfile.backend        # 后端镜像
+├── Dockerfile.frontend       # 前端镜像
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```
@@ -71,7 +79,7 @@
 
 ### 2. 一键启动
 
-在项目根目录**双击** `Docker启动.bat`（或在终端运行）：
+在项目根目录终端运行：
 
 ```bash
 docker compose up -d --build

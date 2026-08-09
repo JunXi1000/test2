@@ -12,18 +12,18 @@
 | 商品 | 分类计数 | Home 分类栏 | `/products/category-counts` | 🔴 占位(全部计数硬编码 0) |
 | 搜索 | 建议/结果/趋势/分面 | SearchResults | `/search/suggestions` `/search` `/search/trending` | 🟡 suggestions 真实;trending 硬编码、facets 空 |
 | 购物车 | 增删改/下单 | Cart | `/shoppingCart`(CRUD + `createOrder`) | 🟡 后端真实;**前端仍用 localStorage,未走后端** |
-| 结算 | 金额汇总/优惠码 | Checkout | `/checkout/summary` `/checkout/promo` | 🔴 伪计算:信任前端 price;优惠码硬编码 SAVE10/VIP15 |
+| 结算 | 金额汇总/优惠码 | Checkout | `/checkout/summary` `/checkout/promo` | 🟡 优惠码已接 coupon 表(`/checkout/promo` 先查券再兜底);金额仍信任前端 price(Phase 2 服务端校验) |
 | 支付 | 创建/确认支付 | Checkout | `/payments/create` `/payments/confirm` | 🔴 纯 mock 返回,无表无业务 |
 | 订单 | 我的订单/最近/仪表盘 | DashboardHome / Orders | `/orders` `/orders/recent` `/dashboard/stats` | 🟢 真实(代理 ProductOrderService) |
-| 账户 | 资料/通知偏好 | dashboard/Settings | `/account/profile` `/account/notifications` | 🟡 profile 真实;通知偏好硬编码 + 更新 no-op |
+| 账户 | 资料/通知偏好 | dashboard/Settings | `/account/profile` `/account/notifications` | 🟢 真实(通知偏好落库 `user_notification_pref`) |
 | 地址 | CRUD/默认 | dashboard/Addresses | `/addresses` CRUD | 🟡 CRUD 真实;`setDefaultAddress` no-op |
 | 聊天 | 会话/消息/未读 | UserMessages / MerchantMessages / ChatWidget | `/chat/*` | 🟢 全量真实(唯一无 mock 兜底的模块) |
 | 收藏/关注 | 心愿单/收藏/浏览历史/店铺关注 | Wishlist / ProductDetail | `/productCollect` `/productBrowsingHistory` `/shopCollect` | 🟡 后端真实;前端 Wishlist store 未同步后端 |
 | 评价 | 评论/审核 | ProductDetail 评论区 / AdminReviews | `/productOrderEvaluate` + 管理端 | 🟢 真实 |
-| 退换货 | 申请/状态 | dashboard/Returns | — | ⚪ 纯前端 store,后端无表 |
-| 优惠券 | 领券/使用 | dashboard/Coupons / Cart / Checkout | — | ⚪ 纯前端 store,后端无表 |
-| 到货订阅 | 订阅/通知 | ProductDetail | — | ⚪ 纯前端 store,后端无表 |
-| 通知 | 用户/商家/管理 | admin/Notifications / MerchantLayout 铃铛 | — | 🔴 硬编码数组,无接口 |
+| 退换货 | 申请/状态 | dashboard/Returns | `/returns`(GET/POST) | 🟢 真实(`return_request` 表) |
+| 优惠券 | 领券/使用 | dashboard/Coupons / Cart / Checkout | `/coupons` `/coupons/:id/claim` `/coupons/my-coupons` | 🟢 真实(`coupon` + `user_coupon` 表,checkout promo 已打通) |
+| 到货订阅 | 订阅/通知 | ProductDetail | `/stock-alerts`(GET/POST/DELETE) | 🟢 真实(`stock_alert` 表) |
+| 通知 | 用户/商家/管理 | admin/Notifications / MerchantLayout 铃铛 / 用户中心 | `/notifications` + 已读接口 | 🟢 真实(`notification` 表,按角色广播) |
 | 商家端 | 仪表盘 | MerchantHome | `/merchant/dashboard/stats` `/low-stock` | 🔴 统计硬编码 0;low-stock 真实 |
 | 商家端 | 商品管理 | merchant/Products | `/merchant/products` CRUD | 🟢 真实 |
 | 商家端 | 订单管理 | merchant/Orders | `/merchant/orders*` | 🟢 真实 |
@@ -43,6 +43,7 @@
 ## 2. 完整占位清单(按文件定位)
 
 > 这些位置是「看似实现、实为占位」的代码,补全时以此为准。
+> Phase 1(2026-08-08)已解决项已从清单移除:改密码对接、logo 上传、通知偏好落库、优惠券/退换货/到货订阅/通知后端化。
 
 ### 后端控制器占位(`src/main/java/com/project/platform/controller/`)
 
@@ -63,9 +64,8 @@
 | `StorefrontSearchController.search` | L101-103 | facets 空 Map、relatedSearches 空 |
 | `StorefrontProductController.getCategoryCounts` | L77-87 | 计数全部 0(注释 "Placeholder") |
 | `StorefrontMerchantController.getProfile` | L45-59 | stats 硬编码、featuredProducts 空、policies 硬编码 |
-| `StorefrontAccountController` | L51-64 | 通知偏好硬编码返回、updateNotificationPrefs no-op |
 | `StorefrontAddressController.setDefaultAddress` | L51-55 | no-op,不设默认地址 |
-| `StorefrontCheckoutController` | L22-59 | 用前端传入 price 直接计算;优惠码硬编码 `Map.of("SAVE10",0.10,"VIP15",0.15)` |
+| `StorefrontCheckoutController` | L22-59 | `/checkout/summary` 用前端传入 price 直接计算(未服务端校验);`/checkout/promo` 已接 coupon 表(硬编码 SAVE10/VIP15 仅兜底) |
 
 ### 后端明确 TODO / Bug
 
@@ -80,14 +80,8 @@
 
 | 位置 | 内容 |
 |------|------|
-| `web/src/pages/dashboard/Settings.vue` L50-67 | 改密码纯本地模拟,不调后端 |
-| `web/src/pages/merchant/Settings.vue` L118 | logo 上传仅存 data URL 预览,注释 "upload to CDN when your backend is ready" |
-| `web/src/pages/admin/Notifications.vue` L65-98 | 通知列表硬编码 4 条,无 API |
-| `useMerchantNotifications.ts` | 商家通知硬编码,无 API |
 | `web/src/components/ProductQA.vue` L28-75 | 问答硬编码 mock,提问/点赞仅前端状态 |
 | `web/src/pages/admin/Products.vue` L115 | 商品详情描述为占位文案 |
-| `web/src/stores/coupons.ts` / `returns.ts` / `stockAlerts.ts` | 纯 localStorage,无后端同步 |
-| `web/src/pages/dashboard/Coupons.vue` / `Returns.vue` | 渲染依赖上述本地 store |
 
 ### 前端 localStorage store 清单(后端同步状态)
 
@@ -97,9 +91,9 @@
 | wishlist | `nexus_wishlist_items` | `/productCollect` | ❌ 未同步 |
 | browsingHistory | `nexus_browsing_history` | `/productBrowsingHistory` | ❌ 未同步 |
 | compare | `nexus_compare_items` | — | ❌ 仅本地 |
-| coupons | `nexus_user_coupons` | — | ❌ 仅本地 |
-| returns | `nexus_return_requests` | — | ❌ 仅本地 |
-| stockAlerts | `nexus_stock_alerts` | — | ❌ 仅本地 |
+| coupons | `nexus_user_coupons` | `/coupons` `/coupons/my-coupons` | ✅ 后端化(领券/我的券) |
+| returns | `nexus_return_requests` | `/returns` | ✅ 后端化 |
+| stockAlerts | `nexus_stock_alerts` | `/stock-alerts` | ✅ 后端化 |
 | 钱包提现方式 | `merchant_withdraw_methods_mru_*` | — | ❌ 仅本地 |
 
 ## 3. 关键依赖关系与风险
@@ -115,7 +109,7 @@
 
 见 [ROADMAP.md](ROADMAP.md) Phase 1–4。简单结论:
 
-- **Phase 1(本期)**:纯前端占位补全——改密码、logo 上传、通知偏好落库、优惠券/退换货/到货订阅后端化、通知后端化。
+- **Phase 1(✅ 2026-08-08 已完成)**:改密码对接、logo 上传、通知偏好落库、优惠券/退换货/到货订阅/通知后端化。
 - **Phase 2**:主链路——结算服务端校验、模拟支付落库、购物车/订单全链路。
 - **Phase 3**:后台真实化——钱包、dashboard 统计、设置持久化、搜索/店铺页真实化。
 - **Phase 4**:质量收尾——生产 mock 开关、查重 bug、密码找回、JWT 密钥、退款、验证码、测试、文档同步。

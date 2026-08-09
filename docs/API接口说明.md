@@ -226,7 +226,7 @@
 - 在 Java 侧新增与上表一致的 Controller，或  
 - 修改前端 `api/modules` 中的路径以匹配 Java。
 
-「Java 已实现接口清单」已单独维护在 **`docs/backend-api.md`**（后端 29 个 Controller 端点 + 实现状态 + 与前端契约的差异对照），本仓库可直接使用。
+「Java 已实现接口清单」已单独维护在 **`docs/backend-api.md`**（后端 33 个 Controller 端点 + 实现状态 + 与前端契约的差异对照），本仓库可直接使用。
 
 ---
 

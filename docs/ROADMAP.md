@@ -3,9 +3,11 @@
 > 目标:把「前端成熟、后端半真半假」的原型,分阶段推进为关掉 mock 也能完整跑通的系统。
 > 优先级顺序经项目负责人确认。每阶段含**范围**与**验收标准**;现状依据见 [MODULES.md](MODULES.md)。
 
-## Phase 1 — 前端占位功能补全(本期)
+## Phase 1 — 前端占位功能补全 ✅ 已完成(2026-08-08)
 
 **目标**:让「看似完整但仅前端占位」的功能真正对接后端。优先复用已有后端能力,必要时补建最小表。
+
+> **完成情况**:WP-1~WP-7 全部落地。新增 6 张表(`user_notification_pref` / `coupon` / `user_coupon` / `return_request` / `stock_alert` / `notification`)与 4 个控制器(`CouponController` / `ReturnRequestController` / `StockAlertController` / `NotificationController`);`/checkout/promo` 已接 coupon 表;新端点经冒烟测试全部通过(领券/退换货/订阅/通知/通知偏好);存量 7 个 H2 测试失败与约 30 个前端 TS 错误均为**预存问题**,已移入 Phase 4。
 
 | # | 工作项 | 涉及文件(示意) | 说明 |
 |---|--------|-----------------|------|

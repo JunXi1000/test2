@@ -1,6 +1,6 @@
 # 后端接口契约清单(backend-api)
 
-> 本文档列出 **Spring Boot 后端当前实际暴露的端点**(29 个 Controller),并标注每个端点的**实现状态**与所委托的 Service。
+> 本文档列出 **Spring Boot 后端当前实际暴露的端点**(33 个 Controller),并标注每个端点的**实现状态**与所委托的 Service。
 > 用途:与 [docs/API接口说明.md](API接口说明.md)(前端期望的接口)对照,找出路径/字段差异与缺口;也是实现各阶段路线图的起点清单。
 > 状态标记:🟢 真实 · 🟡 部分(含占位) · 🔴 占位/mock · ⚪ 未建
 
@@ -13,9 +13,10 @@
 
 ---
 
-## 1. 门面控制器(面向 Nexus 前端,12 个)
+## 1. 门面控制器(面向 Nexus 前端,16 个)
 
 > 路径与 `web/src/api/modules/*.ts` 对齐;部分端点仍为硬编码占位(标 🔴/🟡)。
+> Phase 1(2026-08-08)新增了 `CouponController` / `ReturnRequestController` / `StockAlertController` / `NotificationController`,见 §1.13。
 
 ### 1.1 商品 /products — StorefrontProductController
 
@@ -54,8 +55,8 @@
 |------|------|------|------|
 | GET | `/account/profile` | 🟢 | 当前用户资料(含 balance) |
 | POST | `/account/profile` | 🟢 | 更新资料 |
-| GET | `/account/notifications` | 🔴 | 通知偏好硬编码返回 |
-| POST | `/account/notifications` | 🔴 | no-op(不落库) |
+| GET | `/account/notifications` | 🟢 | 通知偏好(读 `user_notification_pref`,无记录时返回默认值) |
+| POST | `/account/notifications` | 🟢 | 更新通知偏好(upsert 落库) |
 
 ### 1.6 地址 /addresses — StorefrontAddressController
 
@@ -72,7 +73,7 @@
 | 方法 | 路径 | 状态 | 说明 |
 |------|------|------|------|
 | POST | `/checkout/summary` | 🔴 | 用前端传入 price 直接算,未按服务端 DB 校验 |
-| POST | `/checkout/promo` | 🔴 | 优惠码硬编码 `SAVE10`/`VIP15` |
+| POST | `/checkout/promo` | 🟡 | 先查 coupon 表(`CouponService.applyByCode`,含门槛/有效期校验),未命中再兜底硬编码 `SAVE10`/`VIP15` |
 
 ### 1.8 支付 /payments — StorefrontPaymentController
 
@@ -144,6 +145,41 @@
 | POST | `/chat/messages` | 🟢 | 发消息(自动建会话) |
 | PUT | `/chat/conversations/:id/read` | 🟢 | 标记已读 |
 
+### 1.13 Phase 1 新增功能控制器(4 个)
+
+> Phase 1(2026-08-08)后端化:优惠券 / 退换货 / 到货订阅 / 通知。均需登录(`/checkout/promo` 除外,已入白名单)。
+
+**优惠券 /coupons — CouponController**(`coupon` + `user_coupon` 表)
+
+| 方法 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| GET | `/coupons` | 🟢 | 可领取券池(未过期/未领完;不含用户领取状态) |
+| POST | `/coupons/:id/claim` | 🟢 | 领取(已过期/已领取/已领完 → `CustomException` 409) |
+| GET | `/coupons/my-coupons` | 🟢 | 我的券(含 isUsed / claimedAt / expiresAt) |
+
+**退换货 /returns — ReturnRequestController**(`return_request` 表)
+
+| 方法 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| GET | `/returns` | 🟢 | 我的退换货列表 |
+| POST | `/returns` | 🟢 | 提交申请(状态 `pending`) |
+
+**到货订阅 /stock-alerts — StockAlertController**(`stock_alert` 表)
+
+| 方法 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| GET | `/stock-alerts/mine` | 🟢 | 我的订阅 |
+| POST | `/stock-alerts` | 🟢 | 订阅(重复订阅 = 删除旧记录重建) |
+| DELETE | `/stock-alerts/:productId` | 🟢 | 取消订阅 |
+
+**通知 /notifications — NotificationController**(`notification` 表,`user_id=0` 表示按角色广播)
+
+| 方法 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| GET | `/notifications` | 🟢 | 我的通知(广播 + 定向,按角色过滤) |
+| POST | `/notifications/:id/read` | 🟢 | 标为已读 |
+| POST | `/notifications/read-all` | 🟢 | 全部已读 |
+
 ---
 
 ## 2. 传统 CRUD 控制器(17 个)
@@ -177,8 +213,7 @@
 | 差异点 | 说明 | 归属阶段 |
 |--------|------|----------|
 | `/payments/*` | 纯 mock,无表 | Phase 2 |
-| `/checkout/*` | 伪计算 + 硬编码优惠码 | Phase 2 |
-| `/account/notifications` | 硬编码 + no-op | Phase 1 (WP-3) |
+| `/checkout/summary` | 伪计算(信任前端 price);`/checkout/promo` 已接 coupon 表 | Phase 2 |
 | `/addresses/:id/default` | no-op | Phase 2 |
 | `/search/trending`、facets | 硬编码/空 | Phase 3 |
 | `/products/category-counts` | 硬编码 0 | Phase 3 |
@@ -187,8 +222,6 @@
 | dashboard stats(admin/merchant) | 硬编码 0 | Phase 3 |
 | `/merchants/:id/profile` | stats 硬编码 | Phase 3 |
 | 密码找回 | 前端 `email` vs 后端 `tel`;token 复用为 userId | Phase 4 |
-| 前端 `updateProfile`(改密码) | 前端本地模拟,未调 `/common/updatePassword` | Phase 1 (WP-1) |
-| 图片上传 | 前端 logo 未走 `/file/upload` | Phase 1 (WP-2) |
 
 ## 4. 维护约定
 

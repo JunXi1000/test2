@@ -51,7 +51,8 @@
               ▼
 ┌───────────────────── MySQL 8.0 ─────────────────────┐
 │  库: template_v3                                     │
-│  15 张表,完整定义见 docker/mysql/init/01-schema.sql    │
+│  22 张表(16 基础 + 6 张 Phase 1 新增),定义见          │
+│  docker/mysql/init/01-schema.sql(权威来源)            │
 │  (仓库根 sql/templatev3_s.sql 仅含 admin 表,已过时)     │
 └─────────────────────────────────────────────────────┘
 ```
@@ -86,7 +87,7 @@ Controller                 Service(接口)            Mapper(接口)          re
 
 | | 门面控制器(Facade) | 传统 CRUD 控制器 |
 |---|---|---|
-| 前缀示例 | `/products` `/orders` `/admin` `/merchant` `/merchants` `/chat` `/account` `/addresses` `/checkout` `/payments` `/search` `/dashboard` | `/product` `/user` `/productOrder` `/shoppingCart` `/common` `/shop` `/productType` ... |
+| 前缀示例 | `/products` `/orders` `/admin` `/merchant` `/merchants` `/chat` `/account` `/addresses` `/checkout` `/payments` `/search` `/dashboard` + Phase 1 新增 `/coupons` `/returns` `/stock-alerts` `/notifications` | `/product` `/user` `/productOrder` `/shoppingCart` `/common` `/shop` `/productType` ... |
 | 面向 | Nexus 前端页面(英文路由) | 平台型中后台通用 CRUD |
 | 注释 | 英文 | 中文 |
 | 实现程度 | 部分端点仍为**硬编码占位**(见 [MODULES.md](MODULES.md)) | 基本真实 CRUD + 少量业务(库存/销量/状态机) |
@@ -163,7 +164,8 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 ## 7. 数据库
 
-- 正式建表 + 种子数据:**`docker/mysql/init/01-schema.sql`**(15 张表,权威来源)。
+- 正式建表 + 种子数据:**`docker/mysql/init/01-schema.sql`**(22 张表,权威来源)。
+- 对已初始化的运行中库补表:增量迁移 **`sql/migration-2026-08-08-phase1.sql`**(含中文种子,执行时须加 `--default-character-set=utf8mb4`,否则中文双重编码成乱码)。
 - 聊天表:**`sql/chat.sql`**(conversation / message)。
 - ⚠️ 仓库根 `sql/templatev3_s.sql` **只有 admin 表,已过时**,本地开发请勿再导入它;以 docker init 脚本为准。
 - 测试用 H2 建表:`src/test/resources/schema-h2.sql`(MODE=MySQL,与主 schema 对齐)。
@@ -174,5 +176,5 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 2. **钱包无表无 Service**:商家钱包硬编码在 `MerchantApiController`。
 3. **结算信任前端价格**:`/checkout/summary` 直接用前端传入 price 计算,未做服务端校验。
 4. **搜索无独立 Service**:trending/facets 硬编码或空;无全文检索。
-5. **前端大量本地 store 与后端未同步**:购物车/心愿单/优惠券/退换货/到货订阅/浏览历史/对比 均在 localStorage。
+5. **前端部分本地 store 与后端未同步**:购物车/心愿单/浏览历史/对比 仍在 localStorage(优惠券/退换货/到货订阅已在 Phase 1 后端化)。
 6. **两套控制器并存**:门面薄转发 + 传统 CRUD 各成体系,新增端点需明确归属。

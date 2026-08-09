@@ -106,3 +106,4 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 | 结算成功但订单列表没有 | mock 关闭后订单只存在于服务端;Phase 2 修复前属预期 |
 | 改了后端不生效 | 本地需重启 Spring Boot;Docker 需 `docker compose up -d --build` |
 | 本机 MySQL 端口冲突 | Docker MySQL 已映射 3307,本地开发改连 3307 或本机 3306 |
+| 迁移 SQL 中文变乱码 | 经 `docker exec ... mysql` 导入含中文的 SQL 必须加 `--default-character-set=utf8mb4`;mysql CLI 默认 latin1,会把 UTF-8 字节双重编码入库 |
