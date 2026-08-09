@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { AUTH_USER_KEY, clearAuthStorage, getStoredToken, setStoredToken } from '@/auth/session'
+import { notifyUserScopeChange } from './userScope'
 
 export interface User {
   id: string
@@ -52,12 +53,15 @@ export const useAuthStore = defineStore('auth', () => {
       setStoredToken(token.value)
     }
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+    // 用户变化后通知各 store 重载对应作用域的数据, 避免新用户读到旧用户数据
+    notifyUserScopeChange()
   }
 
   function logout() {
     user.value = null
     token.value = ''
     clearAuthStorage()
+    notifyUserScopeChange()
   }
 
   function updateUser(userData: Partial<User>) {

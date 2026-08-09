@@ -37,7 +37,7 @@
         <div class="flex-1">
           <div class="flex justify-between items-start mb-1">
             <h3 class="font-semibold text-white" :class="{ 'text-blue-400': !item.read }">{{ item.title }}</h3>
-            <span class="text-xs text-zinc-500">{{ item.time }}</span>
+            <span class="text-xs text-zinc-500">{{ formatRelativeTime(item.createdAt) }}</span>
           </div>
           <p class="text-zinc-400 text-sm mb-3">{{ item.message }}</p>
           <div class="flex gap-2" v-if="!item.read">
@@ -50,52 +50,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Bell as BellIcon, BellOff as BellOffIcon, Info, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-vue-next'
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  formatRelativeTime,
+  type AppNotification,
+} from '@/api/modules/notifications'
 
-interface Notification {
-  id: number
-  title: string
-  message: string
-  type: 'info' | 'success' | 'warning' | 'error'
-  time: string
-  read: boolean
-}
+const notifications = ref<AppNotification[]>([])
 
-const notifications = ref<Notification[]>([
-  {
-    id: 1,
-    title: 'New Merchant Application',
-    message: 'Store "Gadget Pro" has submitted an application for review.',
-    type: 'info',
-    time: '10 mins ago',
-    read: false
-  },
-  {
-    id: 2,
-    title: 'System Update',
-    message: 'The system will undergo maintenance tonight at 02:00 AM.',
-    type: 'warning',
-    time: '2 hours ago',
-    read: false
-  },
-  {
-    id: 3,
-    title: 'High Sales Volume',
-    message: 'Merchant "Nike Store" exceeded $50k revenue today.',
-    type: 'success',
-    time: '5 hours ago',
-    read: true
-  },
-  {
-    id: 4,
-    title: 'Payment Gateway Error',
-    message: 'Multiple failed transactions detected on Stripe gateway.',
-    type: 'error',
-    time: '1 day ago',
-    read: true
-  }
-])
+onMounted(async () => {
+  notifications.value = await getNotifications()
+})
 
 const getIcon = (type: string) => {
   switch (type) {
@@ -109,9 +78,11 @@ const getIcon = (type: string) => {
 const markAsRead = (id: number) => {
   const item = notifications.value.find(n => n.id === id)
   if (item) item.read = true
+  markNotificationRead(id)
 }
 
 const markAllAsRead = () => {
   notifications.value.forEach(n => n.read = true)
+  markAllNotificationsRead()
 }
 </script>

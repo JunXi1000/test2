@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Product } from '@/types/product'
-import { ShoppingCart, ImageOff, Star } from 'lucide-vue-next'
+import { ShoppingCart, ImageOff, Star, Heart, GitCompare } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import { useRouter } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
+import { useWishlistStore } from '@/stores/wishlist'
+import { useCompareStore } from '@/stores/compare'
 import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{
@@ -14,6 +16,8 @@ const props = defineProps<{
 const router = useRouter()
 const imageError = ref(false)
 const cartStore = useCartStore()
+const wishlistStore = useWishlistStore()
+const compareStore = useCompareStore()
 const { toast } = useToast()
 
 // 快速加入购物车
@@ -46,6 +50,51 @@ function getPromoBadge(product: Product) {
   if ((product.reviews ?? 0) >= 200) return 'Popular Choice'
   return 'Fast Dispatch'
 }
+
+function toggleWishlist(e: Event) {
+  e.stopPropagation()
+  const product = props.product
+  wishlistStore.toggleItem({
+    id: product.id,
+    title: product.title,
+    price: product.price,
+    image: product.image,
+    category: product.category,
+    rating: product.rating,
+    reviews: product.reviews,
+  })
+  toast({
+    title: wishlistStore.isInWishlist(product.id) ? 'Added to Wishlist' : 'Removed from Wishlist',
+    description: product.title,
+    variant: 'success'
+  })
+}
+
+function toggleCompare(e: Event) {
+  e.stopPropagation()
+  const product = props.product
+  if (compareStore.isInCompare(product.id)) {
+    compareStore.removeItem(product.id)
+  } else {
+    if (compareStore.items.length >= compareStore.MAX_COMPARE) {
+      toast({
+        title: 'Compare list full',
+        description: `You can compare up to ${compareStore.MAX_COMPARE} products. Remove one first.`,
+        variant: 'destructive'
+      })
+      return
+    }
+    compareStore.addItem({
+      id: product.id,
+      title: product.title,
+      price: product.price,
+      image: product.image,
+      category: product.category,
+      rating: product.rating,
+    })
+    toast({ title: 'Added to Compare', description: product.title, variant: 'success' })
+  }
+}
 </script>
 
 <template>
@@ -73,6 +122,26 @@ function getPromoBadge(product: Product) {
       </div>
       
       <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+      <!-- Wishlist button -->
+      <button
+        @click="toggleWishlist"
+        class="absolute top-2 right-2 p-2 rounded-full bg-background/80 backdrop-blur shadow-sm transition-all hover:scale-110 z-10"
+        :class="wishlistStore.isInWishlist(product.id) ? 'text-red-500' : 'text-muted-foreground hover:text-red-400'"
+        :title="wishlistStore.isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'"
+      >
+        <Heart class="w-4 h-4" :class="{ 'fill-current': wishlistStore.isInWishlist(product.id) }" />
+      </button>
+
+      <!-- Compare checkbox (visible on hover) -->
+      <button
+        @click="toggleCompare"
+        class="absolute top-2 left-2 p-1.5 rounded-lg bg-background/80 backdrop-blur shadow-sm transition-all opacity-0 group-hover:opacity-100 z-10"
+        :class="compareStore.isInCompare(product.id) ? 'opacity-100 !bg-primary/10 text-primary border border-primary/30' : 'text-muted-foreground hover:text-primary'"
+        :title="compareStore.isInCompare(product.id) ? 'Remove from compare' : 'Add to compare'"
+      >
+        <GitCompare class="w-3.5 h-3.5" />
+      </button>
     </div>
 
     <!-- Content -->

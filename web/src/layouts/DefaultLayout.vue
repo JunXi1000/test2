@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import { ShoppingCart, User, Menu, Sun, Moon, X, LogIn, Twitter, Instagram, Facebook, MessageSquare, ArrowUp, Search, RefreshCw } from 'lucide-vue-next'
+import { ShoppingCart, User, Menu, Sun, Moon, X, LogIn, Twitter, Instagram, Facebook, MessageSquare, ArrowUp, Search, RefreshCw, GitCompare } from 'lucide-vue-next'
 import { useCartStore } from '@/stores/cart'
+import { useCompareStore } from '@/stores/compare'
 import { useAuthStore } from '@/stores/auth'
 import { useDark, useToggle, useWindowScroll, useWindowSize } from '@vueuse/core'
 import { ref, watch, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
@@ -10,7 +11,9 @@ const ChatWidget = defineAsyncComponent(() => import('@/components/ui/chat/ChatW
 import { preloadByPath } from '@/router/preload'
 
 const isMobileMenuOpen = ref(false)
+const mobileSearchQuery = ref('')
 const cartStore = useCartStore()
+const compareStore = useCompareStore()
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -182,10 +185,12 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
              <!-- Mobile Search -->
             <div class="relative mb-2">
                <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-               <input 
-                type="search" 
-                placeholder="Search products..." 
+               <input
+                v-model="mobileSearchQuery"
+                type="search"
+                placeholder="Search products..."
                 class="w-full h-10 rounded-lg bg-secondary pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary"
+                @keyup.enter="mobileSearchQuery.trim() && (isMobileMenuOpen = false, router.push({ name: 'SearchResults', query: { q: mobileSearchQuery.trim() } }))"
               />
             </div>
 
@@ -361,6 +366,47 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
           aria-label="Back to top"
         >
           <ArrowUp class="w-5 h-5" />
+        </button>
+      </div>
+    </Transition>
+
+    <!-- Floating Compare Bar -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0 translate-y-4"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-4"
+    >
+      <div
+        v-if="compareStore.items.length >= 2"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border border-border rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-3"
+      >
+        <span class="text-sm font-semibold whitespace-nowrap">
+          {{ compareStore.items.length }} products selected
+        </span>
+        <div class="flex -space-x-2">
+          <img
+            v-for="item in compareStore.items.slice(0, 4)"
+            :key="item.id"
+            :src="item.image"
+            :alt="item.title"
+            class="w-8 h-8 rounded-full border-2 border-card object-cover"
+          />
+        </div>
+        <router-link
+          to="/compare"
+          class="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+        >
+          <GitCompare class="w-4 h-4" />
+          Compare
+        </router-link>
+        <button
+          @click="compareStore.clearAll()"
+          class="text-xs text-muted-foreground hover:text-destructive transition-colors ml-1"
+        >
+          Clear
         </button>
       </div>
     </Transition>

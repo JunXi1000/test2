@@ -1,0 +1,32 @@
+# ============================================================
+# 会议白板助手 - 前端镜像 (Vue 3 / Vite 5)
+# 多阶段构建: node 构建静态资源 -> nginx 托管并反向代理 /api
+# ============================================================
+
+# ---------- 阶段 1: 构建 ----------
+FROM node:20-slim AS build
+WORKDIR /app
+
+# 只拷贝依赖清单，利用 Docker 层缓存
+COPY web/package.json web/package-lock.json ./
+# 使用国内 npm 镜像加速依赖下载(仅容器内生效)
+RUN npm config set registry https://registry.npmmirror.com && npm ci
+
+# 拷贝源码
+COPY web/ .
+
+# 覆盖 .env.production 中的占位值:
+#   真实接口走同源 /api,由 nginx 转发到后端容器
+#   关闭 Mock 模式,使用真实后端数据
+ENV VITE_API_BASE_URL=/api
+ENV VITE_USE_MOCK=false
+
+# 生产构建 -> dist/
+RUN npm run build-prod
+
+# ---------- 阶段 2: nginx 托管 ----------
+FROM nginx:alpine
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80

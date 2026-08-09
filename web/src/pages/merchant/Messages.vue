@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue'
 import {
   Search,
   Send,
@@ -17,11 +17,28 @@ import {
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { useMessagesLayout } from '@/composables/useMessagesLayout'
-import { useChatUploads, type UploadMessage } from '@/composables/useChatUploads'
+import {
+  getConversations,
+  getMessages,
+  sendMessage as sendChatMessage,
+  markAsRead,
+  type Conversation as ApiConversation,
+  type Message as ApiMessage
+} from '@/api/modules/chat'
 
-type Message = UploadMessage & { sender: 'user' | 'merchant' }
+// ── Local types (compatible with template) ──────────────────────────
+interface LocalMessage {
+  id: string
+  content: string
+  sender: 'user' | 'merchant'
+  timestamp: Date
+  read: boolean
+  type?: string
+  fileName?: string
+  fileUrl?: string
+}
 
-interface Conversation {
+interface LocalConversation {
   id: string
   userId: string
   userName: string
@@ -30,16 +47,49 @@ interface Conversation {
   lastMessageTime: Date
   unread: number
   online: boolean
-  messages: Message[]
+  messages: LocalMessage[]
 }
 
+function mapApiMessage(m: ApiMessage): LocalMessage {
+  return {
+    id: String(m.id),
+    content: m.content || '',
+    sender: m.senderType === 'SHOP' ? 'merchant' : 'user',
+    timestamp: new Date(m.createTime),
+    read: m.isRead,
+    type: m.type,
+    fileName: m.fileName,
+    fileUrl: m.fileUrl
+  }
+}
+
+function mapApiConversation(c: ApiConversation): LocalConversation {
+  return {
+    id: c.id,
+    userId: c.participantId,
+    userName: c.participantName,
+    userAvatar: c.participantAvatar || '',
+    lastMessage: c.lastMessage,
+    lastMessageTime: new Date(c.lastMessageTime),
+    unread: c.unreadCount,
+    online: false,
+    messages: []
+  }
+}
+
+// ── State ────────────────────────────────────────────────────────────
 const { toast } = useToast()
 const searchQuery = ref('')
 const activeConversationId = ref<string | null>(null)
 const newMessage = ref('')
 const chatContainerRef = ref<HTMLElement | null>(null)
 const isLoading = ref(true)
+const isSending = ref(false)
 const LAYOUT_PREFERENCES_KEY = 'merchant-messages-layout-preferences-v1'
+
+const conversations = ref<LocalConversation[]>([])
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const {
   sidebarWidth,
@@ -62,66 +112,131 @@ const {
   maxSidebarWidth: 400
 })
 
-// Mock Conversations (Merchant View)
-const conversations = ref<Conversation[]>([
-  {
-    id: 'c1',
-    userId: 'u1',
-    userName: 'Alex Doe',
-    userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop',
-    lastMessage: 'Great! I just placed an order.',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30),
-    unread: 1,
-    online: true,
-    messages: [
-      { id: 'm1', content: 'Hi, is the Air Max 90 in stock?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), read: true },
-      { id: 'm2', content: 'Yes, we have all sizes available.', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5), read: true },
-      { id: 'm3', content: 'Great! I just placed an order.', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60), read: false }
-    ]
-  },
-  {
-    id: 'c3',
-    userId: 'u2',
-    userName: 'Sarah Smith',
-    userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop',
-    lastMessage: 'When will this be restocked?',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 5),
-    unread: 0,
-    online: false,
-    messages: [
-      { id: 'm1', content: 'When will this be restocked?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), read: true }
-    ]
-  }
-])
-
-const activeConversation = computed(() => 
-  conversations.value.find(c => c.id === activeConversationId.value)
+// ── Computed ─────────────────────────────────────────────────────────
+const activeConversation = computed(() =>
+  conversations.value.find((c) => c.id === activeConversationId.value)
 )
 
-const filteredConversations = computed(() => 
-  conversations.value.filter(c => 
+const filteredConversations = computed(() =>
+  conversations.value.filter((c) =>
     c.userName.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 )
 
-onMounted(() => {
-  setTimeout(() => {
-    isLoading.value = false
-    if (window.innerWidth >= 1024 && conversations.value.length > 0) {
-      selectConversation(conversations.value[0].id)
+// ── API helpers ──────────────────────────────────────────────────────
+async function loadConversations() {
+  try {
+    const raw = await getConversations()
+    const oldMap = new Map(conversations.value.map((c) => [c.id, c]))
+    conversations.value = raw.map((c) => {
+      const existing = oldMap.get(c.id)
+      const conv = mapApiConversation(c)
+      if (existing) {
+        conv.messages = existing.messages
+        conv.online = existing.online
+      }
+      return conv
+    })
+  } catch {
+    // keep current state
+  }
+}
+
+async function loadMessagesForConversation(conv: LocalConversation) {
+  try {
+    const msgs = await getMessages(conv.id)
+    conv.messages = msgs.map(mapApiMessage)
+  } catch {
+    conv.messages = []
+  }
+}
+
+async function refreshActiveMessages() {
+  const conv = activeConversation.value
+  if (!conv) return
+  try {
+    const msgs = await getMessages(conv.id)
+    conv.messages = msgs.map(mapApiMessage)
+    scrollToBottom()
+  } catch { /* silent */ }
+}
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    await loadConversations()
+    if (activeConversation.value) {
+      const fresh = conversations.value.find((c) => c.id === activeConversationId.value)
+      if (fresh) {
+        await loadMessagesForConversation(fresh)
+        if (fresh.id === activeConversationId.value) {
+          activeConversation.value!.messages = fresh.messages
+        }
+      }
     }
-  }, 500)
+  }, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+// ── Actions ──────────────────────────────────────────────────────────
+onMounted(async () => {
+  try {
+    await loadConversations()
+  } catch { /* empty */ }
+  isLoading.value = false
+  if (!isMobile.value && conversations.value.length > 0) {
+    selectConversation(conversations.value[0].id)
+  }
+  startPolling()
 })
 
-function selectConversation(id: string) {
+onBeforeUnmount(() => {
+  stopPolling()
+})
+
+async function selectConversation(id: string) {
   activeConversationId.value = id
   if (isMobile.value) {
     mobileViewMode.value = 'chat'
   }
-  const conv = conversations.value.find(c => c.id === id)
+  const conv = conversations.value.find((c) => c.id === id)
   if (conv) {
+    if (conv.messages.length === 0) {
+      await loadMessagesForConversation(conv)
+    }
     conv.unread = 0
     scrollToBottom()
+    await markAsRead(id)
+  }
+}
+
+async function doSendMessage() {
+  if (!newMessage.value.trim() || !activeConversation.value || isSending.value) return
+  const content = newMessage.value.trim()
+  const conv = activeConversation.value
+  newMessage.value = ''
+  isSending.value = true
+
+  try {
+    await sendChatMessage({
+      conversationId: conv.id,
+      receiverId: conv.userId,
+      content,
+      isMerchant: true
+    })
+    await refreshActiveMessages()
+    await loadConversations()
+    scrollToBottom()
+  } catch (err: any) {
+    toast({ title: 'Send failed', description: err?.message || 'Could not send message', variant: 'destructive' })
+  } finally {
+    isSending.value = false
   }
 }
 
@@ -133,30 +248,6 @@ function scrollToBottom() {
   })
 }
 
-function sendMessage() {
-  if (!newMessage.value.trim() || !activeConversation.value) return
-  pushOutgoingMessage({ content: newMessage.value })
-  newMessage.value = ''
-  // scroll handled in pushOutgoingMessage
-  
-  // Mock User Reply
-  setTimeout(() => {
-    if (activeConversation.value) {
-      activeConversation.value.messages.push({
-        id: (Date.now() + 1).toString(),
-        content: 'Okay, thank you!',
-        sender: 'user',
-        timestamp: new Date(),
-        read: false
-      })
-      activeConversation.value.lastMessage = 'Okay, thank you!'
-      activeConversation.value.lastMessageTime = new Date()
-      scrollToBottom()
-      toast({ title: 'New message', description: `Reply from ${activeConversation.value.userName}` })
-    }
-  }, 3000)
-}
-
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
 }
@@ -165,35 +256,16 @@ function formatDate(date: Date) {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
   if (days === 0) return formatTime(date)
   if (days === 1) return 'Yesterday'
   return date.toLocaleDateString()
 }
-
-const {
-  attachmentInputRef,
-  imageInputRef,
-  CHAT_IMAGE_ACCEPT,
-  CHAT_ATTACHMENT_ACCEPT,
-  pushOutgoingMessage,
-  triggerAttachmentPicker,
-  triggerImagePicker,
-  onAttachmentChange,
-  onImageChange
-} = useChatUploads({
-  sender: 'merchant',
-  getActiveConversation: () => activeConversation.value,
-  toast,
-  scrollToBottom
-})
 </script>
 
 <template>
   <div
     class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 md:flex-row md:items-stretch"
   >
-    <!-- Sidebar: conversation list (resizable width on desktop) -->
     <div
       v-if="showSidebar"
       class="flex w-full min-h-0 flex-col border-zinc-200/80 bg-zinc-100/95 dark:border-zinc-800 dark:bg-zinc-900/90 md:h-full md:max-h-full md:shrink-0 md:border-r"
@@ -343,7 +415,6 @@ const {
       @mousedown.prevent="startSidebarResize"
     />
 
-    <!-- Main: chat -->
     <div
       v-if="showChat"
       class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-zinc-50/90 dark:bg-zinc-950/40"
@@ -482,50 +553,22 @@ const {
           <div
             class="flex items-end gap-1 rounded-2xl border-2 border-violet-400/45 bg-white px-1 py-1 shadow-sm transition-shadow focus-within:border-violet-500 focus-within:shadow-md focus-within:shadow-violet-500/10 dark:border-violet-500/35 dark:bg-zinc-900"
           >
-            <button
-              type="button"
-              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
-              @click="triggerAttachmentPicker"
-            >
-              <Paperclip class="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
-              @click="triggerImagePicker"
-            >
-              <ImageIcon class="h-5 w-5" />
-            </button>
             <textarea
               v-model="newMessage"
               rows="1"
               placeholder="Type a message..."
               class="max-h-32 min-h-[40px] flex-1 resize-none border-0 bg-transparent py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-              @keydown.enter.prevent="sendMessage"
+              @keydown.enter.prevent="doSendMessage"
             />
             <button
               type="button"
               class="mb-0.5 mr-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-md transition-all hover:bg-violet-700 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-              :disabled="!newMessage.trim()"
+              :disabled="!newMessage.trim() || isSending"
               aria-label="Send"
-              @click="sendMessage"
+              @click="doSendMessage"
             >
               <Send class="h-[18px] w-[18px]" />
             </button>
-            <input
-              ref="attachmentInputRef"
-              type="file"
-              class="hidden"
-              :accept="CHAT_ATTACHMENT_ACCEPT"
-              @change="onAttachmentChange"
-            />
-            <input
-              ref="imageInputRef"
-              type="file"
-              class="hidden"
-              :accept="CHAT_IMAGE_ACCEPT"
-              @change="onImageChange"
-            />
           </div>
         </div>
       </template>
@@ -542,7 +585,7 @@ const {
         <p><span class="text-muted-foreground">Messages:</span> {{ activeConversation?.messages.length ?? 0 }}</p>
       </div>
       <div class="rounded-lg border border-border p-3">
-        <p class="text-xs text-muted-foreground">Ultra-wide mode enabled. Switch back to two columns with the top icon.</p>
+        <p class="text-xs text-muted-foreground">Ultra-wide mode enabled.</p>
       </div>
     </aside>
   </div>

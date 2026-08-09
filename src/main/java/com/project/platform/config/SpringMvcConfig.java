@@ -21,7 +21,14 @@ public class SpringMvcConfig implements WebMvcConfigurer {
                         "/common/login",
                         "/common/register",
                         "/common/retrievePassword",
-                        "/file/**"
+                        "/file/**",
+                        // Public storefront — no auth required
+                        "/products/**",
+                        "/search/**",
+                        "/merchants/**",
+                        "/checkout/summary",
+                        "/checkout/promo"
+                        // 注意: /payments/create 需要登录(创建订单),不能放白名单
                 );
     }
 }

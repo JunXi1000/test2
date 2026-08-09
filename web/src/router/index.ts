@@ -147,6 +147,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/ProductDetail.vue')
       },
       {
+        path: 'search',
+        name: 'SearchResults',
+        component: () => import('@/pages/SearchResults.vue')
+      },
+      {
+        path: 'compare',
+        name: 'Compare',
+        component: () => import('@/pages/Compare.vue')
+      },
+      {
         path: 'store/:id',
         name: 'StorePage',
         component: () => import('@/pages/StorePage.vue')
@@ -191,6 +201,16 @@ const routes: RouteRecordRaw[] = [
             path: 'addresses',
             name: 'Addresses',
             component: () => import('@/pages/dashboard/Addresses.vue')
+          },
+          {
+            path: 'returns',
+            name: 'DashboardReturns',
+            component: () => import('@/pages/dashboard/Returns.vue')
+          },
+          {
+            path: 'coupons',
+            name: 'DashboardCoupons',
+            component: () => import('@/pages/dashboard/Coupons.vue')
           },
           {
             path: 'settings',

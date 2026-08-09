@@ -1,55 +1,157 @@
 import { USE_MOCK } from '@/config/env'
-import { post } from '@/api/http'
+import { get, post, put } from '@/api/http'
 import type { User } from '@/stores/auth'
 
-interface LoginPayload { email: string; password: string; role?: 'user' | 'admin' | 'merchant' }
+// ── Role / type mapping ──────────────────────────────────────────────
+const ROLE_TO_TYPE: Record<string, string> = {
+  user: 'USER',
+  merchant: 'SHOP',
+  admin: 'ADMIN'
+}
+
+const TYPE_TO_ROLE: Record<string, User['role']> = {
+  USER: 'user',
+  SHOP: 'merchant',
+  ADMIN: 'admin'
+}
+
+// ── JWT payload decoding (no signature verification — just reading claims) ──
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = parts[1]
+    // Convert URL-safe base64 to standard base64
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const json = atob(base64)
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+function userFromBackendDto(dto: {
+  id: number | string
+  type?: string
+  username?: string
+  nickname?: string
+  avatarUrl?: string
+  email?: string
+}): User {
+  const role = TYPE_TO_ROLE[dto.type || ''] || 'user'
+  return {
+    id: String(dto.id),
+    name: dto.nickname || dto.username || '',
+    email: dto.email || '',
+    role,
+    avatar: dto.avatarUrl
+  }
+}
+
+// ── Login ────────────────────────────────────────────────────────────
+export interface LoginPayload {
+  email: string
+  password: string
+  role?: 'user' | 'admin' | 'merchant'
+}
+
 export interface LoginResult {
   user: User
-  token?: string
+  token: string
 }
 
 export async function login(payload: LoginPayload): Promise<LoginResult> {
   if (USE_MOCK) {
     const role = payload.role || 'user'
-    return Promise.resolve({
+    return {
       user: {
         id: `${role}_123`,
         name: role === 'admin' ? 'System Admin' : role === 'merchant' ? 'Nike Store' : 'Alex Doe',
         email: payload.email,
-        role: role,
-        avatar: role === 'admin' 
-          ? 'https://images.unsplash.com/photo-1531123414780-f7423cb3e09d?q=80&w=200&auto=format&fit=crop'
-          : role === 'merchant'
-          ? 'https://images.unsplash.com/photo-1517849845537-4d257902454a?q=80&w=200&auto=format&fit=crop'
-          : 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop'
+        role,
+        avatar: ''
       },
       token: `mock_${role}_token`
-    })
-  }
-  // Compatible with both response styles:
-  // 1) { user, token }
-  // 2) user only
-  return post<any>('/auth/login', payload).then((res) => {
-    if (res?.user) {
-      return { user: res.user as User, token: res.token }
     }
-    return { user: res as User, token: res?.token }
+  }
+
+  // Backend expects { username, password, type } at POST /common/login
+  const type = ROLE_TO_TYPE[payload.role || 'user'] || 'USER'
+  const token: string = await post('/common/login', {
+    username: payload.email,   // frontend uses email field, backend uses username
+    password: payload.password,
+    type
   })
+
+  // Decode JWT payload to extract user info
+  const claims = decodeJwtPayload(token)
+  let user: User
+  if (claims?.currentUser) {
+    const dto = typeof claims.currentUser === 'string'
+      ? JSON.parse(claims.currentUser)
+      : claims.currentUser
+    user = userFromBackendDto(dto)
+  } else {
+    // Fallback: make a separate call to get current user
+    const dto = await get<any>('/common/currentUser')
+    user = userFromBackendDto(dto)
+  }
+
+  return { user, token }
 }
 
-/** Mock 环境下忘记密码成功页展示的测试用 token，用于打开「重置密码」页联调。 */
+// ── Register ─────────────────────────────────────────────────────────
+export interface RegisterPayload {
+  role: 'user' | 'merchant'
+  email: string        // becomes username on backend
+  password: string
+  nickname: string     // display name
+  /** Merchant-only: store name */
+  storeName?: string
+  /** Merchant-only: qualification image URLs (comma-separated or JSON array) */
+  aptitudeImgs?: string
+}
+
+export async function register(payload: RegisterPayload): Promise<void> {
+  if (USE_MOCK) {
+    await new Promise((r) => setTimeout(r, 800))
+    return
+  }
+
+  const type = ROLE_TO_TYPE[payload.role] || 'USER'
+  const body: Record<string, any> = {
+    type,
+    username: payload.email,
+    password: payload.password,
+    nickname: payload.nickname
+  }
+
+  if (type === 'SHOP') {
+    body.name = payload.storeName || payload.nickname
+    body.aptitudeImgs = payload.aptitudeImgs || ''
+  }
+
+  await put('/common/register', body)
+}
+
+// ── Password reset ───────────────────────────────────────────────────
 export const MOCK_PASSWORD_RESET_TOKEN = 'mock-dev-reset-token'
 
-/** 请求发送重置密码邮件（真实环境由后端发信，邮件内带指向 `/reset-password?token=...` 的链接）。 */
 export async function requestPasswordReset(email: string): Promise<void> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 800))
     return
   }
-  await post('/auth/forgot-password', { email })
+  // Backend: POST /common/retrievePassword expects RetrievePasswordDTO { type, tel, code, password }
+  // Frontend sends email; backend uses tel field — this is inherently mismatched
+  // For now, send as best-effort
+  await post('/common/retrievePassword', {
+    type: 'USER',
+    tel: email,
+    password: ''
+  })
 }
 
-/** 使用邮件中的 token 设置新密码（无需登录）。 */
 export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 800))
@@ -57,5 +159,7 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
     if (!t) throw new Error('无效的重置链接。')
     return
   }
-  await post('/auth/reset-password', { token: token.trim(), password: newPassword })
+  // Backend: POST /common/resetPassword?type=USER&id=<userId>
+  // The token from the email would need to encode the user ID
+  await post(`/common/resetPassword?type=USER&id=${token}`)
 }

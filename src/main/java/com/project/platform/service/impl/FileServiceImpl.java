@@ -79,8 +79,8 @@ public class FileServiceImpl implements FileService {
 
 
     private String getFilePath(String fileName) {
-        return basePath + fileName;
-
+        // 用 Paths.get 保证目录与文件名之间自动补分隔符(与 createFile 保持一致)
+        return Paths.get(basePath, fileName).toString();
     }
 
     public File getFile(String fileName) throws IOException {

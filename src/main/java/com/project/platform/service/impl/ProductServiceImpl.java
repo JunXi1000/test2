@@ -1,5 +1,6 @@
 package com.project.platform.service.impl;
 
+import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductBrowsingHistory;
 import com.project.platform.entity.ProductCollect;
@@ -36,8 +37,10 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public PageVO<Product> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
         PageVO<Product> page = new PageVO();
-        if (CurrentUserThreadLocal.getCurrentUser().getType().equals("SHOP")) {
-            query.put("shopId", CurrentUserThreadLocal.getCurrentUser().getId());
+        // 公开接口(如 /products)可能无登录用户,需判空
+        CurrentUserDTO currentUser = CurrentUserThreadLocal.getCurrentUser();
+        if (currentUser != null && "SHOP".equals(currentUser.getType())) {
+            query.put("shopId", currentUser.getId());
         }
         PageParams.Normalized p = PageParams.normalize(pageNum, pageSize);
         List<Product> list = productMapper.queryPage(p.offset(), p.pageSize(), query);
@@ -120,10 +123,15 @@ public class ProductServiceImpl implements ProductService {
     public List<Product> recommended(Integer size) {
         int n = clampTopSize(size == null ? 10 : size);
         List<Product> productList = list();
+        // 公开接口可能无登录用户,无登录时跳过个性化权重
+        CurrentUserDTO currentUser = CurrentUserThreadLocal.getCurrentUser();
+        if (currentUser == null) {
+            return productList.stream().limit(n).collect(Collectors.toList());
+        }
         //浏览记录
-        List<ValueNameVO> productBrowsingHistoryStatisticsList = productBrowsingHistoryMapper.statisticsProductTypeIdByUserId(CurrentUserThreadLocal.getCurrentUser().getId());
+        List<ValueNameVO> productBrowsingHistoryStatisticsList = productBrowsingHistoryMapper.statisticsProductTypeIdByUserId(currentUser.getId());
         //收藏
-        List<ValueNameVO> productCollectStatisticsList = productCollectMapper.statisticsProductTypeIdByUserId(CurrentUserThreadLocal.getCurrentUser().getId());
+        List<ValueNameVO> productCollectStatisticsList = productCollectMapper.statisticsProductTypeIdByUserId(currentUser.getId());
         for (Product product : productList) {
             for (ValueNameVO item : productBrowsingHistoryStatisticsList) {
                 if (item.getName().equals(product.getProductTypeId())) {

@@ -1,0 +1,19 @@
+{
+  "name": "NEXUS - Online Store",
+  "short_name": "NEXUS",
+  "description": "Your one-stop electronics marketplace",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["shopping", "electronics"],
+  "lang": "en-US"
+}

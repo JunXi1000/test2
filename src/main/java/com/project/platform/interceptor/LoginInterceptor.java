@@ -28,7 +28,14 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
         String path = request.getRequestURL().toString();
         log.debug("接口登录拦截 path={}", path);
+        // Support both "token" header (legacy) and "Authorization: Bearer <token>" (frontend)
         String token = request.getHeader("token");
+        if (token == null || token.isEmpty()) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
         log.debug("登录校验 token 是否为空={}", token == null || token.isEmpty());
         if (token == null || token.isEmpty()) {
             log.debug("token 为空，请求被拦截");
@@ -42,9 +49,29 @@ public class LoginInterceptor implements HandlerInterceptor {
             throw new CustomException(HttpStatus.UNAUTHORIZED,"token无效，请求被拦截");
         } else {
             CurrentUserDTO currentUserDTO = JSON.parseObject(claims.get("currentUser").toString(), CurrentUserDTO.class);
+            // 基于路径的角色校验: /admin/** 仅管理员, /merchant/** 仅商家
+            if (!checkRole(request.getRequestURI(), currentUserDTO)) {
+                throw new CustomException(HttpStatus.FORBIDDEN, "无权限访问该接口");
+            }
             CurrentUserThreadLocal.set(currentUserDTO);
             return true;
         }
+    }
+
+    /**
+     * 按路径前缀校验角色权限
+     * 注意: /merchants/** (公开店铺页) 与 /merchant/** (商家后台) 前缀不同, 需区分
+     */
+    private boolean checkRole(String path, CurrentUserDTO currentUserDTO) {
+        String type = currentUserDTO.getType();
+        if (path.startsWith("/admin")) {
+            return "ADMIN".equals(type);
+        }
+        // /merchant/** 为商家后台; /merchants/** 为公开店铺页(已配置白名单,不经过此处)
+        if (path.startsWith("/merchant/")) {
+            return "SHOP".equals(type);
+        }
+        return true;
     }
 
     @Override

@@ -141,6 +141,9 @@ public class CommonController {
      */
 
     private CommonService getCommonService(String type) {
+        if (type == null || type.isEmpty()) {
+            throw new CustomException("用户类型不能为空");
+        }
         switch (type) {
             case "ADMIN":
                 return adminService;

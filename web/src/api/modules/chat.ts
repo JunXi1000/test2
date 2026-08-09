@@ -1,106 +1,98 @@
-import { USE_MOCK } from '@/config/env'
 import { get, post, put } from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 
 export interface Message {
-  id: string
-  conversationId: string
-  senderId: string
-  senderName: string
-  senderAvatar?: string
+  id: number
+  conversationId: number
+  senderId: number
+  senderType: 'USER' | 'SHOP'
   content: string
-  timestamp: number
-  read: boolean
-  isMerchant: boolean // true if sender is merchant
+  type: 'text' | 'image' | 'attachment'
+  fileName?: string
+  fileUrl?: string
+  isRead: boolean
+  createTime: string
 }
 
+// Backend Conversation shape (snake_case from DB)
+interface BackendConversation {
+  id: number
+  userId: number
+  shopId: number
+  productId?: number
+  lastMessage: string
+  lastMessageTime: string
+  userUnreadCount: number
+  shopUnreadCount: number
+  createTime: string
+  userName?: string
+  userAvatar?: string
+  shopName?: string
+  shopAvatar?: string
+  productName?: string
+  productImage?: string
+}
+
+// Frontend conversation shape (used by components)
 export interface Conversation {
   id: string
-  participantId: string // The other person's ID (user or merchant)
+  participantId: string
   participantName: string
   participantAvatar?: string
   lastMessage: string
   lastMessageTime: number
   unreadCount: number
-  productId?: number // Optional: context for the conversation
+  productId?: number
   productName?: string
   productImage?: string
 }
 
-const MOCK_MESSAGES: Message[] = []
-const MOCK_CONVERSATIONS: Conversation[] = []
-
-// Helper to generate ID
-const genId = () => Math.random().toString(36).substring(2, 9)
-
-export async function getConversations(role: 'user' | 'merchant'): Promise<Conversation[]> {
-  if (USE_MOCK) {
-    // In a real app, backend filters by current user ID
-    // Here we just return mock data
-    return Promise.resolve(MOCK_CONVERSATIONS)
-  }
-  return get<Conversation[]>('/chat/conversations')
+function isMerchant(): boolean {
+  const auth = useAuthStore()
+  return auth.user?.role === 'merchant'
 }
 
-export async function getMessages(conversationId: string): Promise<Message[]> {
-  if (USE_MOCK) {
-    return Promise.resolve(MOCK_MESSAGES.filter(m => m.conversationId === conversationId).sort((a, b) => a.timestamp - b.timestamp))
+function mapConversation(c: BackendConversation): Conversation {
+  const merchant = isMerchant()
+  return {
+    id: String(c.id),
+    participantId: merchant ? String(c.userId) : String(c.shopId),
+    participantName: (merchant ? c.userName : c.shopName) || 'Unknown',
+    participantAvatar: merchant ? c.userAvatar : c.shopAvatar,
+    lastMessage: c.lastMessage || '',
+    lastMessageTime: c.lastMessageTime ? new Date(c.lastMessageTime).getTime() : Date.now(),
+    unreadCount: merchant ? c.shopUnreadCount : c.userUnreadCount,
+    productId: c.productId,
+    productName: c.productName,
+    productImage: c.productImage
   }
+}
+
+export async function getConversations(): Promise<Conversation[]> {
+  const raw = await get<BackendConversation[]>('/chat/conversations')
+  return (raw || []).map(mapConversation)
+}
+
+export async function getMessages(conversationId: string | number): Promise<Message[]> {
   return get<Message[]>(`/chat/conversations/${conversationId}/messages`)
 }
 
-export async function sendMessage(payload: { conversationId?: string, receiverId: string, content: string, productId?: number, isMerchant: boolean }): Promise<Message> {
-  if (USE_MOCK) {
-    let convId = payload.conversationId
-    
-    // If no conversation ID, check if one exists or create new
-    if (!convId) {
-      // Simple mock logic: create new conversation
-      convId = genId()
-      const newConv: Conversation = {
-        id: convId,
-        participantId: payload.receiverId,
-        participantName: payload.isMerchant ? 'User' : 'Nike Store', // Mock names
-        participantAvatar: payload.isMerchant 
-          ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop'
-          : 'https://images.unsplash.com/photo-1517849845537-4d257902454a?q=80&w=200&auto=format&fit=crop',
-        lastMessage: payload.content,
-        lastMessageTime: Date.now(),
-        unreadCount: 0,
-        productId: payload.productId
-      }
-      MOCK_CONVERSATIONS.push(newConv)
-    } else {
-      // Update existing conversation
-      const conv = MOCK_CONVERSATIONS.find(c => c.id === convId)
-      if (conv) {
-        conv.lastMessage = payload.content
-        conv.lastMessageTime = Date.now()
-      }
-    }
-
-    const newMessage: Message = {
-      id: genId(),
-      conversationId: convId,
-      senderId: 'current_user', // Mock ID
-      senderName: payload.isMerchant ? 'Nike Store' : 'You',
-      content: payload.content,
-      timestamp: Date.now(),
-      read: false,
-      isMerchant: payload.isMerchant
-    }
-    
-    MOCK_MESSAGES.push(newMessage)
-    return Promise.resolve(newMessage)
-  }
-  return post<Message>('/chat/messages', payload)
+export async function sendMessage(payload: {
+  conversationId?: string | number
+  receiverId: string | number
+  content: string
+  productId?: number
+  isMerchant: boolean
+}): Promise<Message> {
+  return post<Message>('/chat/messages', {
+    conversationId: payload.conversationId ? Number(payload.conversationId) : null,
+    receiverId: Number(payload.receiverId),
+    content: payload.content,
+    productId: payload.productId ?? null,
+    isMerchant: payload.isMerchant
+  })
 }
 
-export async function markAsRead(conversationId: string): Promise<void> {
-  if (USE_MOCK) {
-    MOCK_MESSAGES.filter(m => m.conversationId === conversationId).forEach(m => m.read = true)
-    const conv = MOCK_CONVERSATIONS.find(c => c.id === conversationId)
-    if (conv) conv.unreadCount = 0
-    return Promise.resolve()
-  }
+export async function markAsRead(conversationId: string | number): Promise<void> {
   return put(`/chat/conversations/${conversationId}/read`)
 }

@@ -3,6 +3,7 @@ import { API_BASE_URL } from '@/config/env'
 import type { ApiResponse } from './types'
 import { clearAuthStorage, getStoredToken } from '@/auth/session'
 import { loginPathFromAppPath } from '@/utils/loginRoutes'
+import { notifyUserScopeChange } from '@/stores/userScope'
 
 let isHandlingUnauthorized = false
 
@@ -29,8 +30,8 @@ http.interceptors.response.use(
     // If server follows { code, message, data } structure
     const res = response.data as any
     if (typeof res?.code === 'number') {
-      if (res.code === 0) return res.data
-      const err = new Error(res.message || 'Request Error')
+      if (res.code === 0 || res.code === 200) return res.data
+      const err = new Error(res.msg || res.message || 'Request Error')
       // Attach for debugging if needed
       ;(err as any).code = res.code
       throw err
@@ -45,6 +46,7 @@ http.interceptors.response.use(
         isHandlingUnauthorized = true
 
         clearAuthStorage()
+        notifyUserScopeChange() // 会话失效后本地数据回退到 guest 作用域
         try {
           sessionStorage.setItem('auth_cleared', '1')
         } catch {}

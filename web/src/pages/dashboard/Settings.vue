@@ -4,7 +4,7 @@ import Button from '@/components/ui/button/Button.vue'
 import { useToast } from '@/composables/useToast'
 import { Camera } from 'lucide-vue-next'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { getProfile, updateProfile as apiUpdateProfile, getNotificationPrefs, updateNotificationPrefs } from '@/api/modules/account'
+import { getProfile, updateProfile as apiUpdateProfile, getNotificationPrefs, updateNotificationPrefs, changePassword as apiChangePassword } from '@/api/modules/account'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 
 const { toast } = useToast()
@@ -47,7 +47,11 @@ async function saveNotificationPrefs() {
   }
 }
 
-const updatePassword = () => {
+const updatePassword = async () => {
+  if (!password.value.current || !password.value.new) {
+    toast({ title: 'Error', description: 'Please enter your current and new password.', variant: 'destructive' })
+    return
+  }
   if (password.value.new !== password.value.confirm) {
     toast({
       title: 'Error',
@@ -56,14 +60,18 @@ const updatePassword = () => {
     })
     return
   }
-  
-  toast({
-    title: 'Password Changed',
-    description: 'Your password has been updated securely.',
-    variant: 'success'
-  })
-  
-  password.value = { current: '', new: '', confirm: '' }
+
+  try {
+    await apiChangePassword({ oldPassword: password.value.current, newPassword: password.value.new })
+    toast({
+      title: 'Password Changed',
+      description: 'Your password has been updated securely.',
+      variant: 'success'
+    })
+    password.value = { current: '', new: '', confirm: '' }
+  } catch (e: any) {
+    toast({ title: 'Update failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+  }
 }
 
 const handleAvatarUpload = (event: Event) => {

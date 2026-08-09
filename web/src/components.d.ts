@@ -12,6 +12,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    Breadcrumb: typeof import('./components/ui/Breadcrumb.vue')['default']
     Button: typeof import('./components/ui/button/Button.vue')['default']
     Card: typeof import('./components/ui/card/Card.vue')['default']
     ChatWidget: typeof import('./components/ui/chat/ChatWidget.vue')['default']
@@ -53,6 +54,7 @@ declare module 'vue' {
     MerchantNotificationPanel: typeof import('./components/merchant/MerchantNotificationPanel.vue')['default']
     PageProgress: typeof import('./components/ui/progress/PageProgress.vue')['default']
     ProductCard: typeof import('./components/ui/card/ProductCard.vue')['default']
+    ProductQA: typeof import('./components/ui/ProductQA.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Skeleton: typeof import('./components/ui/skeleton/Skeleton.vue')['default']
@@ -67,6 +69,7 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const Breadcrumb: typeof import('./components/ui/Breadcrumb.vue')['default']
   const Button: typeof import('./components/ui/button/Button.vue')['default']
   const Card: typeof import('./components/ui/card/Card.vue')['default']
   const ChatWidget: typeof import('./components/ui/chat/ChatWidget.vue')['default']
@@ -108,6 +111,7 @@ declare global {
   const MerchantNotificationPanel: typeof import('./components/merchant/MerchantNotificationPanel.vue')['default']
   const PageProgress: typeof import('./components/ui/progress/PageProgress.vue')['default']
   const ProductCard: typeof import('./components/ui/card/ProductCard.vue')['default']
+  const ProductQA: typeof import('./components/ui/ProductQA.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
   const Skeleton: typeof import('./components/ui/skeleton/Skeleton.vue')['default']

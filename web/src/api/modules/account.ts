@@ -29,3 +29,16 @@ export async function updateNotificationPrefs(data: Partial<NotificationPrefs>):
   if (USE_MOCK) return Promise.resolve()
   await post('/account/notifications', data)
 }
+
+export interface ChangePasswordPayload {
+  /** current password */
+  oldPassword: string
+  /** new password, 6-64 chars (backend validates) */
+  newPassword: string
+}
+
+/** Change password against the backend (POST /common/updatePassword). */
+export async function changePassword(data: ChangePasswordPayload): Promise<void> {
+  if (USE_MOCK) return Promise.resolve()
+  await post('/common/updatePassword', data)
+}

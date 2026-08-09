@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMerchantNotifications } from '@/composables/useMerchantNotifications'
 import MerchantNotificationPanel from '@/components/merchant/MerchantNotificationPanel.vue'
@@ -52,8 +52,12 @@ const preloadRoute = (path: string) => {
   preloadByPath(path)
 }
 
-const { hasUnread } = useMerchantNotifications()
+const { hasUnread, load: loadNotifications } = useMerchantNotifications()
 const notifOpen = ref(false)
+
+onMounted(() => {
+  loadNotifications()
+})
 </script>
 
 <template>

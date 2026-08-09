@@ -55,4 +55,13 @@ window.addEventListener('storage', (event) => {
   }
 })
 
+// PWA: Register service worker
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Silently fail — non-critical enhancement
+    })
+  })
+}
+
 app.mount('#app')

@@ -14,7 +14,7 @@ import java.util.Map;
  * 管理员
  */
 @RestController
-@RequestMapping("/admin")
+@RequestMapping("/admin-accounts")
 public class AdminController {
     @Resource
     private AdminService adminService;

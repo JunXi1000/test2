@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { onUserScopeChange, scopedKey } from './userScope'
 
 export interface CartItem {
   id: number
@@ -12,8 +13,20 @@ export interface CartItem {
   quantity: number
 }
 
+const STORAGE_KEY = 'nexus_cart_items'
+
+function loadFromStorage(): CartItem[] {
+  try {
+    const raw = localStorage.getItem(scopedKey(STORAGE_KEY))
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 export const useCartStore = defineStore('cart', () => {
-  const saved = localStorage.getItem('nexus_cart_items')
+  const saved = loadFromStorage()
   let initialItems: CartItem[] = []
   try {
     initialItems = saved ? JSON.parse(saved) : []
@@ -120,8 +133,14 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   watch(items, (val) => {
-    localStorage.setItem('nexus_cart_items', JSON.stringify(val))
+    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(val))
   }, { deep: true })
+
+  // 登录/登出切换用户后, 重新加载当前用户作用域下的购物车
+  onUserScopeChange(() => {
+    items.value = loadFromStorage()
+    directBuyItem.value = null
+  })
 
   return { items, directBuyItem, subtotal, totalItems, addItem, removeItem, updateQuantity, updateItemOptions, clearCart, setDirectBuyItem, clearDirectBuyItem }
 })

@@ -1,0 +1,79 @@
+# ============================================================
+# 会议白板助手 - Docker 一键环境
+# 用法:
+#   docker compose up -d --build       启动全部(首次构建需几分钟)
+#   docker compose ps                  查看状态
+#   docker compose logs -f backend     查看后端日志
+#   docker compose down                停止并移除容器(数据卷保留)
+#   docker compose down -v             彻底删除(含数据库数据)
+#
+# 访问:
+#   前端  http://localhost:5173
+#   后端  http://localhost:1000
+#   MySQL  host: localhost  port: 3307  user: root  pwd: 123456
+# ============================================================
+
+services:
+  # ---------- 数据库 ----------
+  mysql:
+    image: mysql:8.0
+    container_name: xmsz-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: "template_v3"
+      TZ: "Asia/Shanghai"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 宿主机用 3307 访问,避免与本机已有 MySQL 冲突
+      - "3307:3306"
+    volumes:
+      # 首次启动自动执行建表 + 种子数据
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      # 数据持久化
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p123456"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---------- 后端 Spring Boot ----------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: xmsz-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 覆盖 application.yaml 里的 localhost 数据库地址
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/template_v3?useUnicode=true&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai"
+      SPRING_DATASOURCE_USERNAME: "root"
+      SPRING_DATASOURCE_PASSWORD: "123456"
+      FILES_UPLOADS_PATH: "/app/uploads"
+      FILES_UPLOADS_BASEURL: "http://localhost:1000/file"
+    ports:
+      - "1000:1000"
+    volumes:
+      # 挂载宿主 uploads 目录,让种子数据里的图片可直接访问
+      - ./uploads:/app/uploads
+
+  # ---------- 前端 Nginx ----------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: xmsz-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  mysql-data:

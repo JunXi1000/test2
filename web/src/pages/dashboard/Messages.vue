@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue'
 import {
   Search,
   Send,
@@ -28,13 +28,29 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { useMessagesLayout } from '@/composables/useMessagesLayout'
-import { useChatUploads, type UploadMessage } from '@/composables/useChatUploads'
 import { getMerchantPublicProfile, type MerchantPublicProfile } from '@/api/modules/merchantPublic'
+import {
+  getConversations,
+  getMessages,
+  sendMessage as sendChatMessage,
+  markAsRead,
+  type Conversation as ApiConversation,
+  type Message as ApiMessage
+} from '@/api/modules/chat'
 
-// Mock Data for now as backend integration is simulated
-type Message = UploadMessage & { sender: 'user' | 'merchant' }
+// ── Local types (compatible with template) ──────────────────────────
+interface LocalMessage {
+  id: string
+  content: string
+  sender: 'user' | 'merchant'
+  timestamp: Date
+  read: boolean
+  type?: string
+  fileName?: string
+  fileUrl?: string
+}
 
-interface Conversation {
+interface LocalConversation {
   id: string
   merchantId: string
   merchantName: string
@@ -43,9 +59,37 @@ interface Conversation {
   lastMessageTime: Date
   unread: number
   online: boolean
-  messages: Message[]
+  messages: LocalMessage[]
 }
 
+function mapApiMessage(m: ApiMessage): LocalMessage {
+  return {
+    id: String(m.id),
+    content: m.content || '',
+    sender: m.senderType === 'SHOP' ? 'merchant' : 'user',
+    timestamp: new Date(m.createTime),
+    read: m.isRead,
+    type: m.type,
+    fileName: m.fileName,
+    fileUrl: m.fileUrl
+  }
+}
+
+function mapApiConversation(c: ApiConversation): LocalConversation {
+  return {
+    id: c.id,
+    merchantId: c.participantId,
+    merchantName: c.participantName,
+    merchantAvatar: c.participantAvatar || '',
+    lastMessage: c.lastMessage,
+    lastMessageTime: new Date(c.lastMessageTime),
+    unread: c.unreadCount,
+    online: false,
+    messages: []
+  }
+}
+
+// ── State ────────────────────────────────────────────────────────────
 const authStore = useAuthStore()
 const { toast } = useToast()
 const searchQuery = ref('')
@@ -53,9 +97,14 @@ const activeConversationId = ref<string | null>(null)
 const newMessage = ref('')
 const chatContainerRef = ref<HTMLElement | null>(null)
 const isLoading = ref(true)
+const isSending = ref(false)
 const merchantInfoVisible = ref(false)
 const merchantInfoTargetId = ref<string | null>(null)
 const LAYOUT_PREFERENCES_KEY = 'dashboard-messages-layout-preferences-v1'
+
+const conversations = ref<LocalConversation[]>([])
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const {
   sidebarWidth,
@@ -78,43 +127,9 @@ const {
   maxSidebarWidth: 400
 })
 
-// Mock Conversations
-const conversations = ref<Conversation[]>([
-  {
-    id: 'c1',
-    merchantId: 'm1',
-    merchantName: 'Nike Official Store',
-    merchantAvatar: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=200&auto=format&fit=crop',
-    lastMessage: 'Your order has been shipped!',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 30), // 30 mins ago
-    unread: 2,
-    online: true,
-    messages: [
-      { id: 'm1', content: 'Hi, is the Air Max 90 in stock?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), read: true },
-      { id: 'm2', content: 'Yes, we have all sizes available.', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5), read: true },
-      { id: 'm3', content: 'Great! I just placed an order.', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60), read: true },
-      { id: 'm4', content: 'Thanks for your purchase! We will ship it today.', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 45), read: true },
-      { id: 'm5', content: 'Your order has been shipped!', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 30), read: false }
-    ]
-  },
-  {
-    id: 'c2',
-    merchantId: 'm2',
-    merchantName: 'Adidas Originals',
-    merchantAvatar: 'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=200&auto=format&fit=crop',
-    lastMessage: 'Thanks for contacting us.',
-    lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    unread: 0,
-    online: false,
-    messages: [
-      { id: 'm1', content: 'Do you ship to Canada?', sender: 'user', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 25), read: true },
-      { id: 'm2', content: 'Thanks for contacting us. Yes we do!', sender: 'merchant', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), read: true }
-    ]
-  }
-])
-
-const activeConversation = computed(() => 
-  conversations.value.find(c => c.id === activeConversationId.value)
+// ── Computed ─────────────────────────────────────────────────────────
+const activeConversation = computed(() =>
+  conversations.value.find((c) => c.id === activeConversationId.value)
 )
 
 const activeMerchantInfo = computed(() => {
@@ -124,32 +139,136 @@ const activeMerchantInfo = computed(() => {
   return conv || null
 })
 
-const filteredConversations = computed(() => 
-  conversations.value.filter(c => 
+const filteredConversations = computed(() =>
+  conversations.value.filter((c) =>
     c.merchantName.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 )
 
-onMounted(() => {
-  setTimeout(() => {
-    isLoading.value = false
-    // Auto-select first conversation on desktop
-    if (window.innerWidth >= 1024 && conversations.value.length > 0) {
-      selectConversation(conversations.value[0].id)
+// ── API helpers ──────────────────────────────────────────────────────
+async function loadConversations() {
+  try {
+    const raw = await getConversations()
+    // Preserve already-loaded messages when refreshing
+    const oldMap = new Map(conversations.value.map((c) => [c.id, c]))
+    conversations.value = raw.map((c) => {
+      const existing = oldMap.get(c.id)
+      const conv = mapApiConversation(c)
+      if (existing) {
+        conv.messages = existing.messages
+        conv.online = existing.online
+      }
+      return conv
+    })
+  } catch {
+    // keep current state
+  }
+}
+
+async function loadMessagesForConversation(conv: LocalConversation) {
+  try {
+    const msgs = await getMessages(conv.id)
+    conv.messages = msgs.map(mapApiMessage)
+  } catch {
+    conv.messages = []
+  }
+}
+
+async function refreshActiveMessages() {
+  const conv = activeConversation.value
+  if (!conv) return
+  try {
+    const msgs = await getMessages(conv.id)
+    conv.messages = msgs.map(mapApiMessage)
+    scrollToBottom()
+  } catch { /* silent */ }
+}
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(async () => {
+    await loadConversations()
+    if (activeConversation.value) {
+      const fresh = conversations.value.find((c) => c.id === activeConversationId.value)
+      if (fresh) {
+        await loadMessagesForConversation(fresh)
+        if (fresh.id === activeConversationId.value) {
+          activeConversation.value!.messages = fresh.messages
+        }
+      }
     }
-  }, 500)
+  }, 5000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+// ── Actions ──────────────────────────────────────────────────────────
+onMounted(async () => {
+  try {
+    await loadConversations()
+  } catch { /* empty */ }
+  isLoading.value = false
+  if (!isMobile.value && conversations.value.length > 0) {
+    selectConversation(conversations.value[0].id)
+  }
+  startPolling()
 })
 
-function selectConversation(id: string) {
+onBeforeUnmount(() => {
+  stopPolling()
+})
+
+async function selectConversation(id: string) {
   activeConversationId.value = id
   if (isMobile.value) {
     mobileViewMode.value = 'chat'
   }
-  const conv = conversations.value.find(c => c.id === id)
+  const conv = conversations.value.find((c) => c.id === id)
   if (conv) {
+    if (conv.messages.length === 0) {
+      await loadMessagesForConversation(conv)
+    }
     conv.unread = 0
     scrollToBottom()
+    await markAsRead(id)
   }
+}
+
+async function doSendMessage() {
+  if (!newMessage.value.trim() || !activeConversation.value || isSending.value) return
+  const content = newMessage.value.trim()
+  const conv = activeConversation.value
+  newMessage.value = ''
+  isSending.value = true
+
+  try {
+    await sendChatMessage({
+      conversationId: conv.id,
+      receiverId: conv.merchantId,
+      content,
+      isMerchant: false
+    })
+    await refreshActiveMessages()
+    await loadConversations()
+    scrollToBottom()
+  } catch (err: any) {
+    toast({ title: 'Send failed', description: err?.message || 'Could not send message', variant: 'destructive' })
+  } finally {
+    isSending.value = false
+  }
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (chatContainerRef.value) {
+      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
+    }
+  })
 }
 
 const merchantProfile = ref<MerchantPublicProfile | null>(null)
@@ -181,39 +300,6 @@ function formatNumber(n: number): string {
   return n.toString()
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (chatContainerRef.value) {
-      chatContainerRef.value.scrollTop = chatContainerRef.value.scrollHeight
-    }
-  })
-}
-
-function sendMessage() {
-  if (!newMessage.value.trim() || !activeConversation.value) return
-
-  pushOutgoingMessage({ content: newMessage.value })
-  newMessage.value = ''
-  // scroll handled in pushOutgoingMessage
-  
-  // Mock Merchant Reply
-  setTimeout(() => {
-    if (activeConversation.value) {
-      activeConversation.value.messages.push({
-        id: (Date.now() + 1).toString(),
-        content: 'Thanks for your message! We will get back to you shortly.',
-        sender: 'merchant',
-        timestamp: new Date(),
-        read: false
-      })
-      activeConversation.value.lastMessage = 'Thanks for your message! We will get back to you shortly.'
-      activeConversation.value.lastMessageTime = new Date()
-      scrollToBottom()
-      toast({ title: 'New message', description: `Reply from ${activeConversation.value.merchantName}` })
-    }
-  }, 2000)
-}
-
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
 }
@@ -222,28 +308,10 @@ function formatDate(date: Date) {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  
   if (days === 0) return formatTime(date)
   if (days === 1) return 'Yesterday'
   return date.toLocaleDateString()
 }
-
-const {
-  attachmentInputRef,
-  imageInputRef,
-  CHAT_IMAGE_ACCEPT,
-  CHAT_ATTACHMENT_ACCEPT,
-  pushOutgoingMessage,
-  triggerAttachmentPicker,
-  triggerImagePicker,
-  onAttachmentChange,
-  onImageChange
-} = useChatUploads({
-  sender: 'user',
-  getActiveConversation: () => activeConversation.value,
-  toast,
-  scrollToBottom
-})
 </script>
 
 <template>
@@ -537,50 +605,22 @@ const {
           <div
             class="flex items-end gap-1 rounded-2xl border-2 border-violet-400/45 bg-white px-1 py-1 shadow-sm transition-shadow focus-within:border-violet-500 focus-within:shadow-md focus-within:shadow-violet-500/10 dark:border-violet-500/35 dark:bg-zinc-900"
           >
-            <button
-              type="button"
-              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
-              @click="triggerAttachmentPicker"
-            >
-              <Paperclip class="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              class="rounded-xl p-2.5 text-zinc-500 transition-colors hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-950/40 dark:hover:text-violet-400"
-              @click="triggerImagePicker"
-            >
-              <ImageIcon class="h-5 w-5" />
-            </button>
             <textarea
               v-model="newMessage"
               rows="1"
               placeholder="Type a message..."
               class="max-h-32 min-h-[40px] flex-1 resize-none border-0 bg-transparent py-2.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-              @keydown.enter.prevent="sendMessage"
+              @keydown.enter.prevent="doSendMessage"
             />
             <button
               type="button"
               class="mb-0.5 mr-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-md transition-all hover:bg-violet-700 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
-              :disabled="!newMessage.trim()"
+              :disabled="!newMessage.trim() || isSending"
               aria-label="Send"
-              @click="sendMessage"
+              @click="doSendMessage"
             >
               <Send class="h-[18px] w-[18px]" />
             </button>
-            <input
-              ref="attachmentInputRef"
-              type="file"
-              class="hidden"
-              :accept="CHAT_ATTACHMENT_ACCEPT"
-              @change="onAttachmentChange"
-            />
-            <input
-              ref="imageInputRef"
-              type="file"
-              :accept="CHAT_IMAGE_ACCEPT"
-              class="hidden"
-              @change="onImageChange"
-            />
           </div>
         </div>
       </template>
@@ -602,7 +642,6 @@ const {
     </aside>
 
     <el-drawer v-model="merchantInfoVisible" title="Store Profile" size="400px" destroy-on-close>
-      <!-- Loading state -->
       <div v-if="merchantProfileLoading" class="space-y-5">
         <div class="flex items-center gap-3">
           <Skeleton class="w-14 h-14 rounded-full" />
@@ -620,9 +659,7 @@ const {
         <Skeleton class="h-40 rounded-lg" />
       </div>
 
-      <!-- Loaded profile -->
       <div v-else-if="merchantProfile" class="space-y-5">
-        <!-- Header -->
         <div class="flex items-center gap-3">
           <div class="relative">
             <div class="w-14 h-14 rounded-full bg-secondary overflow-hidden border-2 border-border">
@@ -645,7 +682,6 @@ const {
 
         <p class="text-sm text-muted-foreground leading-relaxed">{{ merchantProfile.description }}</p>
 
-        <!-- Quick actions -->
         <div class="flex gap-2">
           <router-link :to="`/store/${merchantProfile.id}`" class="flex-1" @click="merchantInfoVisible = false">
             <Button variant="outline" class="w-full h-9 text-sm gap-1.5">
@@ -655,7 +691,6 @@ const {
           </router-link>
         </div>
 
-        <!-- Stats grid -->
         <div class="grid grid-cols-3 gap-2">
           <div class="rounded-lg border border-border p-2.5 text-center">
             <p class="text-lg font-bold text-primary">{{ formatNumber(merchantProfile.stats.totalProducts) }}</p>
@@ -671,7 +706,6 @@ const {
           </div>
         </div>
 
-        <!-- Service indicators -->
         <div class="flex gap-3 text-xs">
           <div class="flex items-center gap-1.5 text-muted-foreground">
             <Clock class="w-3.5 h-3.5 text-emerald-500" />
@@ -683,7 +717,6 @@ const {
           </div>
         </div>
 
-        <!-- Featured Products -->
         <div v-if="merchantProfile.featuredProducts.length > 0">
           <h4 class="text-sm font-semibold mb-3">Popular Products</h4>
           <div class="space-y-2.5">
@@ -712,7 +745,6 @@ const {
           </div>
         </div>
 
-        <!-- Store policies -->
         <div>
           <h4 class="text-sm font-semibold mb-3">Store Policies</h4>
           <div class="space-y-2.5">
@@ -733,13 +765,11 @@ const {
           </div>
         </div>
 
-        <!-- Meta -->
         <p class="text-[10px] text-muted-foreground text-center pt-2 border-t border-border">
           Member since {{ merchantProfile.joinedDate }} • {{ formatNumber(merchantProfile.stats.totalReviews) }} reviews
         </p>
       </div>
 
-      <!-- Fallback -->
       <div v-else class="py-12 text-center text-muted-foreground">
         <p class="text-sm">No merchant information available.</p>
       </div>

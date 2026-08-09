@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Star, Truck, ShieldCheck, Minus, Plus, Share2, MessageSquare, Check, ShoppingBag, Zap, ChevronLeft, ChevronRight, ThumbsUp, X, Hash, Store, Clock, Package, Reply, CornerDownRight, Trash2, BadgeCheck } from 'lucide-vue-next'
+import { Star, Truck, ShieldCheck, Minus, Plus, Share2, MessageSquare, Check, ShoppingBag, Zap, ChevronLeft, ChevronRight, ThumbsUp, X, Hash, Store, Clock, Package, Reply, CornerDownRight, Trash2, BadgeCheck, Heart } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import { useCartStore } from '@/stores/cart'
+import { useWishlistStore } from '@/stores/wishlist'
+import { useBrowsingHistory } from '@/stores/browsingHistory'
+import { useStockAlertStore } from '@/stores/stockAlerts'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { getProductById } from '@/api/modules/product'
 import type { Product } from '@/types/product'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
+import Breadcrumb from '@/components/ui/Breadcrumb.vue'
+import ProductQA from '@/components/ui/ProductQA.vue'
 import { getMerchantPublicProfile, type MerchantPublicProfile } from '@/api/modules/merchantPublic'
 
 const route = useRoute()
 const router = useRouter()
 const cartStore = useCartStore()
+const wishlistStore = useWishlistStore()
+const browsingHistory = useBrowsingHistory()
+const stockAlertStore = useStockAlertStore()
 const { toast } = useToast()
 const productId = Number(route.params.id)
 
@@ -335,13 +343,14 @@ const contactSeller = () => {
   router.push('/dashboard/messages')
 }
 
-const activeTab = ref<'details' | 'specs' | 'reviews'>('details')
+const activeTab = ref<'details' | 'specs' | 'reviews' | 'qa'>('details')
 const tabSwitcherRef = ref<HTMLElement | null>(null)
-const tabKeys: Array<'details' | 'specs' | 'reviews'> = ['details', 'specs', 'reviews']
+const tabKeys: Array<'details' | 'specs' | 'reviews' | 'qa'> = ['details', 'specs', 'reviews', 'qa']
 const activeTabIndex = computed(() => Math.max(0, tabKeys.indexOf(activeTab.value)))
 const detailsSectionRef = ref<HTMLElement | null>(null)
 const specsSectionRef = ref<HTMLElement | null>(null)
 const reviewsSectionRef = ref<HTMLElement | null>(null)
+const qaSectionRef = ref<HTMLElement | null>(null)
 const isProgrammaticTabScroll = ref(false)
 let tabScrollUnlockTimer: ReturnType<typeof setTimeout> | null = null
 let idleWarmupTimer: number | null = null
@@ -813,13 +822,14 @@ async function jumpToReviews() {
   await switchTab('reviews')
 }
 
-async function switchTab(tab: 'details' | 'specs' | 'reviews') {
+async function switchTab(tab: 'details' | 'specs' | 'reviews' | 'qa') {
   activeTab.value = tab
   await nextTick()
-  const sectionMap = {
+  const sectionMap: Record<string, HTMLElement | null> = {
     details: detailsSectionRef.value,
     specs: specsSectionRef.value,
-    reviews: reviewsSectionRef.value
+    reviews: reviewsSectionRef.value,
+    qa: qaSectionRef.value
   }
   const target = sectionMap[tab]
   if (!target) return
@@ -879,7 +889,8 @@ function syncActiveTabByScroll() {
   const sections: Array<{ tab: 'details' | 'specs' | 'reviews'; el: HTMLElement | null }> = [
     { tab: 'details', el: detailsSectionRef.value },
     { tab: 'specs', el: specsSectionRef.value },
-    { tab: 'reviews', el: reviewsSectionRef.value }
+    { tab: 'reviews', el: reviewsSectionRef.value },
+    { tab: 'qa', el: qaSectionRef.value }
   ]
 
   let currentTab: 'details' | 'specs' | 'reviews' = 'details'
@@ -896,7 +907,17 @@ async function fetchDetail() {
     isLoadingRef.value = true
     errorRef.value = ''
     productRef.value = await getProductById(productId)
-    
+
+    // record browsing history
+    browsingHistory.recordView({
+      id: productRef.value.id,
+      title: productRef.value.title,
+      price: productRef.value.price,
+      image: productRef.value.image ?? productRef.value.images?.[0] ?? '',
+      category: productRef.value.category,
+      rating: productRef.value.rating,
+    })
+
     selectedColor.value = null
     selectedSize.value = ''
     
@@ -954,6 +975,7 @@ const stockStatus = computed(() => {
 onMounted(fetchDetail)
 onMounted(loadMerchant)
 onMounted(loadPersistedReviews)
+onMounted(() => stockAlertStore.load())
 onMounted(() => {
   window.addEventListener('scroll', syncActiveTabByScroll, { passive: true })
 })
@@ -1018,7 +1040,16 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
   <div class="product-detail-page min-h-screen bg-background pb-36 md:pb-0">
     <!-- Main Content Area -->
     <div class="max-w-[1440px] mx-auto px-3 sm:px-4 md:px-8 py-4 md:py-12">
-      
+
+      <!-- Breadcrumb -->
+      <Breadcrumb
+        :items="[
+          { label: productRef?.category || 'Products', to: productRef?.category ? `/search?category=${productRef.category}` : undefined },
+          { label: productRef?.title || 'Loading...' }
+        ]"
+        class="mb-4 md:mb-6"
+      />
+
       <div v-if="isLoadingRef" class="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 lg:gap-12">
         <div class="lg:col-span-5 space-y-4">
           <Skeleton class="w-full max-w-md mx-auto lg:mx-0 aspect-[4/3] rounded-2xl" />
@@ -1288,6 +1319,16 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
               >
                 BUY IT NOW
               </Button>
+              <!-- Wishlist -->
+              <Button
+                variant="ghost"
+                class="w-full h-10 rounded-xl text-sm font-semibold transition-all"
+                :class="productRef && wishlistStore.isInWishlist(productRef.id) ? 'text-red-500 bg-red-50 dark:bg-red-950/20' : ''"
+                @click="productRef && wishlistStore.toggleItem({ id: productRef.id, title: productRef.title, price: productRef.price, image: productRef.image ?? productRef.images?.[0] ?? '', category: productRef.category, rating: productRef.rating, reviews: productRef.reviews })"
+              >
+                <Heart class="w-4 h-4 mr-2" :class="{ 'fill-current': productRef && wishlistStore.isInWishlist(productRef.id) }" />
+                {{ productRef && wishlistStore.isInWishlist(productRef.id) ? 'SAVED TO WISHLIST' : 'ADD TO WISHLIST' }}
+              </Button>
               <div class="flex flex-wrap items-center gap-2 text-xs">
                 <span v-if="productRef?.colors?.length" class="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 font-semibold text-primary">
                   <span
@@ -1335,6 +1376,16 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
                 'text-red-600': stockStatus.type === 'danger'
               }"
             >{{ stockStatus.text }}</span>
+
+            <!-- Notify when back in stock -->
+            <button
+              v-if="stockStatus.type === 'danger' && productRef"
+              @click="stockAlertStore.isSubscribed(productRef.id) ? stockAlertStore.unsubscribe(productRef.id) : stockAlertStore.subscribe({ id: productRef.id, title: productRef.title, image: productRef.image ?? productRef.images?.[0] ?? '' }, authStore.user?.email || '')"
+              class="text-xs font-bold px-2.5 py-1 rounded-full border transition-colors"
+              :class="stockAlertStore.isSubscribed(productRef.id) ? 'bg-primary/10 border-primary/30 text-primary' : 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:border-amber-800 dark:text-amber-400 hover:bg-amber-100'"
+            >
+              {{ stockAlertStore.isSubscribed(productRef.id) ? '✓ Notified on Restock' : '🔔 Notify Me' }}
+            </button>
           </div>
 
           <!-- Trust Badges -->
@@ -1412,14 +1463,14 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
             <span
               class="pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white dark:bg-zinc-800 shadow-sm transition-all duration-300 ease-out"
               :style="{
-                width: 'calc((100% - 0.5rem) / 3)',
-                left: `calc(0.25rem + ${activeTabIndex} * ((100% - 0.5rem) / 3))`
+                width: 'calc((100% - 0.5rem) / 4)',
+                left: `calc(0.25rem + ${activeTabIndex} * ((100% - 0.5rem) / 4))`
               }"
             />
             <button 
               v-for="(tab, idx) in tabKeys"
               :key="tab"
-              @click="switchTab(tab as 'details' | 'specs' | 'reviews')"
+              @click="switchTab(tab as 'details' | 'specs' | 'reviews' | 'qa')"
               @keydown="onTabKeydown($event, idx)"
               :data-tab="tab"
               class="relative z-10 flex-1 py-3 rounded-xl text-[10px] sm:text-xs font-black tracking-[0.08em] sm:tracking-widest uppercase transition-all duration-300 ease-out transform-gpu"
@@ -1710,6 +1761,15 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
                 Load More Reviews ({{ filteredReviews.length - visibleReviews.length }})
               </Button>
             </section>
+
+            <!-- Q&A -->
+            <section ref="qaSectionRef" id="qa-section" class="scroll-mt-40 space-y-10">
+              <div>
+                <h3 class="text-2xl font-black mb-2">Questions & Answers</h3>
+                <p class="text-muted-foreground text-sm">Ask the seller or other buyers about this product.</p>
+              </div>
+              <ProductQA v-if="productRef" :product-id="productRef.id" :product-title="productRef.title" />
+            </section>
           </div>
         </div>
       </div>
@@ -1735,6 +1795,14 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
           >
             <MessageSquare class="w-3.5 h-3.5" />
             Chat
+          </button>
+          <button
+            v-if="productRef"
+            @click="wishlistStore.toggleItem({ id: productRef.id, title: productRef.title, price: productRef.price, image: productRef.image ?? productRef.images?.[0] ?? '', category: productRef.category, rating: productRef.rating, reviews: productRef.reviews })"
+            class="h-9 mb-0.5 shrink-0 w-9 rounded-lg border flex items-center justify-center transition-colors"
+            :class="wishlistStore.isInWishlist(productRef.id) ? 'border-red-200 bg-red-50 dark:bg-red-950/20 text-red-500' : 'border-border bg-card text-muted-foreground'"
+          >
+            <Heart class="w-4 h-4" :class="{ 'fill-current': wishlistStore.isInWishlist(productRef.id) }" />
           </button>
         </div>
         <div class="mobile-buy-actions grid grid-cols-2 gap-2">

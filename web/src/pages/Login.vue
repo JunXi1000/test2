@@ -250,6 +250,10 @@ const handleLogin = async () => {
           </template>
           <template v-else-if="loginPortal === 'merchant'">
             <p>
+              Don't have a store yet?
+              <router-link to="/signup?role=merchant" class="text-primary hover:underline font-medium">Open a store</router-link>
+            </p>
+            <p>
               <router-link to="/login" class="text-primary hover:underline font-medium">Customer sign in</router-link>
               <span class="mx-1.5 text-border">·</span>
               <router-link to="/admin/login" class="text-primary hover:underline font-medium">Admin portal</router-link>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.MessageMapper">
+
+    <insert id="insert" parameterType="com.project.platform.entity.Message" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO message
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="conversationId != null">conversation_id,</if>
+            <if test="senderId != null">sender_id,</if>
+            <if test="senderType != null">sender_type,</if>
+            <if test="content != null">content,</if>
+            <if test="type != null">type,</if>
+            <if test="fileName != null">file_name,</if>
+            <if test="fileUrl != null">file_url,</if>
+            <if test="isRead != null">is_read,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="conversationId != null">#{conversationId},</if>
+            <if test="senderId != null">#{senderId},</if>
+            <if test="senderType != null">#{senderType},</if>
+            <if test="content != null">#{content},</if>
+            <if test="type != null">#{type},</if>
+            <if test="fileName != null">#{fileName},</if>
+            <if test="fileUrl != null">#{fileUrl},</if>
+            <if test="isRead != null">#{isRead},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="markAsRead">
+        UPDATE message
+        SET is_read = 1
+        WHERE conversation_id = #{conversationId}
+          AND sender_type != #{readerType}
+          AND is_read = 0
+    </update>
+
+</mapper>

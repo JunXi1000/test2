@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.project.platform.mapper.ConversationMapper">
+
+    <insert id="insert" parameterType="com.project.platform.entity.Conversation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO conversation
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="shopId != null">shop_id,</if>
+            <if test="productId != null">product_id,</if>
+            <if test="lastMessage != null">last_message,</if>
+            <if test="lastMessageTime != null">last_message_time,</if>
+            <if test="userUnreadCount != null">user_unread_count,</if>
+            <if test="shopUnreadCount != null">shop_unread_count,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        VALUES
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="shopId != null">#{shopId},</if>
+            <if test="productId != null">#{productId},</if>
+            <if test="lastMessage != null">#{lastMessage},</if>
+            <if test="lastMessageTime != null">#{lastMessageTime},</if>
+            <if test="userUnreadCount != null">#{userUnreadCount},</if>
+            <if test="shopUnreadCount != null">#{shopUnreadCount},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateLastMessage">
+        UPDATE conversation
+        SET last_message = #{lastMessage},
+            last_message_time = #{lastMessageTime}
+        WHERE id = #{id}
+    </update>
+
+    <update id="incrementUnread">
+        UPDATE conversation
+        SET ${column} = ${column} + 1
+        WHERE id = #{conversationId}
+    </update>
+
+    <update id="resetUnread">
+        UPDATE conversation
+        SET ${column} = 0
+        WHERE id = #{conversationId}
+    </update>
+
+</mapper>

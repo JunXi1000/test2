@@ -1,5 +1,6 @@
 import { USE_MOCK } from '@/config/env'
 import { get } from '@/api/http'
+import { scopedKey } from '@/stores/userScope'
 
 export interface OrderItem {
   productId?: number
@@ -80,9 +81,13 @@ const MOCK_ORDERS: Order[] = [
 /** User-placed orders from checkout (prepended before seed mock data). */
 const USER_CHECKOUT_ORDERS_KEY = 'nexus_checkout_orders_v1'
 
+function checkoutOrdersKey(): string {
+  return scopedKey(USER_CHECKOUT_ORDERS_KEY)
+}
+
 export function loadUserCheckoutOrders(): Order[] {
   try {
-    const raw = localStorage.getItem(USER_CHECKOUT_ORDERS_KEY)
+    const raw = localStorage.getItem(checkoutOrdersKey())
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     return Array.isArray(parsed) ? (parsed as Order[]) : []
@@ -93,7 +98,7 @@ export function loadUserCheckoutOrders(): Order[] {
 
 function saveUserCheckoutOrders(list: Order[]) {
   try {
-    localStorage.setItem(USER_CHECKOUT_ORDERS_KEY, JSON.stringify(list))
+    localStorage.setItem(checkoutOrdersKey(), JSON.stringify(list))
   } catch {
     /* ignore quota */
   }

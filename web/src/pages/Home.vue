@@ -4,6 +4,7 @@ import ProductCard from '@/components/ui/card/ProductCard.vue'
 import Button from '@/components/ui/button/Button.vue'
 import { getProducts, type ProductQuery } from '@/api/modules/product'
 import type { Product } from '@/types/product'
+import { useBrowsingHistory } from '@/stores/browsingHistory'
 import { useToast } from '@/composables/useToast'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useRouter } from 'vue-router'
@@ -14,6 +15,7 @@ import { useScroll, useEventListener } from '@vueuse/core'
 
 const router = useRouter()
 const { toast } = useToast()
+const browsingHistory = useBrowsingHistory()
 const containerRef = ref<HTMLElement | null>(null)
 const carouselRef = ref<any>(null)
 const activeCarouselIndex = ref(0)
@@ -378,7 +380,7 @@ const filteredProducts = computed(() => productsRef.value)
                 type="text"
                 placeholder="Search..."
                 class="h-8 w-full rounded-full bg-secondary border border-transparent px-2.5 text-xs sm:text-sm outline-none focus:border-primary transition-all pl-8 pr-7"
-                @keyup.enter="fetchProducts(true)"
+                @keyup.enter="searchQuery.trim() && router.push({ name: 'SearchResults', query: { q: searchQuery.trim() } })"
               />
               <Search class="absolute left-2.5 top-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
               <button
@@ -503,6 +505,40 @@ const filteredProducts = computed(() => productsRef.value)
             {{ refreshTexts.no_more }}
           </div>
         </template>
+      </div>
+
+      <!-- Recently Viewed -->
+      <div v-if="browsingHistory.recentItems.length > 0 && !searchQuery" class="mt-12 pt-8 border-t border-border">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold">Recently Viewed</h2>
+          <button
+            @click="browsingHistory.clearHistory()"
+            class="text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Clear History
+          </button>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          <div
+            v-for="item in browsingHistory.recentItems"
+            :key="item.id"
+            class="group rounded-xl border border-border bg-card overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
+            @click="router.push(`/product/${item.id}`)"
+          >
+            <div class="aspect-square bg-secondary overflow-hidden">
+              <img
+                :src="item.image"
+                :alt="item.title"
+                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                loading="lazy"
+              />
+            </div>
+            <div class="p-2.5">
+              <h4 class="text-xs font-semibold line-clamp-1 group-hover:text-primary transition-colors">{{ item.title }}</h4>
+              <p class="text-sm font-bold text-primary mt-0.5">${{ Number(item.price).toLocaleString('en-US') }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

@@ -48,12 +48,75 @@
 │   ├── package.json
 │   └── vite.config.js
 ├── docs/                     # 项目文档
+│   ├── ARCHITECTURE.md       # 系统架构（分层/认证/Docker 部署）
+│   ├── MODULES.md            # 功能模块与实现状态矩阵（真实/部分/占位）
+│   ├── DEVELOPMENT.md        # 开发指南与代码规范
+│   ├── backend-api.md        # 后端接口契约清单（端点×实现状态）
+│   ├── ROADMAP.md            # 开发路线图（Phase 1–4）
 │   └── API接口说明.md        # Nexus 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```
 
-## 🚀 环境准备
+> 📖 **文档索引**：新开发者从 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 起步（环境/启动/mock 机制），读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 了解架构，用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发。
+
+## 🐳 方式一：Docker 一键启动（推荐）
+
+> 无需在本地安装 Java / Maven / Node / MySQL，容器内全部自带。仅需安装 **Docker Desktop**。
+
+### 1. 安装 Docker Desktop
+
+1. 前往 https://www.docker.com/products/docker-desktop/ 下载并安装。
+2. 启动 Docker Desktop，等待状态变为 **running**（右下角鲸鱼图标常亮）。
+
+### 2. 一键启动
+
+在项目根目录**双击** `Docker启动.bat`（或在终端运行）：
+
+```bash
+docker compose up -d --build
+```
+
+首次运行会构建三个镜像（MySQL 8.0 / Spring Boot / Nginx），需要 **5~15 分钟**（取决于网络，已配置国内镜像加速）。再次启动为秒级。
+
+### 3. 访问
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 前端 | http://localhost:5173 | 商城首页（Nginx 托管 + `/api` 反代） |
+| 后端 | http://localhost:1000 | Spring Boot API |
+| MySQL | localhost:3307 | root / 123456 |
+
+**演示账号（密码均为 `123456`）：**
+
+| 角色 | 账号 |
+|------|------|
+| 管理员 | `admin` |
+| 买家 | `user1` |
+| 商家 | `shop1` |
+
+数据库建表 + 种子数据在容器首次启动时自动执行（见 [docker/mysql/init](docker/mysql/init/)）。
+
+### 4. 常用命令
+
+```bash
+docker compose ps                 # 查看运行状态
+docker compose logs -f backend    # 实时查看后端日志
+docker compose down               # 停止服务（数据保留）
+docker compose down -v            # 停止并删除数据库数据（重新初始化）
+docker compose up -d --build      # 重新构建并启动（代码改动后使用）
+```
+
+### 5. 常见问题
+
+- **端口被占用**：前端默认 5173、后端 1000、MySQL 3307。可在 [docker-compose.yml](docker-compose.yml) 中修改 `ports` 映射。
+- **需要国内镜像加速**：Maven 使用阿里云镜像（[docker/maven/settings.xml](docker/maven/settings.xml)），npm 使用 npmmirror，均在 Dockerfile 内生效，不影响本机环境。
+
+---
+
+## 🚀 方式二：本地开发（需自行安装环境）
+
+### 环境准备
 
 在启动项目前，请确保你的开发环境中已安装以下软件：
 

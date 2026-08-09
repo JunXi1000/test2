@@ -114,8 +114,8 @@
                     </div>
                     <div class="min-w-0 flex-1 space-y-2">
                       <p class="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                        JPG, PNG, WebP or GIF · max {{ MAX_LOGO_MB }} MB. Files are stored as a preview
-                        data URL in settings (upload to CDN when your backend is ready).
+                        JPG, PNG, WebP or GIF · max {{ MAX_LOGO_MB }} MB. Uploads to the platform server;
+                        in mock mode a local preview is used instead.
                       </p>
                       <div>
                         <span class="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-300">Image URL</span>
@@ -362,6 +362,8 @@ import {
 } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus'
 import { getMerchantSettings, updateMerchantSettings, type MerchantSettings } from '@/api/modules/merchantSettings'
+import { uploadFile } from '@/api/modules/upload'
+import { RUNTIME_USE_MOCK } from '@/config/env'
 
 const responseTimePresets = ['< 30 minutes', '< 1 hour', '< 2 hours', '< 24 hours', '1–3 business days'] as const
 
@@ -405,19 +407,32 @@ function validateLogoFile(file: File): string | null {
   return null
 }
 
-function applyLogoFromFile(file: File) {
+async function applyLogoFromFile(file: File) {
   const msg = validateLogoFile(file)
   if (msg) {
     ElMessage.warning(msg)
     return
   }
-  const reader = new FileReader()
-  reader.onload = () => {
-    const r = reader.result
-    if (typeof r === 'string') form.logo = r
+  if (RUNTIME_USE_MOCK.value) {
+    // Mock mode: keep the local data-URL preview (no backend).
+    const reader = new FileReader()
+    reader.onload = () => {
+      const r = reader.result
+      if (typeof r === 'string') form.logo = r
+    }
+    reader.onerror = () => ElMessage.error('Could not read the file.')
+    reader.readAsDataURL(file)
+    return
   }
-  reader.onerror = () => ElMessage.error('Could not read the file.')
-  reader.readAsDataURL(file)
+  // Real backend: upload to /file/upload and store the returned URL.
+  try {
+    ElMessage.info('Uploading logo…')
+    const { url } = await uploadFile(file)
+    form.logo = url
+    ElMessage.success('Logo uploaded')
+  } catch {
+    ElMessage.error('Upload failed. You can paste an image URL instead.')
+  }
 }
 
 function triggerLogoFilePick() {

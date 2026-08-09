@@ -1,0 +1,22 @@
+.git
+.gitignore
+.claude
+.agents
+.idea
+
+# 后端构建产物
+target
+
+# 前端依赖与构建产物 (构建时在容器内重新安装)
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+
+# 运行时数据(通过 bind mount 挂载)
+uploads
+
+# 文档
+docs
+前端优化建议.txt
+*.md

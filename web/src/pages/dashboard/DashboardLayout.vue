@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { User, Package, MapPin, Settings, LogOut, LayoutDashboard, MessageSquare } from 'lucide-vue-next'
+import { User, Package, MapPin, Settings, LogOut, LayoutDashboard, MessageSquare, Heart, Ticket, RotateCcw } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { preloadByPath } from '@/router/preload'
@@ -15,6 +15,9 @@ const authStore = useAuthStore()
 const sidebarItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'My Orders', path: '/dashboard/orders', icon: Package },
+  { name: 'Wishlist', path: '/dashboard/wishlist', icon: Heart },
+  { name: 'Coupons', path: '/dashboard/coupons', icon: Ticket },
+  { name: 'Returns', path: '/dashboard/returns', icon: RotateCcw },
   { name: 'Messages', path: '/dashboard/messages', icon: MessageSquare },
   { name: 'Addresses', path: '/dashboard/addresses', icon: MapPin },
   { name: 'Account Settings', path: '/dashboard/settings', icon: Settings },

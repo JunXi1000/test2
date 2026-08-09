@@ -2,6 +2,7 @@
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useCartStore } from '@/stores/cart'
+import { useCouponStore } from '@/stores/coupons'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
@@ -18,6 +19,7 @@ import { getProfile } from '@/api/modules/account'
 const router = useRouter()
 const route = useRoute()
 const cartStore = useCartStore()
+const couponStore = useCouponStore()
 const authStore = useAuthStore()
 const { toast } = useToast()
 
@@ -34,6 +36,7 @@ onMounted(() => {
     toast({ title: 'Cart is empty', description: 'Add items before checking out.', variant: 'destructive' })
     router.replace('/cart')
   }
+  couponStore.load()
 })
 
 watch(checkoutItems, (items) => {
@@ -840,6 +843,27 @@ const inputClass = (field: string) =>
                 <span class="text-xs text-emerald-600">(-${{ formatPrice(summaryRef.discount) }})</span>
               </div>
               <button @click="removePromo" class="text-xs text-muted-foreground hover:text-destructive transition-colors">Remove</button>
+            </div>
+
+            <!-- Available coupons from wallet -->
+            <div v-if="!promoApplied && couponStore.available.length > 0" class="mt-3">
+              <p class="text-xs text-muted-foreground mb-1.5">Your coupons:</p>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="c in couponStore.available.slice(0, 4)"
+                  :key="c.id"
+                  @click="promoCodeRef = c.code; onApplyPromo()"
+                  class="text-xs px-2 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
+                >
+                  {{ c.code }}
+                </button>
+                <router-link
+                  to="/dashboard/coupons"
+                  class="text-xs px-2 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  + more
+                </router-link>
+              </div>
             </div>
 
             <div class="mt-6 grid grid-cols-3 gap-2 text-xs text-muted-foreground text-center">

@@ -1,4 +1,12 @@
 import { ref, computed } from 'vue'
+import { USE_MOCK } from '@/config/env'
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  formatRelativeTime,
+  type AppNotification,
+} from '@/api/modules/notifications'
 
 export type MerchantNotificationType = 'info' | 'success' | 'warning' | 'error'
 
@@ -11,8 +19,8 @@ export interface MerchantNotificationItem {
   read: boolean
 }
 
-/** 商户端通知（与顶栏铃铛共用一份状态，标记已读后角标消失） */
-const notifications = ref<MerchantNotificationItem[]>([
+/** 商户端通知(与顶栏铃铛共用一份状态,标记已读后角标消失) */
+const MOCK_NOTIFICATIONS: MerchantNotificationItem[] = [
   {
     id: 1,
     title: 'New order',
@@ -45,7 +53,27 @@ const notifications = ref<MerchantNotificationItem[]>([
     time: 'Yesterday',
     read: true
   }
-])
+]
+
+const notifications = ref<MerchantNotificationItem[]>(USE_MOCK ? MOCK_NOTIFICATIONS : [])
+
+/** 从后端加载当前角色的通知(非 mock 模式);mock 模式保留内置示例。 */
+async function load() {
+  if (USE_MOCK) return
+  try {
+    const items: AppNotification[] = await getNotifications()
+    notifications.value = items.map(n => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      type: n.type,
+      time: formatRelativeTime(n.createdAt),
+      read: n.read,
+    }))
+  } catch {
+    notifications.value = []
+  }
+}
 
 export function useMerchantNotifications() {
   const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
@@ -54,12 +82,14 @@ export function useMerchantNotifications() {
   function markAsRead(id: number) {
     const item = notifications.value.find((n) => n.id === id)
     if (item) item.read = true
+    markNotificationRead(id)
   }
 
   function markAllAsRead() {
     notifications.value.forEach((n) => {
       n.read = true
     })
+    markAllNotificationsRead()
   }
 
   return {
@@ -67,6 +97,7 @@ export function useMerchantNotifications() {
     unreadCount,
     hasUnread,
     markAsRead,
-    markAllAsRead
+    markAllAsRead,
+    load,
   }
 }
