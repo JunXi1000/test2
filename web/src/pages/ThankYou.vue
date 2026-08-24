@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
 import Button from '@/components/ui/button/Button.vue'
+import { Sparkles } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -8,6 +9,7 @@ const router = useRouter()
 const orderId = String(route.query.orderId || '')
 const name = String(route.query.name || '')
 const total = Number(route.query.total || 0)
+const points = Number(route.query.points || 0)
 
 function goOrders() {
   router.push({ name: 'DashboardOrders' })
@@ -26,6 +28,13 @@ function goOrders() {
         <div class="flex justify-between text-sm"><span class="text-muted-foreground">Order ID</span><span class="font-medium">{{ orderId || 'N/A' }}</span></div>
         <div class="flex justify-between text-sm"><span class="text-muted-foreground">Name</span><span class="font-medium">{{ name || '—' }}</span></div>
         <div class="flex justify-between text-sm"><span class="text-muted-foreground">Total</span><span class="font-medium">${{ total.toFixed(2) }}</span></div>
+      </div>
+      <div v-if="points > 0" class="mt-4 p-4 rounded-xl border border-primary/20 bg-primary/5 flex items-center gap-3 text-left">
+        <Sparkles class="w-5 h-5 text-primary flex-shrink-0" />
+        <div>
+          <p class="text-sm font-semibold text-foreground">+{{ points }} points earned</p>
+          <p class="text-xs text-muted-foreground">Earned on this order. Redeem them in Loyalty &amp; Rewards.</p>
+        </div>
       </div>
       <div class="flex justify-center gap-2">
         <Button @click="goOrders">View Orders</Button>

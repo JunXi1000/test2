@@ -18,7 +18,7 @@
 | WP-5 | 退换货后端化 | 新 `return_request` 表 + Service/Controller + `web/src/stores/returns.ts` | 申请/列表/取消 |
 | WP-6 | 到货订阅后端化 | 新 `stock_alert` 表 + Service/Controller + `web/src/stores/stockAlerts.ts` | 订阅/我的/取消 |
 | WP-7 | 通知后端化(可选) | 新 `notification` 表 + Service/Controller + admin/merchant 通知页 | 时间紧则移入 Phase 3 |
-| 横切 | schema 同步 + 增量 SQL | `docker/mysql/init/01-schema.sql`、`schema-h2.sql`、增量迁移 | 新表三处同步 |
+| 横切 | schema 同步 + 增量 SQL | `sql/migrations/`、`schema-h2.sql`、增量迁移 | 新表三处同步 |
 
 **验收**:关 mock 后——改密码成功、商家 logo 上传回显、领券出现在「我的优惠券」、提交退换货可查、订阅到货可取消、通知偏好读写生效;`mvn test` 通过。
 
@@ -64,10 +64,25 @@
 | 退款完成 | `ProductOrderServiceImpl` 的 `//TODO 退款` |
 | 验证码校验 | Admin/Shop `retrievePassword` 的 `//TODO 校验验证码` |
 | 测试补强 | 现有 H2 冒烟测试 → 增加业务断言级用例(订单状态机/购物车/统计) |
-| 文档同步 | 修正 `web/docs/DEVTOOLS.md`/`ENVIRONMENT.md`/`ROUTING.md` 与代码漂移(DebugPanel 等) |
+| 文档同步 | 已删除 `web/docs/` 陈旧工具文档(2026-08-24);其余文档按代码同步 |
 | 清理 | `VITE_APP_API_URL` 无用变量、过时 `sql/templatev3_s.sql` 标注 |
 
 **验收**:`mvn test` 全绿;生产构建 mock=false;登录/查重/找回密码行为正确。
+
+## Phase 5 — 前端扩展与增长功能(候选,未排期)
+
+> 来源:原 `FEATURE_ROADMAP.md`(2026-08-11 前端任务单)合并保留的未完成项,原文档已删除(2026-08-24)。已完成的前端功能状态见 [MODULES.md](MODULES.md)。
+
+| # | 范围 | 说明 | 优先级 |
+|---|------|------|:-:|
+| 5.1 | 发票与电子回单 | 订单完成后申请增值税电子发票(抬头+税号),PDF 生成/下载 | P1 |
+| 5.2 | 限时秒杀/闪购 | 首页秒杀专区 + 商品倒计时 + 秒杀价,秒杀商品限购 1 件 | P1 |
+| 5.3 | 新人礼包 | 注册成功自动发放新人券 + 首单免邮 | P1 |
+| 5.4 | Web Push 通知 | Service Worker Push API:订单状态变化/到货提醒推送 | P2 |
+| 5.5 | 礼品卡 | 购买电子卡密,结账兑换卡密抵扣 | P2 |
+| 5.6 | 第三方登录 | Google/Apple OAuth(OIDC),登录页集成 | P2 |
+
+**说明**:多数项为纯前端 mock 实现;依赖后端的(发票、秒杀价格/库存、OAuth 回调)需并入 Phase 2/3 一并落地。
 
 ---
 

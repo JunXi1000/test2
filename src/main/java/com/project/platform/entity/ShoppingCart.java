@@ -1,5 +1,6 @@
 package com.project.platform.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 /**
  * 购物车
@@ -38,7 +39,7 @@ public class ShoppingCart  {
    /**
     * 价格
     */
-   private Float productPrice;
+   private BigDecimal productPrice;
 
    public Integer getId() {
       return id;
@@ -95,11 +96,11 @@ public class ShoppingCart  {
       this.productMainImg = productMainImg;
    }
 
-   public Float getProductPrice() {
+   public BigDecimal getProductPrice() {
       return productPrice;
    }
 
-   public void setProductPrice(Float productPrice) {
+   public void setProductPrice(BigDecimal productPrice) {
       this.productPrice = productPrice;
    }
 }

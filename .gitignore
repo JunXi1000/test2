@@ -1,7 +1,7 @@
 .idea/
 target/
 
-# Node 依赖(容器内构建,本地可删)
+# Node 依赖(本地可删,重装即可)
 web/node_modules/
 
 # 本地工具目录(与项目无关,不入库)

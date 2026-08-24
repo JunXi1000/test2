@@ -102,7 +102,7 @@
 2. **结算→支付→订单 主链路是断裂的**:`/checkout` 伪计算 + `/payments` 纯 mock + 订单虽真实但前端结算成功只在 mock 模式写本地订单(`Checkout.vue` L426-428)→ **关 mock 后结算成功不会出现在订单列表**。Phase 2 核心目标。
 3. **生产构建默认 mock=true**(`.env.production` 未覆盖 `VITE_USE_MOCK`)→ 产物若后端未就绪会静默用假数据。
 4. **密码找回前后端字段不匹配**:前端发 `email`、后端 `retrievePassword` 用 `tel`;`resetPasswordWithToken` 把 token 当 userId 拼 URL。
-5. **文档与代码漂移**:`web/docs/DEVTOOLS.md` / `ENVIRONMENT.md` / `ROUTING.md` 描述的 DebugPanel、Force Logout、Seed Data 面板当前代码中不存在(`FEATURE_DEV_LOGOUT` 仅定义无引用)。
+5. **前端 Debug 工具残留**:`FEATURE_DEV_LOGOUT` 仅定义无引用;原 `web/docs/` 陈旧工具文档(DebugPanel/Force Logout/Seed Data)描述的界面代码中不存在,文档已删除(2026-08-24)。
 6. **外链图片**:商品图/头像均 Unsplash/Picsum 外链,离线时 ProductDetail 有三级 failover(主图→picsum→内联 SVG)。
 
 ## 4. 补全优先级建议

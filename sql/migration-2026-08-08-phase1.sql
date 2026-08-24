@@ -1,13 +1,13 @@
 -- ============================================================
 -- Phase 1 增量迁移(对已初始化过的数据库补表)
--- 适用场景: Docker 容器已用旧版 01-schema.sql 初始化过, 无需 docker compose down -v 重灌。
--- 用法(在 mysql 容器内执行, 例如):
---   docker compose exec mysql mysql -uroot -p商城 root 密码 --default-character-set=utf8mb4 platform < sql/migration-2026-08-08-phase1.sql
+-- 适用场景: 对已初始化过的数据库补表(建库建表脚本见 sql/ 目录)。
+-- 用法(本地 mysql 客户端执行, 例如):
+--   mysql -uroot -p<密码> --default-character-set=utf8mb4 template_v3 < sql/migration-2026-08-08-phase1.sql
 -- 注意: 本文件含中文种子, 必须加 --default-character-set=utf8mb4, 否则中文会被双重编码成乱码
 --       (mysql CLI 客户端默认 latin1, 会把 UTF-8 字节当 latin1 字符读入后再次编码入库)。
 -- 幂等性: CREATE TABLE IF NOT EXISTS 可安全重复执行; 优惠券种子用 INSERT IGNORE(coupon.code 唯一);
 --         通知种子自带 DELETE 守卫(按标题前缀清理后重插), 可安全重复执行。
--- 全新初始化的库请直接使用 docker/mysql/init/01-schema.sql(已包含本文件全部内容)。
+-- 本文件为独立增量迁移, 可重复执行(幂等)。
 -- ============================================================
 
 -- 用户通知偏好

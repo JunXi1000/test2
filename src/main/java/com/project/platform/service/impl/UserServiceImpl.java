@@ -14,8 +14,12 @@ import com.project.platform.vo.PageVO;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +32,23 @@ public class UserServiceImpl implements UserService {
 
     @Value("${resetPassword}")
     private String resetPassword;
+
+    @Resource
+    private PasswordEncoder passwordEncoder;
+
+    @Resource
+    private ResetCodeStore resetCodeStore;
+
+    /**
+     * 密码统一编码入口:null 保持 null;$2 开头(BCrypt)视为已编码原样返回,其余编码。
+     * 防止 updateById 局部更新时对已哈希密码重复编码。
+     */
+    private String encodeIfNeeded(String raw) {
+        if (raw == null || raw.startsWith("$2")) {
+            return raw;
+        }
+        return passwordEncoder.encode(raw);
+    }
 
     /**
      * 分页模糊查询
@@ -73,12 +94,13 @@ public class UserServiceImpl implements UserService {
     @Override
     public void insert(User entity) {
         check(entity);
-        entity.setBalance(0.0f);
+        entity.setBalance(BigDecimal.ZERO);
         entity.setCreateTime(LocalDateTime.now());
         //没有密码则将密码设置已配置的密码
         if (entity.getPassword() == null) {
             entity.setPassword(resetPassword);
         }
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         userMapper.insert(entity);
     }
 
@@ -91,6 +113,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void updateById(User entity) {
         check(entity);
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         userMapper.updateById(entity);
     }
 
@@ -112,10 +135,10 @@ public class UserServiceImpl implements UserService {
     @Override
     public CurrentUserDTO login(String username, String password) {
         User user = userMapper.selectByUsername(username);
-        if (user == null || !user.getPassword().equals(password)) {
+        if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             throw new CustomException("用户名或密码错误");
         }
-        if("禁用“".equals(user.getStatus())) {
+        if ("禁用".equals(user.getStatus())) {
             throw new CustomException("用户已禁用");
         }
         CurrentUserDTO currentUserDTO = new CurrentUserDTO();
@@ -164,10 +187,10 @@ public class UserServiceImpl implements UserService {
     public void updateCurrentUserPassword(UpdatePasswordDTO updatePassword) {
         //用户自己修改
         User user = userMapper.selectById(CurrentUserThreadLocal.getCurrentUser().getId());
-        if (!user.getPassword().equals(updatePassword.getOldPassword())){
+        if (!passwordEncoder.matches(updatePassword.getOldPassword(), user.getPassword())){
             throw new CustomException("旧密码不正确");
         }
-        user.setPassword(updatePassword.getNewPassword());
+        user.setPassword(encodeIfNeeded(updatePassword.getNewPassword()));
         userMapper.updateById(user);
     }
 
@@ -178,7 +201,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void resetPassword(Integer id) {
         User user = userMapper.selectById(id);
-        user.setPassword(resetPassword);
+        user.setPassword(encodeIfNeeded(resetPassword));
         userMapper.updateById(user);
     }
 
@@ -188,13 +211,17 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public void retrievePassword(RetrievePasswordDTO retrievePasswordDTO) {
+        // 先校验验证码(不存在/过期/不匹配均拒绝),杜绝仅凭手机号改密
+        if (!resetCodeStore.verify(retrievePasswordDTO.getType(), retrievePasswordDTO.getTel(), retrievePasswordDTO.getCode())) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
+        }
         //忘记密码，通过手机号找回
         User user = userMapper.selectByTel(retrievePasswordDTO.getTel());
         if(user == null) {
             throw  new CustomException("手机号不存在");
         }
 
-        user.setPassword(retrievePasswordDTO.getPassword());
+        user.setPassword(encodeIfNeeded(retrievePasswordDTO.getPassword()));
         userMapper.updateById(user);
     }
 
@@ -210,7 +237,7 @@ public class UserServiceImpl implements UserService {
 
     private void check(User entity) {
         User byUsername = userMapper.selectByUsername(entity.getUsername());
-        if (byUsername != null && entity.getId() != entity.getId()) {
+        if (byUsername != null && !byUsername.getId().equals(entity.getId())) {
             throw new CustomException("用户名已存在");
         }
     }
@@ -222,10 +249,16 @@ public class UserServiceImpl implements UserService {
      * @param amount
      */
 
-    public void topUp(Integer userId, Float amount) {
-        User user = selectById(userId);
-        user.setBalance(user.getBalance() + amount);
-        userMapper.updateById(user);
+    @Transactional(rollbackFor = Exception.class)
+    public void topUp(Integer userId, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new CustomException("充值金额必须大于0");
+        }
+        // 原子回补余额(退款/充值场景)
+        int rows = userMapper.addBalance(userId, amount);
+        if (rows == 0) {
+            throw new CustomException("用户不存在");
+        }
     }
 
     /**
@@ -234,13 +267,16 @@ public class UserServiceImpl implements UserService {
      * @param userId
      * @param amount
      */
-    public void consumption(Integer userId, Float amount) {
-        User user = selectById(userId);
-        user.setBalance(user.getBalance() - amount);
-        if (user.getBalance() < 0) {
+    @Transactional(rollbackFor = Exception.class)
+    public void consumption(Integer userId, BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new CustomException("消费金额必须大于0");
+        }
+        // 原子扣减余额(乐观锁:balance>=amount 才扣,防并发双花)
+        int rows = userMapper.deductBalance(userId, amount);
+        if (rows == 0) {
             throw new CustomException("余额不足");
         }
-        userMapper.updateById(user);
     }
 
 

@@ -79,7 +79,10 @@
               </el-image>
               <div class="min-w-0">
                 <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">{{ row.title }}</div>
-                <div class="mt-0.5 text-sm text-gray-500">{{ row.category }}</div>
+                <div class="mt-0.5 flex items-center gap-1.5">
+                  <span class="text-sm text-gray-500">{{ row.category }}</span>
+                  <el-tag v-if="row.video" size="small" effect="plain" type="primary" class="!h-5">Video</el-tag>
+                </div>
               </div>
             </div>
           </template>
@@ -125,14 +128,14 @@
               <button
                 type="button"
                 class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
-                @click="openEditDialog(row)"
+                @click="openEditDialog(row as MerchantProduct)"
               >
                 Edit
               </button>
               <button
                 type="button"
                 class="text-sm font-medium text-red-600 transition-colors hover:text-red-700"
-                @click="handleDelete(row)"
+                @click="handleDelete(row as MerchantProduct)"
               >
                 Delete
               </button>
@@ -334,6 +337,21 @@
             </div>
           </div>
         </el-form-item>
+
+        <el-divider class="!my-6" />
+
+        <el-form-item label="Demo video URL (optional)" prop="video">
+          <el-input
+            v-model="formData.video"
+            type="textarea"
+            :rows="2"
+            placeholder="https://… (product showcase video)"
+            clearable
+          />
+          <p class="mt-1.5 text-xs text-gray-500">
+            Shown in the product detail gallery alongside images. A local path like /videos/demo.webm works in mock mode.
+          </p>
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -409,7 +427,8 @@ const formData = reactive<Omit<MerchantProduct, 'id' | 'sales'>>({
   stock: 0,
   category: '',
   status: 'draft',
-  image: ''
+  image: '',
+  video: ''
 })
 
 const editingId = ref<number | null>(null)
@@ -485,6 +504,26 @@ const formRules = reactive<FormRules>({
           return
         }
         callback()
+      },
+      trigger: 'blur'
+    }
+  ],
+  video: [
+    {
+      validator: (_rule, value: string, callback) => {
+        const v = (value || '').trim()
+        if (!v) {
+          callback()
+          return
+        }
+        try {
+          const u = new URL(v)
+          if (/^https?:$/i.test(u.protocol)) {
+            callback()
+            return
+          }
+        } catch { /* fallthrough */ }
+        callback(new Error('Use a valid http(s) video URL, or leave empty'))
       },
       trigger: 'blur'
     }
@@ -625,6 +664,7 @@ const openCreateDialog = () => {
   formData.category = ''
   formData.status = 'draft'
   formData.image = ''
+  formData.video = ''
   dialogVisible.value = true
 }
 
@@ -640,6 +680,7 @@ const openEditDialog = (row: MerchantProduct) => {
   formData.category = row.category
   formData.status = row.status
   formData.image = row.image
+  formData.video = row.video || ''
   dialogVisible.value = true
 }
 
@@ -655,7 +696,8 @@ function normalizeProductPayload(): Omit<MerchantProduct, 'id' | 'sales'> {
     stock: Math.min(999999, Math.max(0, Math.floor(Number(formData.stock)))),
     category: formData.category,
     status: formData.status,
-    image: formData.image.trim()
+    image: formData.image.trim(),
+    video: (formData.video ?? '').trim() || undefined
   }
 }
 

@@ -91,6 +91,12 @@
             <version>3.12.0</version>
         </dependency>
 
+        <!-- 密码哈希(仅加密模块,不引入 Spring Security 过滤器链,与现有 JWT 拦截器方案不冲突) -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
 
         <!--aop-->
         <dependency>

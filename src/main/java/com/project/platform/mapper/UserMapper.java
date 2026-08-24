@@ -3,6 +3,9 @@ package com.project.platform.mapper;
 import com.project.platform.entity.User;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
+
+import java.math.BigDecimal;
 
 import java.util.List;
 import java.util.Map;
@@ -77,4 +80,16 @@ public interface UserMapper {
      * @return
      */
     boolean removeByIds(List<Integer> ids);
+
+    /**
+     * 原子回补余额(退款/充值场景)。
+     */
+    @Update("UPDATE user SET balance = balance + #{amount} WHERE id = #{id}")
+    int addBalance(@Param("id") Integer id, @Param("amount") BigDecimal amount);
+
+    /**
+     * 原子扣减余额(乐观锁:balance >= amount 才扣,防并发双花),受影响行数为 0 表示余额不足。
+     */
+    @Update("UPDATE user SET balance = balance - #{amount} WHERE id = #{id} AND balance >= #{amount}")
+    int deductBalance(@Param("id") Integer id, @Param("amount") BigDecimal amount);
 }

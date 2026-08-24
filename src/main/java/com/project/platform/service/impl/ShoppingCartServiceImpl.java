@@ -13,6 +13,7 @@ import com.project.platform.service.ShoppingCartService;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 
@@ -84,6 +85,7 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
         shoppingCartMapper.removeByIds(ids);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public void createOrder(CreateOrderByShoppingCartDTO createOrderByShoppingCartDTO) {
         //错误信息

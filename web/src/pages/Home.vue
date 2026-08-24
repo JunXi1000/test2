@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import ProductCard from '@/components/ui/card/ProductCard.vue'
 import Button from '@/components/ui/button/Button.vue'
-import { getProducts, type ProductQuery } from '@/api/modules/product'
+import { getProducts, getRecommendedProducts, type ProductQuery } from '@/api/modules/product'
 import type { Product } from '@/types/product'
 import { useBrowsingHistory } from '@/stores/browsingHistory'
 import { useToast } from '@/composables/useToast'
@@ -10,7 +10,7 @@ import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useRouter } from 'vue-router'
 import { debounce } from 'lodash-es'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { Search, ListFilter, RefreshCw, Loader2, X } from 'lucide-vue-next'
+import { Search, ListFilter, RefreshCw, Loader2, X, Sparkles } from 'lucide-vue-next'
 import { useScroll, useEventListener } from '@vueuse/core'
 
 const router = useRouter()
@@ -183,20 +183,20 @@ const limit = 20
 const hasMore = ref(true)
 const isLoadMore = ref(false)
 
-async function fetchProducts(isRefresh = false) {
+async function fetchProducts(isRefresh = false): Promise<boolean> {
   try {
     if (isRefresh) {
       page.value = 1
       hasMore.value = true
     } else {
-      if (!hasMore.value || isLoadMore.value) return
+      if (!hasMore.value || isLoadMore.value || isRefreshing.value) return false
       isLoadMore.value = true
     }
 
     if (page.value === 1 && !isRefresh && productsRef.value.length === 0) {
       isLoadingRef.value = true
     }
-    
+
     errorRef.value = ''
     const params: ProductQuery = {
       category: activeCategory.value === 'All' ? undefined : activeCategory.value,
@@ -206,51 +206,55 @@ async function fetchProducts(isRefresh = false) {
       limit: limit
     }
     const list = await getProducts(params)
-    
+
     if (isRefresh || page.value === 1) {
       productsRef.value = list
     } else {
       productsRef.value = [...productsRef.value, ...list]
     }
-    
+
     if (list.length < limit) {
       hasMore.value = false
     } else {
       page.value++
     }
+    return true
 
   } catch (e: any) {
     errorRef.value = e?.message || 'Failed to load products'
     toast({ title: 'Failed to load products', description: e?.message || 'Unknown error', variant: 'destructive' })
+    return false
   } finally {
     isLoadingRef.value = false
     isLoadMore.value = false
   }
 }
 
-function handleRefresh() {
+async function handleRefresh() {
   if (isRefreshing.value) return
   isRefreshing.value = true
   refreshState.value = 'refreshing'
-  
+
   // Keep pull indicator visible during refresh
-  pullDistance.value = threshold 
-  
-  // Longer delay for testing
-  setTimeout(() => {
-    fetchProducts(true).then(() => {
-      refreshState.value = 'success'
-      // Show success state briefly
+  pullDistance.value = threshold
+
+  const ok = await fetchProducts(true)
+  if (ok) {
+    refreshState.value = 'success'
+    // Show success state briefly, then snap back
+    setTimeout(() => {
+      pullDistance.value = 0
+      isRefreshing.value = false
       setTimeout(() => {
-        // Reset after fetch complete
-        pullDistance.value = 0
-        isRefreshing.value = false
-        setTimeout(() => {
-          refreshState.value = 'idle'
-        }, 300)
-      }, 500)
-    })
-  }, 2000)
+        refreshState.value = 'idle'
+      }, 300)
+    }, 500)
+  } else {
+    // fetchProducts already surfaced the error via toast/ErrorState — never wedge the UI
+    pullDistance.value = 0
+    isRefreshing.value = false
+    refreshState.value = 'idle'
+  }
 }
 
 // Infinite Scroll Logic
@@ -259,7 +263,7 @@ useEventListener(window, 'scroll', () => {
   const clientHeight = window.innerHeight
   const scrollHeight = document.documentElement.scrollHeight
   
-  if (scrollTop + clientHeight >= scrollHeight - 200 && !isLoadingRef.value && !isLoadMore.value && hasMore.value) {
+  if (scrollTop + clientHeight >= scrollHeight - 200 && !isLoadingRef.value && !isLoadMore.value && !isRefreshing.value && hasMore.value) {
     fetchProducts()
   }
 })
@@ -268,10 +272,11 @@ const debouncedFetch = debounce(() => fetchProducts(true), 300)
 
 onMounted(() => {
   fetchProducts(true)
+  loadRecommended()
 })
-watch(activeCategory, () => fetchProducts(true))
+watch(activeCategory, () => { fetchProducts(true); loadRecommended() })
 watch(sortBy, () => fetchProducts(true))
-watch(searchQuery, () => debouncedFetch())
+watch(searchQuery, () => { debouncedFetch(); loadRecommended() })
 
 onBeforeUnmount(() => {
   if (expandTimer) clearTimeout(expandTimer)
@@ -279,6 +284,26 @@ onBeforeUnmount(() => {
 })
 
 const filteredProducts = computed(() => productsRef.value)
+
+// ── Recommended for You（阶段 1.1）──
+const recommendedRef = ref<Product[]>([])
+const recommendedLoading = ref(false)
+
+async function loadRecommended() {
+  // 只在首页默认流且未搜索时展示推荐
+  if (activeCategory.value !== 'All' || searchQuery.value) {
+    recommendedRef.value = []
+    return
+  }
+  recommendedLoading.value = true
+  try {
+    recommendedRef.value = await getRecommendedProducts(6)
+  } catch {
+    recommendedRef.value = []
+  } finally {
+    recommendedLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -507,15 +532,36 @@ const filteredProducts = computed(() => productsRef.value)
         </template>
       </div>
 
+      <!-- Recommended for You（阶段 1.1） -->
+      <div v-if="!searchQuery && activeCategory === 'All' && recommendedRef.length > 0" class="mt-12 pt-8 border-t border-border">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-bold flex items-center gap-2">
+            <Sparkles class="w-5 h-5 text-primary" />
+            {{ $t('home.recommended') }}
+          </h2>
+          <span class="text-xs text-muted-foreground" v-html="$t('home.recommendedHint')"></span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          <div v-if="recommendedLoading" v-for="i in 6" :key="`rec-${i}`" class="col-span-1">
+            <div class="space-y-3 p-3 border rounded-2xl bg-card h-full">
+              <Skeleton class="aspect-video w-full rounded-lg" />
+              <Skeleton class="h-4 w-3/4" />
+              <Skeleton class="h-4 w-1/2" />
+            </div>
+          </div>
+          <ProductCard v-for="p in recommendedRef" :key="`rec-${p.id}`" :product="p" class="h-full" />
+        </div>
+      </div>
+
       <!-- Recently Viewed -->
       <div v-if="browsingHistory.recentItems.length > 0 && !searchQuery" class="mt-12 pt-8 border-t border-border">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">Recently Viewed</h2>
+          <h2 class="text-xl font-bold">{{ $t('home.recentlyViewed') }}</h2>
           <button
             @click="browsingHistory.clearHistory()"
             class="text-xs text-muted-foreground hover:text-destructive transition-colors"
           >
-            Clear History
+            {{ $t('home.clearHistory') }}
           </button>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">

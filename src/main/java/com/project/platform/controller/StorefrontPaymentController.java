@@ -64,4 +64,22 @@ public class StorefrontPaymentController {
         result.put("orderId", body.getString("orderId"));
         return ResponseVO.ok(result);
     }
+
+    /**
+     * POST /payments/complete-action — 3DS 认证完成后的银行回调。
+     *
+     * ⚠️ MOCK 实现,仅限演示:直接返回 succeeded,不校验支付网关、不落库改单。
+     *    - 该接口需登录(JWT),但任意登录用户都可调用,切勿当作真实支付结果。
+     *    - 接入真实网关时必须替换:校验 HMAC/签名、核对 paymentId 与订单金额、
+     *      仅在网关确认后更新订单状态,并移除本方法。
+     */
+    @PostMapping("/complete-action")
+    public ResponseVO<Map<String, Object>> completeAction(@RequestBody JSONObject body) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "succeeded");
+        result.put("orderId", body.getString("orderId") != null
+                ? body.getString("orderId")
+                : "ORD-" + (1000 + new Random().nextInt(9000)));
+        return ResponseVO.ok(result);
+    }
 }

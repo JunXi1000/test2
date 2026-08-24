@@ -20,8 +20,9 @@ public class SpringMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/common/login",
                         "/common/register",
+                        "/common/sendResetCode",
                         "/common/retrievePassword",
-                        "/file/**",
+                        // 注意: /file/** 不在白名单 —— GET 下载由 LoginInterceptor 放行, 上传 POST 需登录
                         // Public storefront — no auth required
                         "/products/**",
                         "/search/**",

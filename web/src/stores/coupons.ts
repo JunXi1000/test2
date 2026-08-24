@@ -161,6 +161,34 @@ export const useCouponStore = defineStore('coupons', () => {
     }
   }
 
+  /** 积分商城兑换的奖励入账（阶段 5.1）：生成一张 90 天有效的固定额度优惠券 */
+  function addRedeemedCoupon(reward: {
+    id: string
+    code: string
+    title: string
+    description: string
+    type: Coupon['type']
+    value: number
+    minOrder: number
+  }): boolean {
+    if (myCoupons.value.some(c => c.id === reward.id)) return false
+    const coupon: Coupon = {
+      id: reward.id,
+      code: reward.code,
+      title: reward.title,
+      description: reward.description,
+      type: reward.type,
+      value: reward.value,
+      minOrder: reward.minOrder,
+      expiresAt: new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString(),
+      isUsed: false,
+      claimedAt: Date.now(),
+    }
+    myCoupons.value.push(coupon)
+    if (RUNTIME_USE_MOCK.value) saveToStorage(myCoupons.value)
+    return true
+  }
+
   function markUsed(couponId: string) {
     const c = myCoupons.value.find(c => c.id === couponId)
     if (c) {
@@ -197,5 +225,5 @@ export const useCouponStore = defineStore('coupons', () => {
     return myCoupons.value.some(c => c.id === couponId)
   }
 
-  return { myCoupons, catalog, available, used, expired, claimCoupon, markUsed, calculateDiscount, hasClaimed, load }
+  return { myCoupons, catalog, available, used, expired, claimCoupon, addRedeemedCoupon, markUsed, calculateDiscount, hasClaimed, load }
 })

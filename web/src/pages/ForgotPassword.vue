@@ -1,37 +1,43 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
 import { ArrowRight, Mail } from 'lucide-vue-next'
-import { requestPasswordReset, MOCK_PASSWORD_RESET_TOKEN } from '@/api/modules/auth'
-import { USE_MOCK } from '@/config/env'
+import { requestPasswordReset } from '@/api/modules/auth'
 
 const router = useRouter()
 const { toast } = useToast()
+const { t } = useI18n()
 
 const email = ref('')
 const isLoading = ref(false)
 const isSent = ref(false)
+const resetCode = ref('')
 
 const handleReset = async () => {
   if (!email.value) return
 
   isLoading.value = true
   try {
-    await requestPasswordReset(email.value.trim())
+    resetCode.value = await requestPasswordReset(email.value.trim())
     isSent.value = true
     toast({
-      title: '邮件已发送',
-      description: '若该邮箱已注册，您将收到重置说明（含垃圾邮件箱）。',
+      title: t('auth.codeSent'),
+      description: t('auth.codeSentDesc'),
       variant: 'success'
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '发送失败，请稍后重试。'
-    toast({ title: '发送失败', description: msg, variant: 'destructive' })
+    const msg = e instanceof Error ? e.message : t('auth.resetFailedDesc')
+    toast({ title: t('auth.resetFailed'), description: msg, variant: 'destructive' })
   } finally {
     isLoading.value = false
   }
+}
+
+const goReset = () => {
+  router.push({ name: 'ResetPassword', query: { token: resetCode.value, email: email.value.trim() } })
 }
 </script>
 
@@ -57,35 +63,28 @@ const handleReset = async () => {
             </div>
             <span class="text-xl font-bold tracking-tighter">NEXUS</span>
           </router-link>
-          <h1 class="text-2xl font-bold tracking-tight mb-2">忘记密码？</h1>
+          <h1 class="text-2xl font-bold tracking-tight mb-2">{{ $t('auth.forgotTitle') }}</h1>
           <p class="text-muted-foreground text-sm">
-            {{ isSent ? '请查收邮箱' : '输入注册邮箱，我们将发送重置链接' }}
+            {{ isSent ? $t('auth.forgotSent') : $t('auth.forgotSubtitle') }}
           </p>
         </div>
 
         <div v-if="isSent" class="text-center space-y-6">
           <div class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl text-sm border border-emerald-500/20 text-left space-y-2">
-            <p>
-              若 <strong>{{ email }}</strong> 已在系统中注册，您将收到一封包含重置链接的邮件，请检查收件箱与垃圾邮件文件夹。
+            <p v-html="$t('auth.forgotSentTo', { email })"></p>
+            <p class="text-2xl font-mono font-bold tracking-[0.3em] text-center py-2 text-foreground">{{ resetCode }}</p>
+            <p class="text-xs text-muted-foreground border-t border-emerald-500/20 pt-2 mt-2">
+              {{ $t('auth.forgotCodeHint') }}
             </p>
-            <p v-if="USE_MOCK" class="text-xs text-muted-foreground border-t border-emerald-500/20 pt-2 mt-2">
-              当前为 Mock 模式，不会真实发信。可点击下面链接模拟从邮件打开「设置新密码」页：
-            </p>
-            <router-link
-              v-if="USE_MOCK"
-              :to="{ name: 'ResetPassword', query: { token: MOCK_PASSWORD_RESET_TOKEN } }"
-              class="inline-block text-sm text-primary font-medium hover:underline"
-            >
-              打开重置密码页（测试用）
-            </router-link>
           </div>
-          <Button @click="router.push('/login')" class="w-full">返回登录</Button>
+          <Button class="w-full" @click="goReset">{{ $t('auth.continueReset') }}</Button>
+          <Button variant="ghost" class="w-full" @click="router.push('/login')">{{ $t('auth.backToLogin') }}</Button>
         </div>
 
         <!-- Form -->
         <form v-else @submit.prevent="handleReset" class="space-y-4">
           <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">邮箱</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }}</label>
             <div class="relative group">
               <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
@@ -105,18 +104,18 @@ const handleReset = async () => {
           >
             <span v-if="isLoading" class="flex items-center gap-2">
               <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              发送中…
+              {{ $t('common.loading') }}
             </span>
             <span v-else class="flex items-center justify-center gap-2">
-              发送重置链接 <ArrowRight class="w-4 h-4" />
+              {{ $t('auth.sendResetLink') }} <ArrowRight class="w-4 h-4" />
             </span>
           </Button>
         </form>
 
         <!-- Footer -->
         <div v-if="!isSent" class="text-center mt-8 text-sm text-muted-foreground">
-          想起密码了？
-          <router-link to="/login" class="text-primary hover:underline font-medium">去登录</router-link>
+          {{ $t('auth.rememberPassword') }}
+          <router-link to="/login" class="text-primary hover:underline font-medium">{{ $t('auth.goLogin') }}</router-link>
         </div>
       </div>
     </div>

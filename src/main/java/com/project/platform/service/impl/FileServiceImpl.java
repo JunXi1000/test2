@@ -7,17 +7,34 @@ import com.project.platform.vo.FileInfoVO;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Set;
 
 @Service
 public class FileServiceImpl implements FileService {
+
+    /**
+     * 上传文件扩展名白名单,仅允许以下类型(防上传可执行脚本/混淆扩展名文件)
+     */
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            "jpg", "jpeg", "png", "gif", "webp", "bmp",
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+            "txt", "mp4", "mp3", "zip"
+    );
+
+    /**
+     * 上传大小上限 10MB,与 spring.servlet.multipart.max-file-size 对齐
+     */
+    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
 
     @Value("${server.ip}")
     private String serverIp;
@@ -31,11 +48,23 @@ public class FileServiceImpl implements FileService {
 
 
     public FileInfoVO upload(MultipartFile multipartFile) throws IOException, NoSuchAlgorithmException {
+        // 上传大小防御性校验(与 multipart.max-file-size 双保险, 前者超限抛 500, 这里给干净的 400)
+        if (multipartFile.isEmpty()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "上传文件不能为空");
+        }
+        if (multipartFile.getSize() > MAX_FILE_SIZE) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "文件大小不能超过 10MB");
+        }
         //获取上传文件扩展名
         String fix = FilenameUtils.getExtension(multipartFile.getOriginalFilename());
         //生成文件完整名称
         if (StringUtils.isBlank(fix)) {
-            throw new CustomException("文件扩展名不能为空");
+            throw new CustomException(HttpStatus.BAD_REQUEST, "文件扩展名不能为空");
+        }
+        fix = fix.toLowerCase();
+        // 扩展名白名单校验
+        if (!ALLOWED_EXTENSIONS.contains(fix)) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "不支持的文件类型: " + fix);
         }
         //生成文件名 使用MD5 虽然可能产生哈希碰撞 但是一般的场景足够使用
         String md5 = getMD5Checksum(multipartFile);
@@ -78,14 +107,14 @@ public class FileServiceImpl implements FileService {
     }
 
 
-    private String getFilePath(String fileName) {
-        // 用 Paths.get 保证目录与文件名之间自动补分隔符(与 createFile 保持一致)
-        return Paths.get(basePath, fileName).toString();
-    }
-
     public File getFile(String fileName) throws IOException {
-        File file = new File(getFilePath(fileName));
-        return file;
+        // 防路径穿越: 归一化(去 ../ 与 .)后必须仍位于 basePath 目录内, 拒绝 ../ 与绝对路径逃逸
+        Path base = Paths.get(basePath).toAbsolutePath().normalize();
+        Path resolved = base.resolve(fileName).normalize();
+        if (!resolved.startsWith(base)) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "非法文件路径");
+        }
+        return resolved.toFile();
     }
 
     /**

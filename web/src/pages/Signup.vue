@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { register as registerApi } from '@/api/modules/auth'
 import Button from '@/components/ui/button/Button.vue'
@@ -9,6 +10,7 @@ import { ArrowRight, Mail, Lock, User, Store, ShieldAlert } from 'lucide-vue-nex
 const router = useRouter()
 const route = useRoute()
 const { toast } = useToast()
+const { t } = useI18n()
 
 // ── Role ─────────────────────────────────────────────────────────────
 const role = ref<'user' | 'merchant'>('user')
@@ -43,22 +45,22 @@ const handleSignup = async () => {
 
   // Validation
   if (!email.value || !password.value || !name.value) {
-    errorMessage.value = 'Please fill in all required fields.'
+    errorMessage.value = t('auth.fillAllFields')
     return
   }
 
   if (isMerchant.value && !storeName.value.trim()) {
-    errorMessage.value = 'Please enter your store name.'
+    errorMessage.value = t('auth.enterStoreName')
     return
   }
 
   if (password.value.length < 6) {
-    errorMessage.value = 'Password must be at least 6 characters.'
+    errorMessage.value = t('auth.passwordMinLength')
     return
   }
 
   if (password.value !== confirmPassword.value) {
-    errorMessage.value = 'Passwords do not match.'
+    errorMessage.value = t('auth.passwordsNotMatch')
     return
   }
 
@@ -73,13 +75,10 @@ const handleSignup = async () => {
       storeName: isMerchant.value ? storeName.value : undefined
     })
 
-    const accountType = isMerchant.value ? 'merchant' : ''
-    const notice = isMerchant.value
-      ? 'Your store has been submitted for review. An administrator will approve it shortly.'
-      : 'You can now sign in and start shopping.'
+    const notice = isMerchant.value ? t('auth.storePendingNotice') : t('auth.accountReadyNotice')
 
     toast({
-      title: isMerchant.value ? 'Store registration submitted!' : 'Account created!',
+      title: isMerchant.value ? t('auth.storeSubmitted') : t('auth.accountCreated'),
       description: notice,
       variant: 'success'
     })
@@ -88,10 +87,10 @@ const handleSignup = async () => {
     const loginPath = isMerchant.value ? '/merchant/login' : '/login'
     router.push(loginPath)
   } catch (err: any) {
-    const msg = err?.message || 'Registration failed. Please try again.'
+    const msg = err?.message || t('auth.registrationFailedDesc')
     errorMessage.value = msg
     toast({
-      title: 'Registration failed',
+      title: t('auth.registrationFailed'),
       description: msg,
       variant: 'destructive'
     })
@@ -119,8 +118,8 @@ const handleSignup = async () => {
             <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-bold group-hover:scale-110 transition-transform">N</div>
             <span class="text-xl font-bold tracking-tighter">NEXUS</span>
           </router-link>
-          <h1 class="text-2xl font-bold tracking-tight mb-2">Create Account</h1>
-          <p class="text-muted-foreground text-sm">Join us to experience the future of shopping</p>
+          <h1 class="text-2xl font-bold tracking-tight mb-2">{{ $t('auth.createAccount') }}</h1>
+          <p class="text-muted-foreground text-sm">{{ $t('auth.signupTagline') }}</p>
         </div>
 
         <!-- Role Toggle -->
@@ -134,7 +133,7 @@ const handleSignup = async () => {
             @click="switchRole('user')"
           >
             <User class="w-4 h-4" />
-            Buyer
+            {{ $t('auth.buyer') }}
           </button>
           <button
             type="button"
@@ -145,14 +144,14 @@ const handleSignup = async () => {
             @click="switchRole('merchant')"
           >
             <Store class="w-4 h-4" />
-            Merchant
+            {{ $t('auth.merchantRole') }}
           </button>
         </div>
 
         <!-- Merchant Notice -->
         <div v-if="isMerchant" class="flex items-start gap-2.5 p-3 mb-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs">
           <ShieldAlert class="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <span>Merchant registrations require admin approval before your store goes live. This usually takes 1-2 business days.</span>
+          <span>{{ $t('auth.merchantApprovalNotice') }}</span>
         </div>
 
         <!-- Error message -->
@@ -164,13 +163,13 @@ const handleSignup = async () => {
         <form @submit.prevent="handleSignup" class="space-y-3.5">
           <!-- Merchant: Store Name -->
           <div v-if="isMerchant" class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">Store Name *</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.storeNameLabel') }} *</label>
             <div class="relative group">
               <Store class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
                 v-model="storeName"
                 type="text"
-                placeholder="My Awesome Store"
+                :placeholder="$t('auth.storeNamePlaceholder')"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
               />
@@ -180,14 +179,14 @@ const handleSignup = async () => {
           <!-- Full Name / Owner Name -->
           <div class="space-y-1.5">
             <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">
-              {{ isMerchant ? 'Owner Name *' : 'Full Name *' }}
+              {{ isMerchant ? $t('auth.ownerNameLabel') : $t('auth.fullNameLabel') }} *
             </label>
             <div class="relative group">
               <User class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
                 v-model="name"
                 type="text"
-                :placeholder="isMerchant ? 'John Doe' : 'John Doe'"
+                placeholder="John Doe"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
               />
@@ -196,7 +195,7 @@ const handleSignup = async () => {
 
           <!-- Email -->
           <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">Email *</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }} *</label>
             <div class="relative group">
               <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
@@ -211,13 +210,13 @@ const handleSignup = async () => {
 
           <!-- Password -->
           <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">Password *</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.password') }} *</label>
             <div class="relative group">
               <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
                 v-model="password"
                 type="password"
-                placeholder="Minimum 6 characters"
+                :placeholder="$t('auth.passwordMinPlaceholder')"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
                 minlength="6"
@@ -227,13 +226,13 @@ const handleSignup = async () => {
 
           <!-- Confirm Password -->
           <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">Confirm Password *</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.confirmPassword') }} *</label>
             <div class="relative group">
               <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <input
                 v-model="confirmPassword"
                 type="password"
-                placeholder="Re-enter your password"
+                :placeholder="$t('auth.confirmPasswordPlaceholder')"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
               />
@@ -245,7 +244,7 @@ const handleSignup = async () => {
             <div class="flex items-start gap-2 mb-4">
               <input type="checkbox" id="terms" class="mt-1" required />
               <label for="terms" class="text-xs text-muted-foreground leading-relaxed">
-                I agree to the <a href="#" class="text-primary hover:underline">Terms of Service</a> and <a href="#" class="text-primary hover:underline">Privacy Policy</a>.
+                <span v-html="$t('auth.agreeTerms')"></span>
               </label>
             </div>
 
@@ -256,10 +255,10 @@ const handleSignup = async () => {
             >
               <span v-if="isLoading" class="flex items-center gap-2">
                 <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                {{ isMerchant ? 'Submitting application...' : 'Creating account...' }}
+                {{ isMerchant ? $t('auth.submittingApplication') : $t('auth.creatingAccount') }}
               </span>
               <span v-else class="flex items-center justify-center gap-2">
-                {{ isMerchant ? 'Submit Application' : 'Create Account' }}
+                {{ isMerchant ? $t('auth.submitApplication') : $t('auth.createAccount') }}
                 <ArrowRight class="w-4 h-4" />
               </span>
             </Button>
@@ -268,8 +267,8 @@ const handleSignup = async () => {
 
         <!-- Footer -->
         <div class="text-center mt-6 text-sm text-muted-foreground">
-          Already have an account?
-          <router-link :to="isMerchant ? '/merchant/login' : '/login'" class="text-primary hover:underline font-medium">Sign in</router-link>
+          {{ $t('auth.alreadyHaveAccount') }}
+          <router-link :to="isMerchant ? '/merchant/login' : '/login'" class="text-primary hover:underline font-medium">{{ $t('auth.signIn') }}</router-link>
         </div>
       </div>
     </div>

@@ -1,5 +1,8 @@
 package com.project.platform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class User {
@@ -42,15 +45,15 @@ public class User {
     /**
      * 余额
      */
-    private Float balance;
+    private BigDecimal balance;
 
     //alt+insert
 
-    public Float getBalance() {
+    public BigDecimal getBalance() {
         return balance;
     }
 
-    public void setBalance(Float balance) {
+    public void setBalance(BigDecimal balance) {
         this.balance = balance;
     }
 
@@ -70,6 +73,8 @@ public class User {
         this.username = username;
     }
 
+    /** 仅序列化时忽略,setter 保留以便反序列化与 MyBatis 回填 */
+    @JsonIgnore
     public String getPassword() {
         return password;
     }

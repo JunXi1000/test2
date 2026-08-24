@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 
 /**
@@ -47,6 +48,16 @@ public class GlobalExceptionHandler {
                 .orElse("参数校验失败");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ResponseVO.fail(HttpStatus.BAD_REQUEST.value(), msg));
+    }
+
+    /**
+     * 上传文件超过 spring.servlet.multipart 上限时返回 413, 而非落入通用 500
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseBody
+    public ResponseEntity<ResponseVO<Object>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ResponseVO.fail(HttpStatus.PAYLOAD_TOO_LARGE.value(), "上传文件过大, 最大 10MB"));
     }
 
     @ExceptionHandler(Exception.class)

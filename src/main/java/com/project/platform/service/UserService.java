@@ -3,6 +3,7 @@ package com.project.platform.service;
 import com.project.platform.entity.User;
 import com.project.platform.vo.PageVO;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -61,7 +62,7 @@ public interface UserService extends CommonService{
      * @param userId
      * @param amount
      */
-    void topUp(Integer userId, Float amount);
+    void topUp(Integer userId, BigDecimal amount);
 
     /**
      * 消费
@@ -69,6 +70,6 @@ public interface UserService extends CommonService{
      * @param userId
      * @param amount
      */
-    void consumption(Integer userId, Float amount);
+    void consumption(Integer userId, BigDecimal amount);
 
 }

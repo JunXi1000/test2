@@ -1,5 +1,7 @@
 package com.project.platform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.time.LocalDateTime;
 
 /**
@@ -76,6 +78,8 @@ public class Shop {
         this.username = username;
     }
 
+    /** 仅序列化时忽略,setter 保留以便反序列化与 MyBatis 回填 */
+    @JsonIgnore
     public String getPassword() {
         return password;
     }

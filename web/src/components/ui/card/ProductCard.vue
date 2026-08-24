@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Product } from '@/types/product'
 import { ShoppingCart, ImageOff, Star, Heart, GitCompare } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
@@ -19,6 +20,7 @@ const cartStore = useCartStore()
 const wishlistStore = useWishlistStore()
 const compareStore = useCompareStore()
 const { toast } = useToast()
+const { t } = useI18n()
 
 // 快速加入购物车
 function quickAddToCart(e: Event) {
@@ -29,8 +31,8 @@ function quickAddToCart(e: Event) {
     quantity: 1
   })
   toast({
-    title: 'Added to Cart',
-    description: `${props.product.title} has been added to your cart`,
+    title: t('product.addedToCart'),
+    description: t('product.addedToCartDesc', { title: props.product.title }),
     variant: 'success'
   })
 }
@@ -46,9 +48,9 @@ function formatReviews(reviews?: number) {
 }
 
 function getPromoBadge(product: Product) {
-  if (Number(product.price) >= 500) return 'Free Shipping'
-  if ((product.reviews ?? 0) >= 200) return 'Popular Choice'
-  return 'Fast Dispatch'
+  if (Number(product.price) >= 500) return t('product.freeShipping')
+  if ((product.reviews ?? 0) >= 200) return t('product.popularChoice')
+  return t('product.fastDispatch')
 }
 
 function toggleWishlist(e: Event) {
@@ -64,7 +66,7 @@ function toggleWishlist(e: Event) {
     reviews: product.reviews,
   })
   toast({
-    title: wishlistStore.isInWishlist(product.id) ? 'Added to Wishlist' : 'Removed from Wishlist',
+    title: wishlistStore.isInWishlist(product.id) ? t('product.addedToWishlist') : t('product.removedFromWishlist'),
     description: product.title,
     variant: 'success'
   })
@@ -78,8 +80,8 @@ function toggleCompare(e: Event) {
   } else {
     if (compareStore.items.length >= compareStore.MAX_COMPARE) {
       toast({
-        title: 'Compare list full',
-        description: `You can compare up to ${compareStore.MAX_COMPARE} products. Remove one first.`,
+        title: t('product.compareFull'),
+        description: t('product.compareFullDesc', { max: compareStore.MAX_COMPARE }),
         variant: 'destructive'
       })
       return
@@ -92,7 +94,7 @@ function toggleCompare(e: Event) {
       category: product.category,
       rating: product.rating,
     })
-    toast({ title: 'Added to Compare', description: product.title, variant: 'success' })
+    toast({ title: t('product.addedToCompare'), description: product.title, variant: 'success' })
   }
 }
 </script>
@@ -118,9 +120,9 @@ function toggleCompare(e: Event) {
       <!-- Fallback for broken images -->
       <div v-else class="flex flex-col items-center justify-center text-muted-foreground w-full h-full bg-secondary/50">
         <ImageOff class="w-8 h-8 mb-2 opacity-40" />
-        <span class="text-xs font-medium opacity-60">No Image</span>
+        <span class="text-xs font-medium opacity-60">{{ $t('product.noImage') }}</span>
       </div>
-      
+
       <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
 
       <!-- Wishlist button -->
@@ -128,7 +130,7 @@ function toggleCompare(e: Event) {
         @click="toggleWishlist"
         class="absolute top-2 right-2 p-2 rounded-full bg-background/80 backdrop-blur shadow-sm transition-all hover:scale-110 z-10"
         :class="wishlistStore.isInWishlist(product.id) ? 'text-red-500' : 'text-muted-foreground hover:text-red-400'"
-        :title="wishlistStore.isInWishlist(product.id) ? 'Remove from wishlist' : 'Add to wishlist'"
+        :title="wishlistStore.isInWishlist(product.id) ? $t('product.removeFromWishlist') : $t('product.addToWishlist')"
       >
         <Heart class="w-4 h-4" :class="{ 'fill-current': wishlistStore.isInWishlist(product.id) }" />
       </button>
@@ -138,7 +140,7 @@ function toggleCompare(e: Event) {
         @click="toggleCompare"
         class="absolute top-2 left-2 p-1.5 rounded-lg bg-background/80 backdrop-blur shadow-sm transition-all opacity-0 group-hover:opacity-100 z-10"
         :class="compareStore.isInCompare(product.id) ? 'opacity-100 !bg-primary/10 text-primary border border-primary/30' : 'text-muted-foreground hover:text-primary'"
-        :title="compareStore.isInCompare(product.id) ? 'Remove from compare' : 'Add to compare'"
+        :title="compareStore.isInCompare(product.id) ? $t('product.removeFromCompare') : $t('product.addToCompare')"
       >
         <GitCompare class="w-3.5 h-3.5" />
       </button>
@@ -166,7 +168,7 @@ function toggleCompare(e: Event) {
           <span class="text-xs text-muted-foreground">({{ formatReviews(product.reviews) }})</span>
         </template>
         <span v-else class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border/60">
-          New
+          {{ $t('product.new') }}
         </span>
       </div>
       
@@ -186,7 +188,7 @@ function toggleCompare(e: Event) {
           @click="quickAddToCart"
         >
           <ShoppingCart class="w-4 h-4 mr-1.5" />
-          Add
+          {{ $t('common.add') }}
         </Button>
       </div>
     </div>

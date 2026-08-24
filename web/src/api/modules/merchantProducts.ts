@@ -9,6 +9,8 @@ export interface MerchantProduct {
   category: string
   status: 'active' | 'draft' | 'archived'
   image: string
+  /** 演示视频 URL（阶段 4.1，可选） */
+  video?: string
   sales: number
 }
 

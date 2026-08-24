@@ -1,11 +1,9 @@
 package com.project.platform.controller;
 import com.project.platform.entity.User;
 import com.project.platform.service.UserService;
-import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
-import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -96,13 +94,6 @@ public class UserController {
     @DeleteMapping("delBatch")
     public ResponseVO delBatch(@RequestBody List<Integer> ids){
         userService.removeByIds(ids);
-        return ResponseVO.ok();
-    }
-
-    @PostMapping("/topUp/{amount}")
-    public ResponseVO topUp(@Positive(message = "充值金额必须大于 0") @PathVariable Float amount) {
-        Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
-        userService.topUp(userId, amount);
         return ResponseVO.ok();
     }
 

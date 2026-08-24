@@ -40,8 +40,8 @@ class AuthControllerTest extends BaseControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /common/register — should register a new shop")
-    void registerShop() throws Exception {
+    @DisplayName("PUT /common/register — SHOP 匿名注册应 403(商家走入驻审核, 拒绝匿名建商户)")
+    void registerShopRejected() throws Exception {
         put("/common/register", "", java.util.Map.of(
                 "type", "SHOP",
                 "username", "newshop",
@@ -49,8 +49,7 @@ class AuthControllerTest extends BaseControllerTest {
                 "nickname", "Shop Owner",
                 "name", "New Store",
                 "aptitudeImgs", ""
-        )).andExpect(status().isOk())
-          .andExpect(jsonPath("$.code").value(200));
+        )).andExpect(status().isForbidden());
     }
 
     @Test

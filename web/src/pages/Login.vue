@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { login as loginApi } from '@/api/modules/auth'
 import Button from '@/components/ui/button/Button.vue'
-import { ArrowRight, Github, Mail, Lock } from 'lucide-vue-next'
+import { ArrowRight, Github, User, Lock } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
 const { toast } = useToast()
+const { t } = useI18n()
 const authStore = useAuthStore()
 
 const email = ref('')
@@ -35,22 +37,22 @@ watch(
 const portalHeadline = computed(() => {
   switch (loginPortal.value) {
     case 'admin':
-      return 'Administrator sign in'
+      return t('auth.adminHeadline')
     case 'merchant':
-      return 'Merchant sign in'
+      return t('auth.merchantHeadline')
     default:
-      return 'Welcome back'
+      return t('auth.loginTitle')
   }
 })
 
 const portalSubline = computed(() => {
   switch (loginPortal.value) {
     case 'admin':
-      return 'Use your admin account to open the control panel.'
+      return t('auth.adminSubline')
     case 'merchant':
-      return 'Sign in to manage products, orders, and your storefront.'
+      return t('auth.merchantSubline')
     default:
-      return 'Enter your credentials to shop and manage your account.'
+      return t('auth.userSubline')
   }
 })
 
@@ -60,8 +62,8 @@ onMounted(() => {
       clearedRef.value = true
       sessionStorage.removeItem('auth_cleared')
       toast({
-        title: 'Session reset',
-        description: 'Detected outdated login session and cleared it for safety.',
+        title: t('auth.sessionReset'),
+        description: t('auth.sessionResetDesc'),
         variant: 'success'
       })
     }
@@ -83,14 +85,14 @@ const handleLogin = async () => {
     authStore.login(result.user, result.token)
 
     const roleMap = {
-      user: 'User',
-      merchant: 'Merchant',
-      admin: 'Administrator'
+      user: t('auth.roleUser'),
+      merchant: t('auth.roleMerchant'),
+      admin: t('auth.roleAdmin')
     }
 
     toast({
-      title: `Welcome back, ${roleMap[result.user.role]}!`,
-      description: 'You have successfully logged in.',
+      title: t('auth.welcomeBackRole', { role: roleMap[result.user.role] ?? t('auth.roleUser') }),
+      description: t('auth.loginSuccessDesc'),
       variant: 'success'
     })
 
@@ -104,7 +106,7 @@ const handleLogin = async () => {
           : '/')
     router.push(target)
   } catch (e: any) {
-    toast({ title: 'Login failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+    toast({ title: t('auth.loginFailed'), description: e?.message || t('auth.loginFailedUnknown'), variant: 'destructive' })
   } finally {
     isLoading.value = false
   }
@@ -133,7 +135,7 @@ const handleLogin = async () => {
           v-if="clearedRef"
           class="mb-4 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 text-sm"
         >
-          Detected an outdated login session and cleared it. Please sign in again.
+          {{ $t('auth.clearedBanner') }}
         </div>
         <!-- Header -->
         <div class="text-center mb-8">
@@ -149,13 +151,13 @@ const handleLogin = async () => {
             v-if="loginPortal === 'admin'"
             class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-amber-600/90"
           >
-            Admin portal
+            {{ $t('auth.adminPortalBadge') }}
           </p>
           <p
             v-else-if="loginPortal === 'merchant'"
             class="mb-2 text-[11px] font-semibold uppercase tracking-widest text-amber-600/90"
           >
-            Merchant portal
+            {{ $t('auth.merchantPortalBadge') }}
           </p>
           <h1 class="text-2xl font-bold tracking-tight mb-2">{{ portalHeadline }}</h1>
           <p class="text-muted-foreground text-sm">{{ portalSubline }}</p>
@@ -164,15 +166,17 @@ const handleLogin = async () => {
         <!-- Form -->
         <form @submit.prevent="handleLogin" class="space-y-4">
           <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">Email</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.username') }}</label>
             <div class="relative group">
-              <Mail
+              <User
                 class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
               />
               <input
                 v-model="email"
-                type="email"
-                placeholder="name@example.com"
+                type="text"
+                autocomplete="username"
+                :placeholder="$t('auth.usernamePlaceholder')"
+                data-testid="login-username"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
               />
@@ -181,8 +185,8 @@ const handleLogin = async () => {
 
           <div class="space-y-2">
             <div class="flex justify-between items-center ml-1">
-              <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Password</label>
-              <router-link to="/forgot-password" class="text-xs text-primary hover:underline">Forgot?</router-link>
+              <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">{{ $t('auth.password') }}</label>
+              <router-link to="/forgot-password" class="text-xs text-primary hover:underline">{{ $t('auth.forgotShort') }}</router-link>
             </div>
             <div class="relative group">
               <Lock
@@ -205,10 +209,10 @@ const handleLogin = async () => {
           >
             <span v-if="isLoading" class="flex items-center gap-2">
               <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              Signing in...
+              {{ $t('auth.signingIn') }}
             </span>
             <span v-else class="flex items-center justify-center gap-2">
-              Sign In <ArrowRight class="w-4 h-4" />
+              {{ $t('auth.signIn') }} <ArrowRight class="w-4 h-4" />
             </span>
           </Button>
         </form>
@@ -220,7 +224,7 @@ const handleLogin = async () => {
               <span class="w-full border-t border-border/50"></span>
             </div>
             <div class="relative flex justify-center text-xs uppercase">
-              <span class="bg-background/0 backdrop-blur-xl px-2 text-muted-foreground">Or continue with</span>
+              <span class="bg-background/0 backdrop-blur-xl px-2 text-muted-foreground">{{ $t('auth.orContinueWith') }}</span>
             </div>
           </div>
 
@@ -244,29 +248,29 @@ const handleLogin = async () => {
         <div class="mt-8 space-y-3 text-center text-xs text-muted-foreground">
           <template v-if="loginPortal === 'user'">
             <p>
-              Don’t have an account?
-              <router-link to="/signup" class="text-primary hover:underline font-medium">Sign up</router-link>
+              {{ $t('auth.noAccount') }}
+              <router-link to="/signup" class="text-primary hover:underline font-medium">{{ $t('auth.signUp') }}</router-link>
             </p>
           </template>
           <template v-else-if="loginPortal === 'merchant'">
             <p>
-              Don't have a store yet?
-              <router-link to="/signup?role=merchant" class="text-primary hover:underline font-medium">Open a store</router-link>
+              {{ $t('auth.noStoreYet') }}
+              <router-link to="/signup?role=merchant" class="text-primary hover:underline font-medium">{{ $t('auth.openStore') }}</router-link>
             </p>
             <p>
-              <router-link to="/login" class="text-primary hover:underline font-medium">Customer sign in</router-link>
+              <router-link to="/login" class="text-primary hover:underline font-medium">{{ $t('auth.customerSignIn') }}</router-link>
               <span class="mx-1.5 text-border">·</span>
-              <router-link to="/admin/login" class="text-primary hover:underline font-medium">Admin portal</router-link>
+              <router-link to="/admin/login" class="text-primary hover:underline font-medium">{{ $t('auth.adminPortalBadge') }}</router-link>
             </p>
-            <router-link to="/" class="inline-block hover:text-foreground transition-colors">← Back to store</router-link>
+            <router-link to="/" class="inline-block hover:text-foreground transition-colors">{{ $t('auth.backToStore') }}</router-link>
           </template>
           <template v-else>
             <p>
-              <router-link to="/login" class="text-primary hover:underline font-medium">Customer sign in</router-link>
+              <router-link to="/login" class="text-primary hover:underline font-medium">{{ $t('auth.customerSignIn') }}</router-link>
               <span class="mx-1.5 text-border">·</span>
-              <router-link to="/merchant/login" class="text-primary hover:underline font-medium">Merchant login</router-link>
+              <router-link to="/merchant/login" class="text-primary hover:underline font-medium">{{ $t('auth.merchantLogin') }}</router-link>
             </p>
-            <router-link to="/" class="inline-block hover:text-foreground transition-colors">← Back to store</router-link>
+            <router-link to="/" class="inline-block hover:text-foreground transition-colors">{{ $t('auth.backToStore') }}</router-link>
           </template>
         </div>
       </div>

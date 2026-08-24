@@ -16,6 +16,8 @@ export default defineConfig({
     }),
   ],
   server: {
+    // 默认仅绑 IPv6 回环 ::1，IPv4(127.0.0.1)与局域网 IP 都连不上 → 监听所有网卡
+    host: true,
     proxy: {
       '/api': {
         target: 'http://localhost:1000',

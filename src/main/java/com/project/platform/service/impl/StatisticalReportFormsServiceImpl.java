@@ -11,6 +11,7 @@ import com.project.platform.vo.ValueNameVO;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,12 +45,12 @@ public class StatisticalReportFormsServiceImpl implements StatisticalReportForms
         EchartsDataVO echartsDataVO = new EchartsDataVO();
         for (LocalDateTime localDateTime : recentSevenDays) {
             echartsDataVO.getXData().add(TimeUtils.formatterDate(localDateTime));
-            float sum = 0;
+            BigDecimal sum = BigDecimal.ZERO;
             for (ProductOrder productOrder : productOrderList) {
                 if (productOrder.getCreateTime().isBefore(TimeUtils.setToEndOfDay(localDateTime))
                         && (productOrder.getCreateTime().isAfter(TimeUtils.setToMidnight(localDateTime))
                         || productOrder.getCreateTime().equals(TimeUtils.setToMidnight(localDateTime)))) {
-                    sum += productOrder.getTotalMoney();
+                    sum = sum.add(productOrder.getTotalMoney());
                 }
             }
             echartsDataVO.getSeriesData().add(sum);

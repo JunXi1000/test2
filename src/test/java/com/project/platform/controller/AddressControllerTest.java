@@ -54,4 +54,14 @@ class AddressControllerTest extends BaseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
     }
+
+    @Test
+    @DisplayName("user2 修改 user1 的地址应 403(横向越权)")
+    void user2CannotModifyUser1Address() throws Exception {
+        put("/addresses/1", user2Token(), Map.of(
+                "name", "Hacked",
+                "tel", "000",
+                "address", "Evil St"
+        )).andExpect(status().isForbidden());
+    }
 }

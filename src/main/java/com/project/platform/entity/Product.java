@@ -1,5 +1,6 @@
 package com.project.platform.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 /**
  * 商品信息
@@ -32,7 +33,7 @@ public class Product  {
    /**
    * 价格
    */
-   private Float price;
+   private BigDecimal price;
    /**
    * 库存
    */
@@ -87,6 +88,21 @@ public class Product  {
       return mainImg;
    }
 
+   // ── 门店(storefront)字段别名 ──
+   // 前端商品卡片/详情使用 title / image / category,后端实体为 name / mainImg / productTypeName。
+   // 提供只读 getter 让 JSON 同时包含两套字段,admin/merchant 仍读 name/mainImg,互不影响。
+   public String getTitle() {
+      return name;
+   }
+
+   public String getImage() {
+      return mainImg;
+   }
+
+   public String getCategory() {
+      return productTypeName;
+   }
+
    public void setMainImg(String mainImg) {
       this.mainImg = mainImg;
    }
@@ -115,11 +131,11 @@ public class Product  {
       this.productTypeName = productTypeName;
    }
 
-   public Float getPrice() {
+   public BigDecimal getPrice() {
       return price;
    }
 
-   public void setPrice(Float price) {
+   public void setPrice(BigDecimal price) {
       this.price = price;
    }
 

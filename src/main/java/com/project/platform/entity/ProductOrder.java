@@ -1,5 +1,6 @@
 package com.project.platform.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 /**
  * 商品订单
@@ -28,7 +29,7 @@ public class ProductOrder  {
    /**
     * 总金额
     */
-   private Float totalMoney;
+   private BigDecimal totalMoney;
    /**
     * 数量
     */
@@ -113,11 +114,11 @@ public class ProductOrder  {
       this.shopName = shopName;
    }
 
-   public Float getTotalMoney() {
+   public BigDecimal getTotalMoney() {
       return totalMoney;
    }
 
-   public void setTotalMoney(Float totalMoney) {
+   public void setTotalMoney(BigDecimal totalMoney) {
       this.totalMoney = totalMoney;
    }
 

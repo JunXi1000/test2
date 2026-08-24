@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Star, Truck, ShieldCheck, Minus, Plus, Share2, MessageSquare, Check, ShoppingBag, Zap, ChevronLeft, ChevronRight, ThumbsUp, X, Hash, Store, Clock, Package, Reply, CornerDownRight, Trash2, BadgeCheck, Heart } from 'lucide-vue-next'
+import { Star, Truck, ShieldCheck, Minus, Plus, Share2, MessageSquare, Check, ShoppingBag, Zap, ChevronLeft, ChevronRight, ThumbsUp, X, Hash, Store, Clock, Package, Reply, CornerDownRight, Trash2, BadgeCheck, Heart, Play, Ruler } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
+import SizeGuide from '@/components/ui/SizeGuide.vue'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useBrowsingHistory } from '@/stores/browsingHistory'
@@ -10,11 +11,12 @@ import { useStockAlertStore } from '@/stores/stockAlerts'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { getProductById } from '@/api/modules/product'
+import { getProductById, getRelatedProducts, getBoughtTogether } from '@/api/modules/product'
 import type { Product } from '@/types/product'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import Breadcrumb from '@/components/ui/Breadcrumb.vue'
 import ProductQA from '@/components/ui/ProductQA.vue'
+import ProductCard from '@/components/ui/card/ProductCard.vue'
 import { getMerchantPublicProfile, type MerchantPublicProfile } from '@/api/modules/merchantPublic'
 
 const route = useRoute()
@@ -45,6 +47,7 @@ const highlightColorMissing = ref(false)
 const highlightSizeMissing = ref(false)
 const colorExpanded = ref(false)
 const specExpanded = ref(false)
+const showSizeGuide = ref(false)
 const COLLAPSE_THRESHOLD_COLORS = 6
 const COLLAPSE_THRESHOLD_SPECS = 6
 
@@ -71,11 +74,32 @@ const visibleSpecs = computed(() => {
 const hasHiddenColors = computed(() => (productRef.value?.colors?.length || 0) > COLLAPSE_THRESHOLD_COLORS)
 const hasHiddenSpecs = computed(() => (productRef.value?.sizes?.length || 0) > COLLAPSE_THRESHOLD_SPECS)
 
+/** 相册条目：图片与演示视频混排（阶段 4.1）。视频固定插入到第 2 位（index 1）。 */
+type GalleryItem = { kind: 'image'; src: string } | { kind: 'video'; src: string }
+
+const galleryItems = computed<GalleryItem[]>(() => {
+  const p = productRef.value
+  if (!p) return []
+  const imgs = p.images?.length ? p.images : [p.image]
+  const items: GalleryItem[] = imgs.map((src) => ({ kind: 'image', src }))
+  if (p.video) {
+    items.splice(1, 0, { kind: 'video', src: p.video })
+  }
+  return items
+})
+
+const currentGalleryItem = computed<GalleryItem | null>(() => galleryItems.value[currentImageIndex.value] ?? null)
+const isCurrentVideo = computed(() => currentGalleryItem.value?.kind === 'video')
+/** 视频封面图：复用商品首图 */
+const videoPoster = computed(() => productRef.value?.image ?? productRef.value?.images?.[0] ?? imageFallback)
+
 const currentImage = computed(() => {
   if (productRef.value?.variantImages && selectedColor.value?.name && productRef.value.variantImages[selectedColor.value.name]) {
     return productRef.value.variantImages[selectedColor.value.name]
   }
-  return productRef.value?.images?.[currentImageIndex.value] ?? productRef.value?.image ?? ''
+  const item = galleryItems.value[currentImageIndex.value]
+  if (item?.kind === 'image') return item.src
+  return productRef.value?.images?.[0] ?? productRef.value?.image ?? ''
 })
 
 const galleryImages = computed(() => {
@@ -84,8 +108,8 @@ const galleryImages = computed(() => {
   return p.images?.length ? p.images : [p.image]
 })
 
-const canPrevImage = computed(() => galleryImages.value.length > 1)
-const canNextImage = computed(() => galleryImages.value.length > 1)
+const canPrevImage = computed(() => galleryItems.value.length > 1)
+const canNextImage = computed(() => galleryItems.value.length > 1)
 
 const mainImageSlotKey = computed(() => `main-${selectedColor.value?.name || 'default'}-${currentImageIndex.value}`)
 const resolvedMainImage = computed(() => resolveImageSrc(mainImageSlotKey.value, currentImage.value || imageFallback))
@@ -229,7 +253,7 @@ function scheduleIdleWarmup() {
 }
 
 function selectImage(index: number) {
-  if (index < 0 || index >= galleryImages.value.length) return
+  if (index < 0 || index >= galleryItems.value.length) return
   currentImageIndex.value = index
   nextTick(() => {
     const target = thumbnailStripRef.value?.querySelector<HTMLElement>(`button[data-thumb-index="${index}"]`)
@@ -238,14 +262,15 @@ function selectImage(index: number) {
 }
 
 function prevImage() {
-  if (!galleryImages.value.length) return
-  const len = galleryImages.value.length
+  if (!galleryItems.value.length) return
+  const len = galleryItems.value.length
   selectImage((currentImageIndex.value - 1 + len) % len)
 }
 
 function nextImage() {
-  if (!galleryImages.value.length) return
-  selectImage((currentImageIndex.value + 1) % galleryImages.value.length)
+  if (!galleryItems.value.length) return
+  const len = galleryItems.value.length
+  selectImage((currentImageIndex.value + 1) % len)
 }
 
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
@@ -522,7 +547,6 @@ const reviewAvg = computed(() => {
   return sum / mergedReviews.value.length
 })
 const reviewCharCount = computed(() => reviewContent.value.length)
-const reviewCharsRemaining = computed(() => reviewMaxChars - reviewCharCount.value)
 
 function getInitials(name: string) {
   return name
@@ -886,14 +910,14 @@ function syncActiveTabByScroll() {
   const tabHeight = tabSwitcherRef.value?.offsetHeight ?? 52
   const anchorLine = headerOffset + tabHeight + 28
 
-  const sections: Array<{ tab: 'details' | 'specs' | 'reviews'; el: HTMLElement | null }> = [
+  const sections: Array<{ tab: 'details' | 'specs' | 'reviews' | 'qa'; el: HTMLElement | null }> = [
     { tab: 'details', el: detailsSectionRef.value },
     { tab: 'specs', el: specsSectionRef.value },
     { tab: 'reviews', el: reviewsSectionRef.value },
     { tab: 'qa', el: qaSectionRef.value }
   ]
 
-  let currentTab: 'details' | 'specs' | 'reviews' = 'details'
+  let currentTab: 'details' | 'specs' | 'reviews' | 'qa' = 'details'
   for (const section of sections) {
     if (!section.el) continue
     const top = section.el.getBoundingClientRect().top
@@ -920,12 +944,73 @@ async function fetchDetail() {
 
     selectedColor.value = null
     selectedSize.value = ''
-    
+
+    // 商品加载完成后(此时才有真实 shopId)再加载商家信息,避免 onMounted 竞态取到假 id
+    loadMerchant()
+    // 并行加载推荐板块
+    loadRecommendations()
   } catch (e: any) {
     errorRef.value = e?.message || 'Failed to load product'
   } finally {
     isLoadingRef.value = false
   }
+}
+
+// ── Recommendations (阶段 1.1) ──
+const relatedProducts = ref<Product[]>([])
+const boughtTogether = ref<Product[]>([])
+const boughtTogetherSelected = ref<Set<number>>(new Set())
+const recLoading = ref(false)
+
+async function loadRecommendations() {
+  recLoading.value = true
+  try {
+    const [related, together] = await Promise.all([
+      getRelatedProducts(productId, 6),
+      getBoughtTogether(productId, 3),
+    ])
+    relatedProducts.value = related
+    boughtTogether.value = together
+    // 默认全部选中搭配购买
+    boughtTogetherSelected.value = new Set(together.map(p => p.id))
+  } catch {
+    relatedProducts.value = []
+    boughtTogether.value = []
+  } finally {
+    recLoading.value = false
+  }
+}
+
+const boughtTogetherTotal = computed(() => {
+  const ids = boughtTogetherSelected.value
+  return boughtTogether.value
+    .filter(p => ids.has(p.id))
+    .reduce((sum, p) => sum + Number(p.price), Number(productRef.value?.price ?? 0))
+})
+
+function toggleBoughtTogether(id: number) {
+  const next = new Set(boughtTogetherSelected.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  boughtTogetherSelected.value = next
+}
+
+function addBoughtTogetherToCart() {
+  if (!productRef.value) return
+  const ids = boughtTogetherSelected.value
+  // 主商品
+  cartStore.addItem(productRef.value, { color: selectedColor.value?.name ?? 'Default', size: selectedSize.value || 'Standard', quantity: quantity.value })
+  // 搭配商品
+  boughtTogether.value.forEach(p => {
+    if (ids.has(p.id)) {
+      cartStore.addItem(p, { color: 'Default', size: 'Standard', quantity: 1 })
+    }
+  })
+  toast({
+    title: 'Bundle Added to Cart',
+    description: `${ids.size + 1} items added`,
+    variant: 'success',
+  })
 }
 
 // ── Merchant info ──
@@ -934,6 +1019,9 @@ const merchantLoading = ref(false)
 
 const PRODUCT_MERCHANT_MAP: Record<number, string> = {}
 function getMerchantIdForProduct(pId: number): string {
+  // 真实模式:优先用商品自带的真实 shopId(替换 mock 时代硬编码的 'm1'/'m2' 假 id)
+  const shopId = productRef.value?.shopId
+  if (shopId) return String(shopId)
   if (PRODUCT_MERCHANT_MAP[pId]) return PRODUCT_MERCHANT_MAP[pId]
   return pId % 2 === 0 ? 'm2' : 'm1'
 }
@@ -973,7 +1061,6 @@ const stockStatus = computed(() => {
 })
 
 onMounted(fetchDetail)
-onMounted(loadMerchant)
 onMounted(loadPersistedReviews)
 onMounted(() => stockAlertStore.load())
 onMounted(() => {
@@ -1019,7 +1106,7 @@ watch(currentImageIndex, () => {
   scheduleIdleWarmup()
 })
 
-watch(galleryImages, () => {
+watch(galleryItems, () => {
   imageFailoverCursor.value = {}
   warmupNearbyGalleryImages()
   scheduleIdleWarmup()
@@ -1080,8 +1167,20 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
             ref="heroCardRef"
             class="product-hero-card relative aspect-[4/3] rounded-2xl md:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-border/50"
           >
-            <img 
-              :src="resolveImageSrc(`main-${selectedColor?.name || 'default'}-${currentImageIndex}`, currentImage || imageFallback)" 
+            <!-- 演示视频：与图片混排相册，原生 controls 支持播放/暂停/全屏（阶段 4.1） -->
+            <video
+              v-if="isCurrentVideo"
+              :key="`gallery-video-${currentImageIndex}`"
+              :src="currentGalleryItem?.src"
+              class="w-full h-full object-contain p-3 md:p-5"
+              controls
+              playsinline
+              preload="metadata"
+              :poster="videoPoster"
+            ></video>
+            <img
+              v-else
+              :src="resolveImageSrc(`main-${selectedColor?.name || 'default'}-${currentImageIndex}`, currentImage || imageFallback)"
               class="w-full h-full object-contain p-3 md:p-5"
               :alt="productRef?.title"
               @error="onImageError($event, `main-${selectedColor?.name || 'default'}-${currentImageIndex}`, currentImage || imageFallback)"
@@ -1090,8 +1189,9 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
               decoding="async"
               draggable="false"
             />
-            <!-- Zoom capture layer: sits above image, below buttons -->
+            <!-- Zoom capture layer: sits above image, below buttons（视频时禁用，避免遮挡播放控件） -->
             <div
+              v-if="!isCurrentVideo"
               class="hidden lg:block absolute inset-0 z-[1]"
               :class="zoomActive ? 'cursor-crosshair' : 'cursor-zoom-in'"
               @mousemove="onHeroMouseMove"
@@ -1099,7 +1199,7 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
             />
             <!-- Zoom Lens Indicator -->
             <div
-              v-if="zoomActive"
+              v-if="!isCurrentVideo && zoomActive"
               class="hidden lg:block absolute pointer-events-none border-2 border-primary/40 bg-primary/10 rounded-sm z-[2]"
               :style="{
                 width: `${LENS_SIZE}px`,
@@ -1115,7 +1215,7 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
               Backup image
             </span>
             <button
-              v-if="galleryImages.length > 1"
+              v-if="galleryItems.length > 1"
               class="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/45 text-white flex items-center justify-center hover:bg-black/60 transition z-[3]"
               :disabled="!canPrevImage"
               :class="!canPrevImage ? 'opacity-40 cursor-not-allowed' : ''"
@@ -1124,7 +1224,7 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
               <ChevronLeft class="w-5 h-5" />
             </button>
             <button
-              v-if="galleryImages.length > 1"
+              v-if="galleryItems.length > 1"
               class="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/45 text-white flex items-center justify-center hover:bg-black/60 transition z-[3]"
               :disabled="!canNextImage"
               :class="!canNextImage ? 'opacity-40 cursor-not-allowed' : ''"
@@ -1135,7 +1235,7 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
             <!-- Badges -->
             <div class="absolute top-4 left-4 md:top-6 md:left-6 flex flex-col gap-1.5 md:gap-2 z-[3] pointer-events-none">
               <span class="px-2.5 md:px-3 py-1 md:py-1.5 bg-white/90 dark:bg-black/90 backdrop-blur-md rounded-full text-[9px] md:text-[10px] font-bold tracking-wider md:tracking-widest uppercase shadow-sm">New Arrival</span>
-              <span v-if="productRef?.rating >= 4.8" class="px-2.5 md:px-3 py-1 md:py-1.5 bg-primary text-primary-foreground rounded-full text-[9px] md:text-[10px] font-bold tracking-wider md:tracking-widest uppercase shadow-sm">Top Rated</span>
+              <span v-if="Number(productRef?.rating ?? 0) >= 4.8" class="px-2.5 md:px-3 py-1 md:py-1.5 bg-primary text-primary-foreground rounded-full text-[9px] md:text-[10px] font-bold tracking-wider md:tracking-widest uppercase shadow-sm">Top Rated</span>
             </div>
             <!-- Actions -->
             <div class="absolute top-4 right-4 md:top-6 md:right-6 z-[3]">
@@ -1148,21 +1248,38 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
             </div>
           </div>
           
-          <!-- Thumbnail Strip -->
-          <div v-if="galleryImages.length > 1" ref="thumbnailStripRef" class="flex gap-2 md:gap-3 overflow-x-auto pb-2 no-scrollbar px-0.5 md:px-1 snap-x snap-mandatory scroll-px-1 md:scroll-px-2 [-webkit-overflow-scrolling:touch] justify-center lg:justify-start">
-            <button 
-              v-for="(img, idx) in galleryImages" 
+          <!-- Thumbnail Strip（图片与演示视频混排，视频缩略图带播放角标） -->
+          <div v-if="galleryItems.length > 1" ref="thumbnailStripRef" class="flex gap-2 md:gap-3 overflow-x-auto pb-2 no-scrollbar px-0.5 md:px-1 snap-x snap-mandatory scroll-px-1 md:scroll-px-2 [-webkit-overflow-scrolling:touch] justify-center lg:justify-start">
+            <button
+              v-for="(item, idx) in galleryItems"
               :key="idx"
               @click="selectImage(idx)"
               :data-thumb-index="idx"
+              :data-thumb-kind="item.kind"
               class="relative flex-shrink-0 snap-start w-14 h-14 md:w-16 md:h-16 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all duration-300 group"
               :class="currentImageIndex === idx ? 'border-primary p-1 scale-105' : 'border-transparent opacity-60 hover:opacity-100'"
             >
+              <template v-if="item.kind === 'video'">
+                <img
+                  :src="resolveImageSrc(`thumb-${idx}`, videoPoster)"
+                  class="w-full h-full object-cover rounded-xl"
+                  :alt="`${productRef?.title || 'Product'} demo video`"
+                  @error="onImageError($event, `thumb-${idx}`, videoPoster)"
+                  :loading="idx <= 2 ? 'eager' : 'lazy'"
+                  decoding="async"
+                />
+                <span class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/35">
+                  <span class="flex items-center justify-center w-6 h-6 rounded-full bg-white/95 text-foreground shadow-sm">
+                    <Play class="w-3.5 h-3.5 ml-0.5" />
+                  </span>
+                </span>
+              </template>
               <img
-                :src="resolveImageSrc(`thumb-${idx}`, img || imageFallback)"
+                v-else
+                :src="resolveImageSrc(`thumb-${idx}`, item.src || imageFallback)"
                 class="w-full h-full object-cover rounded-xl"
                 :alt="`${productRef?.title || 'Product'} thumbnail ${idx + 1}`"
-                @error="onImageError($event, `thumb-${idx}`, img || imageFallback)"
+                @error="onImageError($event, `thumb-${idx}`, item.src || imageFallback)"
                 :loading="idx <= 2 ? 'eager' : 'lazy'"
                 :fetchpriority="idx === currentImageIndex ? 'high' : 'low'"
                 decoding="async"
@@ -1254,11 +1371,20 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
                   <span class="h-3.5 w-1 rounded-full bg-primary/80"></span>
                   <span>{{ productRef.specLabel || 'Size' }}{{ selectedSize ? ` — ${selectedSize}` : '' }}</span>
                 </label>
+                <button
+                  v-if="productRef?.hasSizeGuide && productRef?.sizes?.length"
+                  class="inline-flex items-center gap-1.5 text-[11px] md:text-xs font-bold text-primary hover:text-primary/80 transition-colors"
+                  @click="showSizeGuide = true"
+                >
+                  <Ruler class="w-3.5 h-3.5" />
+                  Size Guide
+                </button>
               </div>
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <button 
-                  v-for="size in visibleSpecs" 
+                <button
+                  v-for="size in visibleSpecs"
                   :key="size"
+                  :data-size="size"
                   @click="selectedSize = selectedSize === size ? '' : size"
                   class="min-h-[44px] md:h-12 rounded-xl px-2 text-sm leading-tight text-center font-bold transition-all border-2 flex items-center justify-center relative"
                   :class="selectedSize === size ? 'border-primary bg-primary/5 text-primary shadow-sm shadow-primary/10' : 'border-border hover:border-foreground'"
@@ -1275,6 +1401,15 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
                 </button>
               </div>
             </div>
+
+            <!-- 尺码指南弹窗（阶段 4.2） -->
+            <SizeGuide
+              v-if="productRef?.hasSizeGuide && productRef?.sizes?.length"
+              v-model="showSizeGuide"
+              :sizes="productRef.sizes"
+              :selected-size="selectedSize"
+              @select="(size: string) => { selectedSize = size; showSizeGuide = false }"
+            />
 
             <!-- Quantity & CTA -->
             <div class="space-y-3 md:space-y-4 pt-2 md:pt-4">
@@ -1771,6 +1906,68 @@ watch(() => selectedSize.value, () => { highlightSizeMissing.value = false })
               <ProductQA v-if="productRef" :product-id="productRef.id" :product-title="productRef.title" />
             </section>
           </div>
+        </div>
+      </div>
+
+      <!-- ══════════ 商品推荐（阶段 1.1）══════════ -->
+      <div v-if="productRef" class="mt-16 border-t border-border pt-10">
+        <div class="container px-4 mx-auto">
+          <!-- Frequently Bought Together -->
+          <section v-if="!recLoading && boughtTogether.length > 0" class="mb-12">
+            <h2 class="text-xl sm:text-2xl font-black mb-6 flex items-center gap-2">
+              <ShoppingBag class="w-5 h-5 text-primary" />
+              Frequently Bought Together
+            </h2>
+            <div class="rounded-2xl border border-border bg-card p-4 sm:p-6">
+              <div class="flex flex-wrap items-center gap-3 sm:gap-4">
+                <!-- 主商品 -->
+                <div class="w-28 sm:w-32">
+                  <div class="aspect-square rounded-xl overflow-hidden border border-border bg-secondary/30">
+                    <img :src="productRef.image ?? productRef.images?.[0]" :alt="productRef.title" class="w-full h-full object-cover" loading="lazy" @error="(e) => (e.target as HTMLImageElement).src = imageFallback" />
+                  </div>
+                  <p class="text-[11px] font-semibold line-clamp-1 mt-1.5 text-center">{{ productRef.title }}</p>
+                  <p class="text-xs font-bold text-primary text-center mt-0.5">${{ formatPrice(productRef.price) }}</p>
+                </div>
+
+                <template v-for="(p, i) in boughtTogether" :key="p.id">
+                  <Plus class="w-5 h-5 text-muted-foreground shrink-0" v-if="i > 0 || boughtTogether.length > 1" />
+                  <div class="w-28 sm:w-32 cursor-pointer select-none" @click="toggleBoughtTogether(p.id)">
+                    <div class="relative aspect-square rounded-xl overflow-hidden border bg-secondary/30" :class="boughtTogetherSelected.has(p.id) ? 'border-primary ring-2 ring-primary/30' : 'border-border opacity-60'">
+                      <img :src="p.image" :alt="p.title" class="w-full h-full object-cover" loading="lazy" />
+                      <span class="absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center text-white"
+                        :class="boughtTogetherSelected.has(p.id) ? 'bg-primary border-primary' : 'bg-background/80 border-border'">
+                        <Check v-if="boughtTogetherSelected.has(p.id)" class="w-3 h-3" />
+                      </span>
+                    </div>
+                    <p class="text-[11px] font-semibold line-clamp-1 mt-1.5 text-center">{{ p.title }}</p>
+                    <p class="text-xs font-bold text-primary text-center mt-0.5">${{ formatPrice(p.price) }}</p>
+                  </div>
+                </template>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-border/60">
+                <div class="text-sm">
+                  <span class="text-muted-foreground">Total for selected:</span>
+                  <span class="ml-2 text-2xl font-black text-primary">${{ formatPrice(boughtTogetherTotal) }}</span>
+                </div>
+                <Button size="sm" class="rounded-full px-6 h-10" @click="addBoughtTogetherToCart">
+                  <ShoppingBag class="w-4 h-4 mr-1.5" />
+                  Add Bundle to Cart
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <!-- You May Also Like -->
+          <section v-if="!recLoading && relatedProducts.length > 0" class="mb-4">
+            <h2 class="text-xl sm:text-2xl font-black mb-6 flex items-center gap-2">
+              <Zap class="w-5 h-5 text-primary" />
+              You May Also Like
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+              <ProductCard v-for="p in relatedProducts" :key="p.id" :product="p" class="h-full" />
+            </div>
+          </section>
         </div>
       </div>
 

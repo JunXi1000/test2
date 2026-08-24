@@ -93,10 +93,14 @@ public class ProductServiceImpl implements ProductService {
      */
     @Override
     public void in(Integer Id, Integer quantity) {
-        Product product = productMapper.selectById(Id);
-        product.setStock(product.getStock() + quantity);
-        product.setSalesVolume(product.getSalesVolume() - quantity);
-        productMapper.updateById(product);
+        if (quantity == null || quantity <= 0) {
+            throw new CustomException("数量必须大于0");
+        }
+        // 原子回补库存
+        int rows = productMapper.restoreStock(Id, quantity);
+        if (rows == 0) {
+            throw new CustomException("商品不存在");
+        }
     }
 
     /**
@@ -104,13 +108,14 @@ public class ProductServiceImpl implements ProductService {
      */
     @Override
     public void out(Integer Id, Integer quantity) {
-        Product product = productMapper.selectById(Id);
-        if (product.getStock() < quantity) {
+        if (quantity == null || quantity <= 0) {
+            throw new CustomException("数量必须大于0");
+        }
+        // 原子扣减库存(乐观锁:stock>=qty 才扣),0 行即库存不足
+        int rows = productMapper.deductStock(Id, quantity);
+        if (rows == 0) {
             throw new CustomException("库存不足");
         }
-        product.setStock(product.getStock() - quantity);
-        product.setSalesVolume(product.getSalesVolume() + quantity);
-        productMapper.updateById(product);
     }
 
     @Override

@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import { ShoppingCart, User, Menu, Sun, Moon, X, LogIn, Twitter, Instagram, Facebook, MessageSquare, ArrowUp, Search, RefreshCw, GitCompare } from 'lucide-vue-next'
+import { ShoppingCart, User, Menu, Sun, Moon, X, Twitter, Instagram, Facebook, MessageSquare, ArrowUp, Search, RefreshCw, GitCompare } from 'lucide-vue-next'
 import { useCartStore } from '@/stores/cart'
 import { useCompareStore } from '@/stores/compare'
 import { useAuthStore } from '@/stores/auth'
 import { useDark, useToggle, useWindowScroll, useWindowSize } from '@vueuse/core'
 import { ref, watch, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { useToast } from '@/composables/useToast'
 const ChatWidget = defineAsyncComponent(() => import('@/components/ui/chat/ChatWidget.vue'))
 import { preloadByPath } from '@/router/preload'
 
@@ -17,7 +16,6 @@ const compareStore = useCompareStore()
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const { toast } = useToast()
 
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
@@ -36,7 +34,11 @@ const routerViewComponentKey = computed(() => {
   if (isUserDashboardRoute.value) return 'user-dashboard'
   return route.fullPath
 })
-const isHeaderCompact = computed(() => y.value > 24)
+// 阈值不能太小：页面内容仅比视口高十几~几十像素时（如结算页），scrollY 会恰好停在
+// 阈值附近。sticky 表头在紧凑/完整状态间切换会改变占位高度 → 内容高度变化 → 滚动锚定
+// 又调整 scrollY 跨回阈值 → 无限反馈循环，表头持续闪烁、页面内容不断上下抖动。
+// 取 120 远高于"刚好可滚动"页面的滚动上限，彻底避开该区间。
+const isHeaderCompact = computed(() => y.value > 120)
 const isMobileViewport = computed(() => width.value < 768)
 const hiddenChatWidgetRoutes = new Set(['UserMessages', 'MerchantMessages'])
 const shouldShowChatWidget = computed(() => {
@@ -119,12 +121,12 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
         </nav>
 
         <!-- Actions -->
-        <div class="flex items-center transition-all duration-300" :class="isHeaderCompact ? 'gap-3' : 'gap-4'">
+        <div class="flex items-center transition-all duration-300" :class="isHeaderCompact ? 'gap-2 sm:gap-3' : 'gap-2 sm:gap-4'">
           <button @click="toggleDark()" class="h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors" aria-label="Toggle theme">
             <Sun v-if="isDark" class="h-5 w-5" />
             <Moon v-else class="h-5 w-5" />
           </button>
-          
+
           <router-link to="/cart" @mouseenter="preloadRoute('/cart')" @focus="preloadRoute('/cart')">
             <button class="relative h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors" title="Cart" aria-label="Cart">
               <ShoppingCart class="h-5 w-5" />
@@ -143,7 +145,7 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
               </span>
             </button>
           </router-link>
-          
+
           <!-- User Menu (Logged In) -->
           <router-link v-if="authStore.isAuthenticated" to="/dashboard" @mouseenter="preloadRoute('/dashboard')" @focus="preloadRoute('/dashboard')">
             <button class="h-9 px-2 hover:bg-secondary rounded-lg transition-colors flex items-center gap-2" title="Dashboard" aria-label="Dashboard">
@@ -157,10 +159,10 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
           <!-- Guest Menu (Not Logged In) -->
           <div v-else class="hidden md:flex items-center gap-1">
             <router-link to="/login" @mouseenter="preloadRoute('/login')" @focus="preloadRoute('/login')">
-              <button class="h-9 px-3 text-sm font-medium text-foreground/80 hover:text-primary hover:bg-secondary rounded-lg transition-colors">Log in</button>
+              <button class="h-9 px-3 text-sm font-medium text-foreground/80 hover:text-primary hover:bg-secondary rounded-lg transition-colors">{{ $t('header.logIn') }}</button>
             </router-link>
             <router-link to="/signup" @mouseenter="preloadRoute('/signup')" @focus="preloadRoute('/signup')">
-              <button class="h-9 px-4 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm">Sign up</button>
+              <button class="h-9 px-4 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm">{{ $t('header.signUp') }}</button>
             </router-link>
           </div>
 
@@ -195,28 +197,28 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
             </div>
 
             <router-link to="/" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary" @mouseenter="preloadRoute('/')" @focus="preloadRoute('/')">
-              Home
+              {{ $t('header.home') }}
             </router-link>
             <router-link to="/products" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary">
-              Products
+              {{ $t('common.products') }}
             </router-link>
             <router-link to="/about" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary">
-              About
+              {{ $t('header.about') }}
             </router-link>
-            
+
             <div class="h-px bg-border my-2"></div>
-            
+
             <router-link to="/cart" class="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/cart')" @focus="preloadRoute('/cart')">
-              <span>Cart</span>
+              <span>{{ $t('header.cart') }}</span>
               <span v-if="cartStore.totalItems > 0" class="bg-primary text-white text-xs px-2 py-0.5 rounded-full">{{ cartStore.totalItems }}</span>
             </router-link>
-            
+
             <template v-if="authStore.isAuthenticated">
-              <router-link to="/dashboard" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/dashboard')" @focus="preloadRoute('/dashboard')">My Account</router-link>
+              <router-link to="/dashboard" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/dashboard')" @focus="preloadRoute('/dashboard')">{{ $t('header.myAccount') }}</router-link>
             </template>
             <template v-else>
-              <router-link to="/login" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/login')" @focus="preloadRoute('/login')">Log in</router-link>
-              <router-link to="/signup" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-primary font-medium" @mouseenter="preloadRoute('/signup')" @focus="preloadRoute('/signup')">Sign up</router-link>
+              <router-link to="/login" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/login')" @focus="preloadRoute('/login')">{{ $t('header.logIn') }}</router-link>
+              <router-link to="/signup" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-primary font-medium" @mouseenter="preloadRoute('/signup')" @focus="preloadRoute('/signup')">{{ $t('header.signUp') }}</router-link>
             </template>
           </nav>
         </div>
@@ -260,8 +262,7 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
                <span class="font-bold text-lg">NEXUS STORE</span>
             </div>
             <p class="text-sm text-muted-foreground mb-6 max-w-sm">
-              Redefining digital commerce with a curated selection of premium lifestyle products. 
-              Designed for the modern minimalist.
+              {{ $t('footer.tagline') }}
             </p>
             <div class="flex gap-4">
               <button class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors">
@@ -277,25 +278,25 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
           </div>
           
           <div>
-            <h4 class="font-bold mb-4">Shop</h4>
+            <h4 class="font-bold mb-4">{{ $t('footer.shop') }}</h4>
             <ul class="space-y-2 text-sm text-muted-foreground">
-              <li class="hover:text-primary transition-colors cursor-pointer">All Products</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">New Arrivals</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">Best Sellers</li>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 class="font-bold mb-4">Company</h4>
-            <ul class="space-y-2 text-sm text-muted-foreground">
-              <li class="hover:text-primary transition-colors cursor-pointer">About Us</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">Careers</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">Press</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.allProducts') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.newArrivals') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.bestSellers') }}</li>
             </ul>
           </div>
 
           <div>
-            <h4 class="font-bold mb-4">Partners</h4>
+            <h4 class="font-bold mb-4">{{ $t('footer.company') }}</h4>
+            <ul class="space-y-2 text-sm text-muted-foreground">
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.aboutUs') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.careers') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.press') }}</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 class="font-bold mb-4">{{ $t('footer.partners') }}</h4>
             <ul class="space-y-2 text-sm text-muted-foreground">
               <li>
                 <router-link
@@ -304,7 +305,7 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
                   @mouseenter="preloadRoute('/merchant/login')"
                   @focus="preloadRoute('/merchant/login')"
                 >
-                  Merchant Login
+                  {{ $t('footer.merchantLogin') }}
                 </router-link>
               </li>
               <li>
@@ -314,20 +315,20 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
                   @mouseenter="preloadRoute('/admin/login')"
                   @focus="preloadRoute('/admin/login')"
                 >
-                  Admin Portal
+                  {{ $t('footer.adminPortal') }}
                 </router-link>
               </li>
-              <li class="hover:text-primary transition-colors cursor-pointer">Affiliate Program</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.affiliateProgram') }}</li>
             </ul>
           </div>
         </div>
-        
+
         <div class="border-t border-border/40 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
-          <p>&copy; 2026 Nexus Store Inc. All rights reserved.</p>
+          <p>{{ $t('footer.rights') }}</p>
           <div class="flex gap-6">
-            <span class="hover:text-foreground cursor-pointer">Privacy Policy</span>
-            <span class="hover:text-foreground cursor-pointer">Terms of Service</span>
-            <span class="hover:text-foreground cursor-pointer">Cookie Policy</span>
+            <span class="hover:text-foreground cursor-pointer">{{ $t('footer.privacy') }}</span>
+            <span class="hover:text-foreground cursor-pointer">{{ $t('footer.terms') }}</span>
+            <span class="hover:text-foreground cursor-pointer">{{ $t('footer.cookie') }}</span>
           </div>
         </div>
       </div>

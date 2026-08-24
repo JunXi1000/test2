@@ -26,6 +26,11 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (request.getMethod().toUpperCase().equals("OPTIONS")) {
             return true;
         }
+        // /file/** 的 GET 下载公开(商品图片/附件由 <img src> 直连, 无法携带 token),
+        // 其余方法(上传 POST 等)走下方登录校验
+        if (request.getRequestURI().startsWith("/file") && "GET".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         String path = request.getRequestURL().toString();
         log.debug("接口登录拦截 path={}", path);
         // Support both "token" header (legacy) and "Authorization: Bearer <token>" (frontend)
@@ -64,6 +69,7 @@ public class LoginInterceptor implements HandlerInterceptor {
      */
     private boolean checkRole(String path, CurrentUserDTO currentUserDTO) {
         String type = currentUserDTO.getType();
+        // 显式「路径前缀→角色」映射,收紧遗留 CRUD 接口的越权面
         if (path.startsWith("/admin")) {
             return "ADMIN".equals(type);
         }
@@ -71,6 +77,14 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (path.startsWith("/merchant/")) {
             return "SHOP".equals(type);
         }
+        // /user/**、/productOrder/** 为后台/遗留 CRUD,前端不调用,收紧为仅管理员
+        if (path.startsWith("/user")) {
+            return "ADMIN".equals(type);
+        }
+        if (path.startsWith("/productOrder")) {
+            return "ADMIN".equals(type);
+        }
+        // 其余接口(公开白名单外的)保持"任意登录用户可访问"
         return true;
     }
 

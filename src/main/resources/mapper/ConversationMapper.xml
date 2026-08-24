@@ -36,13 +36,23 @@
 
     <update id="incrementUnread">
         UPDATE conversation
-        SET ${column} = ${column} + 1
+        SET
+        <choose>
+            <when test="column == 'user_unread_count'">user_unread_count = user_unread_count + 1</when>
+            <when test="column == 'shop_unread_count'">shop_unread_count = shop_unread_count + 1</when>
+            <otherwise>1 = 0</otherwise>
+        </choose>
         WHERE id = #{conversationId}
     </update>
 
     <update id="resetUnread">
         UPDATE conversation
-        SET ${column} = 0
+        SET
+        <choose>
+            <when test="column == 'user_unread_count'">user_unread_count = 0</when>
+            <when test="column == 'shop_unread_count'">shop_unread_count = 0</when>
+            <otherwise>1 = 0</otherwise>
+        </choose>
         WHERE id = #{conversationId}
     </update>
 

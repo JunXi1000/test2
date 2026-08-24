@@ -1,6 +1,6 @@
 # 系统架构
 
-> 面向后续开发者:快速理解本项目「前后端分离 + Docker 部署」的整体结构、分层方式与认证鉴权链路。
+> 面向后续开发者:快速理解本项目「前后端分离」的整体结构、分层方式与认证鉴权链路。
 > 配套文档:[模块与实现状态](MODULES.md)· [后端接口契约](backend-api.md)· [开发指南](DEVELOPMENT.md)· [开发路线图](ROADMAP.md)
 
 ## 1. 技术栈总览
@@ -17,61 +17,26 @@
 | 持久层 | MyBatis | 3.0.4 | Mapper 接口 + XML,手写动态 SQL |
 | 数据库 | MySQL | 8.0 | utf8mb4 |
 | 认证 | JWT | jjwt 0.9.1 | HS256,30 天有效期 |
-| 部署 | Docker Compose | — | MySQL / Backend / Nginx 三容器 |
+| 部署 | 本地运行 | — | 前端 Vite :5173 + 后端 Spring Boot :1000(见 [DEVELOPMENT.md](DEVELOPMENT.md)) |
 
 ## 2. 系统拓扑
 
 ```
-浏览器 (Vue SPA)
-   │  /api/*  (Vite dev proxy 或 Nginx /api 反代,去掉 /api 前缀)
+浏览器 (Vue SPA, Vite dev server :5173)
+   │  /api/*  (Vite 代理 → :1000,去掉 /api 前缀)
    ▼
-┌───────────────────── 前端 :5173 ─────────────────────┐
-│  web/  (Vue 3 + Vite)                                │
-│  ├─ src/router        路由 + 角色守卫                  │
-│  ├─ src/pages         用户端 / 用户中心 / 商家端 / 管理端 │
-│  ├─ src/api/modules   每模块一个 api 文件(mock/真实双分支)│
-│  ├─ src/stores        Pinia:登录态 + 本地数据 store      │
-│  └─ src/config/env    mock 开关 / API base             │
-└──────────────────────────────────────────────────────┘
-              │  HTTP :1000 (JSON, {code,msg,data})
-              ▼
-┌───────────────────── 后端 Spring Boot :1000 ──────────────────────┐
-│  com.project.platform                                             │
-│  ├─ controller/  两套体系:                                     │
-│  │   ├─ 门面控制器(面向 Nexus 前端):Storefront* / AdminApi /   │
-│  │   │   MerchantApi / Chat,路径与前端 api/modules 对齐         │
-│  │   └─ 传统 CRUD 控制器(/product /user /productOrder ...)     │
-│  ├─ service/(接口) + service/impl/(实现)                        │
-│  ├─ mapper/(接口) + resources/mapper/*Mapper.xml(动态 SQL)     │
-│  ├─ entity/ 纯 POJO(无 Lombok,手写 getter/setter)             │
-│  ├─ dto/ vo/ exception/ utils/ config/ interceptor/            │
-│  └─ LoginInterceptor + SpringMvcConfig(白名单)                 │
-└─────────────────────────────────────────────────────────────────┘
-              │  JDBC :3306
-              ▼
-┌───────────────────── MySQL 8.0 ─────────────────────┐
-│  库: template_v3                                     │
-│  22 张表(16 基础 + 6 张 Phase 1 新增),定义见          │
-│  docker/mysql/init/01-schema.sql(权威来源)            │
-│  (仓库根 sql/templatev3_s.sql 仅含 admin 表,已过时)     │
-└─────────────────────────────────────────────────────┘
-```
-
-### Docker 部署(3 容器)
-
-| 服务 | 容器名 | 端口映射 | 说明 |
-|------|--------|----------|------|
-| mysql | xmsz-mysql | 3307→3306 | 首次启动执行 `docker/mysql/init/*.sql`(建表+种子) |
-| backend | xmsz-backend | 1000→1000 | Spring Boot,通过 `SPRING_DATASOURCE_URL` 等环境变量覆盖默认配置 |
-| frontend | xmsz-frontend | 5173→80 | Nginx 托管构建产物,`/api` 反代到 backend |
-
-后端容器内的关键环境变量覆盖(`docker-compose.yml`):
-
-```yaml
-SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/template_v3?...   # 容器间用服务名 mysql
-FILES_UPLOADS_PATH: /app/uploads                                  # 上传目录(挂载宿主 ./uploads)
-FILES_UPLOADS_BASEURL: http://localhost:1000/file                 # 上传文件访问前缀
-```
+后端 :1000 (Spring Boot)
+│  com.project.platform
+│  ├─ controller/    两套体系:门面控制器(Storefront*/…) + 传统 CRUD(/product…)
+│  ├─ service/ + service/impl/
+│  ├─ mapper/ + resources/mapper/*.xml
+│  ├─ entity/ dto/ vo/ utils/ config/
+│  └─ LoginInterceptor + 白名单
+   │  JDBC :3306 (localhost)
+   ▼
+MySQL 8.0 (本地)
+│  库: template_v3
+└─────────────────
 
 ## 3. 后端分层与两套控制器体系
 
@@ -148,7 +113,7 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 - 构建时 `VITE_USE_MOCK=true` 固化;运行时 `localStorage.RUNTIME_USE_MOCK` 可覆盖。
 - 两类判断风格:模块级常量 `USE_MOCK`(import 时固化)与响应式 `RUNTIME_USE_MOCK.value`(调用时读取,切换立即生效,管理/商家端 admin*/merchant* 模块)。
 - ⚠️ 生产构建 `.env.production` 未显式覆盖 `VITE_USE_MOCK`,默认仍 mock=true(见 [ROADMAP.md](ROADMAP.md) Phase 4)。
-- ⚠️ `chat.ts` 无 mock 分支,无后端时消息页必然报错。
+- ✅ `chat.ts` 已补 mock 分支(2026-08-09):mock 模式下聊天全走本地假数据,不再打真实后端,避免假 token → 401 → 登录死循环。
 
 ## 6. 环境与配置
 
@@ -164,11 +129,9 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 ## 7. 数据库
 
-- 正式建表 + 种子数据:**`docker/mysql/init/01-schema.sql`**(22 张表,权威来源)。
-- 对已初始化的运行中库补表:增量迁移 **`sql/migration-2026-08-08-phase1.sql`**(含中文种子,执行时须加 `--default-character-set=utf8mb4`,否则中文双重编码成乱码)。
-- 聊天表:**`sql/chat.sql`**(conversation / message)。
-- ⚠️ 仓库根 `sql/templatev3_s.sql` **只有 admin 表,已过时**,本地开发请勿再导入它;以 docker init 脚本为准。
-- 测试用 H2 建表:`src/test/resources/schema-h2.sql`(MODE=MySQL,与主 schema 对齐)。
+- 建表/迁移脚本位于 `sql/`:`sql/templatev3_s.sql`(仅 admin 表)、`sql/chat.sql`(聊天表)、`sql/migrations/`(增量调整)、`sql/migration-2026-08-08-phase1.sql`(一期新增表增量迁移,含中文种子,执行时须加 `--default-character-set=utf8mb4`,否则中文双重编码成乱码)。
+- ⚠️ `sql/templatev3_s.sql` **只有 admin 表,已过时**;完整 schema 需以 `sql/migrations/` + `migration-2026-08-08-phase1.sql` 逐步搭建。
+- 测试用 H2 建表:`src/test/resources/schema-h2.sql`(MODE=MySQL)。
 
 ## 8. 已知架构层面的技术债
 

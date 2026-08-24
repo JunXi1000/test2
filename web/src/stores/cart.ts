@@ -26,13 +26,8 @@ function loadFromStorage(): CartItem[] {
 }
 
 export const useCartStore = defineStore('cart', () => {
-  const saved = loadFromStorage()
-  let initialItems: CartItem[] = []
-  try {
-    initialItems = saved ? JSON.parse(saved) : []
-  } catch {
-    initialItems = []
-  }
+  // loadFromStorage() 已返回解析后的数组，直接使用（避免二次 JSON.parse 导致刷新后清空）
+  const initialItems: CartItem[] = loadFromStorage()
 
   // Data Migration: Ensure all items have a cartItemId
   initialItems.forEach(item => {

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Star, ShieldCheck, MapPin, Clock, ThumbsUp, Users, Package, Truck, RotateCcw,
-  Search, SlidersHorizontal, MessageSquare, ChevronLeft, ShoppingCart, ImageOff,
-  Loader2, X
+  Search, MessageSquare, ChevronLeft, ShoppingCart,
+  Loader2, X, UserPlus, UserCheck
 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
@@ -12,6 +13,7 @@ import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useToast } from '@/composables/useToast'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
+import { useFollowedStores } from '@/stores/followedStores'
 import {
   getMerchantPublicProfile,
   getMerchantStoreProducts,
@@ -24,10 +26,34 @@ import { debounce } from 'lodash-es'
 const route = useRoute()
 const router = useRouter()
 const { toast } = useToast()
+const { t } = useI18n()
 const cartStore = useCartStore()
 const authStore = useAuthStore()
+const followedStores = useFollowedStores()
 
 const merchantId = computed(() => route.params.id as string)
+const isFollowing = computed(() => followedStores.isFollowing(merchantId.value))
+
+function toggleFollow() {
+  if (!profile.value) return
+  const added = followedStores.toggle({
+    id: merchantId.value,
+    storeName: profile.value.storeName,
+    avatar: profile.value.avatar,
+    followers: profile.value.stats.followers
+  })
+  // 乐观更新粉丝数（本地演示用，真实环境由后端统计）
+  if (profile.value) {
+    profile.value.stats.followers += added ? 1 : -1
+  }
+  toast({
+    title: added ? t('store.followingStore') : t('store.unfollowed'),
+    description: added
+      ? t('store.followingStoreDesc', { name: profile.value.storeName })
+      : t('store.unfollowedDesc', { name: profile.value.storeName }),
+    variant: added ? 'success' : 'default'
+  })
+}
 
 const profile = ref<MerchantPublicProfile | null>(null)
 const profileLoading = ref(true)
@@ -43,17 +69,16 @@ const searchQuery = ref('')
 const sortBy = ref<StoreProductQuery['sort']>('popular')
 const currentPage = ref(1)
 const pageSize = 12
-const showFilters = ref(false)
 
 const totalPages = computed(() => Math.ceil(productsTotal.value / pageSize))
 const hasMore = computed(() => currentPage.value < totalPages.value)
 
-const sortOptions = [
-  { label: 'Most Popular', value: 'popular' as const },
-  { label: 'Newest', value: 'newest' as const },
-  { label: 'Price: Low → High', value: 'price-asc' as const },
-  { label: 'Price: High → Low', value: 'price-desc' as const }
-]
+const sortOptions = computed(() => [
+  { label: t('store.sortPopular'), value: 'popular' as const },
+  { label: t('store.sortNewest'), value: 'newest' as const },
+  { label: t('store.sortPriceAsc'), value: 'price-asc' as const },
+  { label: t('store.sortPriceDesc'), value: 'price-desc' as const }
+])
 
 async function loadProfile() {
   profileLoading.value = true
@@ -61,7 +86,7 @@ async function loadProfile() {
   try {
     profile.value = await getMerchantPublicProfile(merchantId.value)
   } catch (e: any) {
-    profileError.value = e?.message || 'Failed to load store profile'
+    profileError.value = e?.message || t('store.loadProfileFailed')
   } finally {
     profileLoading.value = false
   }
@@ -85,7 +110,7 @@ async function loadProducts(append = false) {
     productsTotal.value = res.total
     if (res.categories.length) categories.value = res.categories
   } catch {
-    toast({ title: 'Error', description: 'Failed to load products', variant: 'destructive' })
+    toast({ title: t('common.error'), description: t('store.loadProductsFailed'), variant: 'destructive' })
   } finally {
     productsLoading.value = false
   }
@@ -125,12 +150,12 @@ function quickAddToCart(product: MerchantFeaturedProduct, e: Event) {
     { id: product.id, title: product.title, price: product.price, image: product.image },
     { color: 'Default', size: 'Standard', quantity: 1 }
   )
-  toast({ title: 'Added to Cart', description: `${product.title} has been added.`, variant: 'success' })
+  toast({ title: t('product.addedToCart'), description: `${product.title} has been added.`, variant: 'success' })
 }
 
 function goToMessages() {
   if (!authStore.isAuthenticated) {
-    toast({ title: 'Login required', description: 'Please sign in to message this store.', variant: 'destructive' })
+    toast({ title: t('store.loginRequired'), description: t('store.loginRequiredDesc'), variant: 'destructive' })
     router.push({ name: 'Login', query: { redirect: route.fullPath } })
     return
   }
@@ -239,25 +264,36 @@ watch(searchQuery, () => debouncedSearch())
                 <div class="flex items-center gap-2 rounded-full bg-card border border-border px-4 py-2 shadow-sm">
                   <Package class="w-4 h-4 text-primary" />
                   <span class="text-sm font-bold">{{ formatNumber(profile.stats.totalProducts) }}</span>
-                  <span class="text-xs text-muted-foreground">Products</span>
+                  <span class="text-xs text-muted-foreground">{{ $t('store.products') }}</span>
                 </div>
                 <div class="flex items-center gap-2 rounded-full bg-card border border-border px-4 py-2 shadow-sm">
                   <ShoppingCart class="w-4 h-4 text-primary" />
                   <span class="text-sm font-bold">{{ formatNumber(profile.stats.totalSales) }}</span>
-                  <span class="text-xs text-muted-foreground">Sales</span>
+                  <span class="text-xs text-muted-foreground">{{ $t('store.sales') }}</span>
                 </div>
                 <div class="flex items-center gap-2 rounded-full bg-card border border-border px-4 py-2 shadow-sm">
                   <Users class="w-4 h-4 text-primary" />
                   <span class="text-sm font-bold">{{ formatNumber(profile.stats.followers) }}</span>
-                  <span class="text-xs text-muted-foreground">Followers</span>
+                  <span class="text-xs text-muted-foreground">{{ $t('store.followers') }}</span>
                 </div>
               </div>
 
               <!-- Actions -->
               <div class="flex gap-2">
+                <Button
+                  size="sm"
+                  class="gap-1.5"
+                  :variant="isFollowing ? 'outline' : 'default'"
+                  :aria-pressed="isFollowing"
+                  @click="toggleFollow"
+                >
+                  <UserCheck v-if="isFollowing" class="w-4 h-4" />
+                  <UserPlus v-else class="w-4 h-4" />
+                  {{ isFollowing ? $t('store.following') : $t('store.follow') }}
+                </Button>
                 <Button size="sm" class="gap-1.5" @click="goToMessages">
                   <MessageSquare class="w-4 h-4" />
-                  Contact Store
+                  {{ $t('store.contactStore') }}
                 </Button>
               </div>
             </div>
@@ -273,14 +309,14 @@ watch(searchQuery, () => debouncedSearch())
           <aside class="hidden lg:block w-64 flex-shrink-0 space-y-6">
             <!-- Categories -->
             <div class="rounded-xl border border-border bg-card p-4">
-              <h3 class="font-semibold text-sm mb-3">Categories</h3>
+              <h3 class="font-semibold text-sm mb-3">{{ $t('store.categories') }}</h3>
               <div class="space-y-0.5">
                 <button
                   @click="selectCategory('All')"
                   class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
                   :class="selectedCategory === 'All' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'"
                 >
-                  All Products
+                  {{ $t('store.allProducts') }}
                 </button>
                 <button
                   v-for="cat in categories"
@@ -296,18 +332,18 @@ watch(searchQuery, () => debouncedSearch())
 
             <!-- Store policies -->
             <div class="rounded-xl border border-border bg-card p-4 space-y-4">
-              <h3 class="font-semibold text-sm">Store Policies</h3>
+              <h3 class="font-semibold text-sm">{{ $t('store.storePolicies') }}</h3>
               <div class="flex gap-2.5 items-start">
                 <Truck class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                 <div>
-                  <p class="text-xs font-medium mb-0.5">Shipping</p>
+                  <p class="text-xs font-medium mb-0.5">{{ $t('store.shipping') }}</p>
                   <p class="text-xs text-muted-foreground leading-relaxed">{{ profile.policies.shipping }}</p>
                 </div>
               </div>
               <div class="flex gap-2.5 items-start">
                 <RotateCcw class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                 <div>
-                  <p class="text-xs font-medium mb-0.5">Returns</p>
+                  <p class="text-xs font-medium mb-0.5">{{ $t('store.returns') }}</p>
                   <p class="text-xs text-muted-foreground leading-relaxed">{{ profile.policies.returns }}</p>
                 </div>
               </div>
@@ -315,9 +351,9 @@ watch(searchQuery, () => debouncedSearch())
 
             <!-- Store info -->
             <div class="rounded-xl border border-border bg-card p-4">
-              <h3 class="font-semibold text-sm mb-2">About</h3>
+              <h3 class="font-semibold text-sm mb-2">{{ $t('store.about') }}</h3>
               <p class="text-xs text-muted-foreground leading-relaxed mb-3">{{ profile.description }}</p>
-              <p class="text-[10px] text-muted-foreground">Member since {{ profile.joinedDate }}</p>
+              <p class="text-[10px] text-muted-foreground">{{ $t('store.memberSince', { date: profile.joinedDate }) }}</p>
             </div>
           </aside>
 
@@ -331,7 +367,7 @@ watch(searchQuery, () => debouncedSearch())
                 <input
                   v-model="searchQuery"
                   type="text"
-                  placeholder="Search in this store..."
+                  :placeholder="$t('store.searchInStore')"
                   class="w-full h-9 pl-9 pr-8 rounded-lg bg-card border border-input text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
                 <button v-if="searchQuery" @click="clearSearch" class="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground">
@@ -346,14 +382,14 @@ watch(searchQuery, () => debouncedSearch())
                   @change="selectCategory(($event.target as HTMLSelectElement).value)"
                   class="h-9 rounded-lg bg-card border border-input px-3 text-sm outline-none"
                 >
-                  <option value="All">All Categories</option>
+                  <option value="All">{{ $t('store.allCategories') }}</option>
                   <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
                 </select>
               </div>
 
               <!-- Sort -->
               <div class="flex items-center gap-2 ml-auto">
-                <span class="text-xs text-muted-foreground hidden sm:inline">Sort by:</span>
+                <span class="text-xs text-muted-foreground hidden sm:inline">{{ $t('store.sortBy') }}</span>
                 <select
                   :value="sortBy"
                   @change="changeSort(($event.target as HTMLSelectElement).value as StoreProductQuery['sort'])"
@@ -413,7 +449,7 @@ watch(searchQuery, () => debouncedSearch())
                       @click="quickAddToCart(product, $event)"
                     >
                       <ShoppingCart class="w-4 h-4 sm:mr-1.5" />
-                      <span class="hidden sm:inline">Add</span>
+                      <span class="hidden sm:inline">{{ $t('common.add') }}</span>
                     </Button>
                   </div>
                 </div>
@@ -435,15 +471,15 @@ watch(searchQuery, () => debouncedSearch())
             <!-- Empty state -->
             <div v-if="!productsLoading && products.length === 0" class="text-center py-16 rounded-2xl border border-border bg-card">
               <Package class="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
-              <h3 class="text-lg font-bold mb-1">No products found</h3>
-              <p class="text-sm text-muted-foreground mb-6">Try adjusting your search or category filter.</p>
-              <Button variant="outline" @click="searchQuery = ''; selectedCategory = 'All'; resetAndLoad()">Clear Filters</Button>
+              <h3 class="text-lg font-bold mb-1">{{ $t('store.noProducts') }}</h3>
+              <p class="text-sm text-muted-foreground mb-6">{{ $t('store.noProductsHint') }}</p>
+              <Button variant="outline" @click="searchQuery = ''; selectedCategory = 'All'; resetAndLoad()">{{ $t('store.clearFilters') }}</Button>
             </div>
 
             <!-- Load more -->
             <div v-if="hasMore && !productsLoading" class="text-center mt-8">
               <Button variant="outline" size="lg" class="px-8" @click="loadMore">
-                Load More Products
+                {{ $t('store.loadMore') }}
               </Button>
             </div>
 
@@ -457,18 +493,18 @@ watch(searchQuery, () => debouncedSearch())
         <!-- Mobile store info (bottom cards) -->
         <div class="lg:hidden mt-10 space-y-4">
           <div class="rounded-xl border border-border bg-card p-4 space-y-4">
-            <h3 class="font-semibold text-sm">Store Policies</h3>
+            <h3 class="font-semibold text-sm">{{ $t('store.storePolicies') }}</h3>
             <div class="flex gap-2.5 items-start">
               <Truck class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
               <div>
-                <p class="text-xs font-medium mb-0.5">Shipping</p>
+                <p class="text-xs font-medium mb-0.5">{{ $t('store.shipping') }}</p>
                 <p class="text-xs text-muted-foreground leading-relaxed">{{ profile.policies.shipping }}</p>
               </div>
             </div>
             <div class="flex gap-2.5 items-start">
               <RotateCcw class="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
               <div>
-                <p class="text-xs font-medium mb-0.5">Returns</p>
+                <p class="text-xs font-medium mb-0.5">{{ $t('store.returns') }}</p>
                 <p class="text-xs text-muted-foreground leading-relaxed">{{ profile.policies.returns }}</p>
               </div>
             </div>

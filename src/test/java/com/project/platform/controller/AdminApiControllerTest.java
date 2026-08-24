@@ -83,7 +83,8 @@ class AdminApiControllerTest extends BaseControllerTest {
     @Test
     @DisplayName("Non-admin cannot access admin endpoints")
     void unauthorizedAccess() throws Exception {
+        // LoginInterceptor 按路径前缀校验, 非 ADMIN 访问 /admin/** 直接 403
         get("/admin/users", userToken())
-                .andExpect(status().isOk()); // Service-layer enforcement, not HTTP 403
+                .andExpect(status().isForbidden());
     }
 }

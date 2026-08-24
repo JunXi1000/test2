@@ -35,7 +35,8 @@ const BASE_PRODUCTS: Product[] = [
   { id: 32, title: 'USB-C Hub', price: 89, category: 'Accessories', image: 'https://images.unsplash.com/photo-1625842268584-8f3296236761?q=80&w=1000&auto=format&fit=crop' },
   { id: 33, title: 'Wi-Fi Router', price: 249, category: 'Networking', image: 'https://images.unsplash.com/photo-1544197150-b99a580bbcbf?q=80&w=1000&auto=format&fit=crop' },
   { id: 34, title: 'Smart Scale', price: 69, category: 'Smart Home', image: 'https://images.unsplash.com/photo-1576678927484-cc907957088c?q=80&w=1000&auto=format&fit=crop' },
-  { id: 35, title: 'Graphics Card', price: 799, category: 'Electronics', image: 'https://images.unsplash.com/photo-1591488320449-011701bb6704?q=80&w=1000&auto=format&fit=crop' }
+  { id: 35, title: 'Graphics Card', price: 799, category: 'Electronics', image: 'https://images.unsplash.com/photo-1591488320449-011701bb6704?q=80&w=1000&auto=format&fit=crop' },
+  { id: 36, title: 'Tech Fleece Hoodie', price: 89, category: 'Apparel', image: 'https://images.unsplash.com/photo-1576871337622-98d48d1cf531?q=80&w=1000&auto=format&fit=crop' }
 ]
 
 const MOCK_PRODUCTS: Product[] = [...BASE_PRODUCTS]

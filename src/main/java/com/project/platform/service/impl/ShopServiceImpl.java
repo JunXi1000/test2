@@ -13,6 +13,8 @@ import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.project.platform.vo.PageVO;
 
@@ -27,6 +29,23 @@ public class ShopServiceImpl  implements ShopService {
     private ShopMapper shopMapper;
     @Value("${resetPassword}")
     private String resetPassword;
+
+    @Resource
+    private PasswordEncoder passwordEncoder;
+
+    @Resource
+    private ResetCodeStore resetCodeStore;
+
+    /**
+     * 密码统一编码入口:null 保持 null;$2 开头(BCrypt)视为已编码原样返回,其余编码。
+     * 防止 updateById 局部更新时对已哈希密码重复编码。
+     */
+    private String encodeIfNeeded(String raw) {
+        if (raw == null || raw.startsWith("$2")) {
+            return raw;
+        }
+        return passwordEncoder.encode(raw);
+    }
 
     @Override
     public PageVO<Shop> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
@@ -54,17 +73,19 @@ public class ShopServiceImpl  implements ShopService {
         if (entity.getPassword() == null) {
             entity.setPassword(resetPassword);
         }
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         entity.setFansCount(0);//设置初始粉丝为0
         shopMapper.insert(entity);
     }
     @Override
     public void updateById(Shop entity) {
         check(entity);
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         shopMapper.updateById(entity);
     }
     private void check(Shop entity) {
         Shop shop = shopMapper.selectByUsername(entity.getUsername());
-        if (shop != null && shop.getId() != entity.getId()) {
+        if (shop != null && !shop.getId().equals(entity.getId())) {
             throw new CustomException("用户名已存在");
         }
     }
@@ -78,7 +99,7 @@ public class ShopServiceImpl  implements ShopService {
     @Override
     public CurrentUserDTO login(String username, String password) {
         Shop shop = shopMapper.selectByUsername(username);
-        if (shop == null || !shop.getPassword().equals(password)) {
+        if (shop == null || !passwordEncoder.matches(password, shop.getPassword())) {
             throw new CustomException("用户名或密码错误");
         }
         if (shop.getStatus().equals("禁用")) {
@@ -117,28 +138,31 @@ public class ShopServiceImpl  implements ShopService {
     @Override
     public void updateCurrentUserPassword(UpdatePasswordDTO updatePassword) {
         Shop shop = shopMapper.selectById(CurrentUserThreadLocal.getCurrentUser().getId());
-        if (!shop.getPassword().equals(updatePassword.getOldPassword())) {
+        if (!passwordEncoder.matches(updatePassword.getOldPassword(), shop.getPassword())) {
             throw new CustomException("旧密码不正确");
         }
-        shop.setPassword(updatePassword.getNewPassword());
+        shop.setPassword(encodeIfNeeded(updatePassword.getNewPassword()));
         shopMapper.updateById(shop);
     }
 
     @Override
     public void resetPassword(Integer id) {
         Shop shop = shopMapper.selectById(id);
-        shop.setPassword(resetPassword);
+        shop.setPassword(encodeIfNeeded(resetPassword));
         shopMapper.updateById(shop);
     }
 
     @Override
     public void retrievePassword(RetrievePasswordDTO retrievePasswordDTO) {
+        // 先校验验证码(不存在/过期/不匹配均拒绝),杜绝仅凭手机号改密
+        if (!resetCodeStore.verify(retrievePasswordDTO.getType(), retrievePasswordDTO.getTel(), retrievePasswordDTO.getCode())) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
+        }
         Shop shop = shopMapper.selectByTel(retrievePasswordDTO.getTel());
         if (shop == null) {
             throw new CustomException("手机号不存在");
         }
-        //TODO 校验验证码
-        shop.setPassword(retrievePasswordDTO.getPassword());
+        shop.setPassword(encodeIfNeeded(retrievePasswordDTO.getPassword()));
         shopMapper.updateById(shop);
     }
 }

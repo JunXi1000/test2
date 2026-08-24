@@ -9,31 +9,13 @@
 | JDK | 17+ | 后端编译运行 |
 | Maven | 3.6+ | 后端构建 |
 | Node.js | 18+ | 前端构建(Vite 5 要求) |
-| MySQL | 8.0+ | 数据库(本地开发,或直接用 Docker 的) |
-| Docker Desktop | — | 一键部署方式 |
+| MySQL | 8.0+ | 数据库(本地开发) |
 
 ## 2. 启动
 
-### 2.1 Docker 一键(推荐,含构建)
+### 2.1 本地开发
 
-```bash
-docker compose up -d --build        # 首次构建 5~15 分钟,再次秒级
-docker compose ps                    # mysql / backend / frontend 三容器
-docker compose logs -f backend       # 后端实时日志
-docker compose down -v               # 彻底删除(含数据库数据,重新初始化)
-```
-
-| 服务 | 地址 |
-|------|------|
-| 前端 | http://localhost:5173 |
-| 后端 | http://localhost:1000 |
-| MySQL | localhost:3307,root/123456 |
-
-演示账号(密码均 `123456`):管理员 `admin` / 买家 `user1` / 商家 `shop1`。
-
-### 2.2 本地开发
-
-1. **数据库**:建库 `template_v3`,导入 `docker/mysql/init/01-schema.sql`(+ `sql/chat.sql`)。⚠️ 不要用 `sql/templatev3_s.sql`(已过时,仅 admin 表)。
+1. **数据库**:建库 `template_v3`。`sql/` 下脚本按需导入:`sql/templatev3_s.sql`(仅 admin 表,已过时)、`sql/chat.sql`(聊天表)、`sql/migrations/` + `sql/migration-2026-08-08-phase1.sql`(增量迁移)。
 2. **后端**:IDEA 打开项目根 → 运行 `com.project.platform.ProjectManagement`;或在 `src/main/resources/application.yaml` 改好 DB 连接后 `mvn spring-boot:run`。
 3. **前端**:
    ```bash
@@ -41,6 +23,8 @@ docker compose down -v               # 彻底删除(含数据库数据,重新初
    npm install
    npm run dev        # 起在 :5173,代理 /api → :1000
    ```
+
+演示账号(密码均 `123456`):管理员 `admin` / 买家 `user1` / 商家 `shop1`。
 
 ## 3. Mock 开关机制(务必理解)
 
@@ -53,7 +37,7 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 - **运行时覆盖**:浏览器控制台 `localStorage.RUNTIME_USE_MOCK='false'` 后刷新,即切真实后端(无需重建)。
 - **生产构建陷阱**:`.env.production` 未覆盖 `VITE_USE_MOCK`,故 `npm run build-prod` 产物默认仍是 mock=true。要生产关 mock,需在 `.env.production` 显式加 `VITE_USE_MOCK=false`。
 - **模块差异**:部分模块(admin*/merchant* 系列)读取响应式 `RUNTIME_USE_MOCK.value`,切换立即生效;其余模块用 `import` 时的常量 `USE_MOCK`,切换需刷新页面。
-- **⚠️ 聊天无 mock**:`web/src/api/modules/chat.ts` 不读开关,始终请求 `/chat/*`。无后端时消息页必报错,属预期。
+- **聊天 mock 已补齐**:`web/src/api/modules/chat.ts` 已加 mock 分支。⚠️ 若在 **mock 模式下登录**,后端签发的 token 是假的,任何**未加 mock 分支**的真实请求会 401 → 全局拦截器清会话跳登录 → 死循环。新增模块务必保留 mock 兜底。
 
 ## 4. 代码规范
 
@@ -92,9 +76,9 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 | 场景 | 做法 |
 |------|------|
-| 新增表(正式环境) | 追加到 `docker/mysql/init/01-schema.sql`,并新建/追加一份增量 SQL(供已初始化的库执行,避免 `down -v` 重灌) |
+| 新增表(正式环境) | 新建/追加一份增量 SQL 到 `sql/migrations/`,对已初始化的库执行 |
 | 新增表(测试) | 同步追加到 `src/test/resources/schema-h2.sql` |
-| 种子数据 | 追加到 `docker/mysql/init/`(首次初始化自动执行) |
+| 种子数据 | 写入增量 SQL,保持可重复执行(如 INSERT IGNORE / DELETE 守卫) |
 
 ## 7. 常见问题
 
@@ -104,6 +88,6 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 | 生产构建出来是假数据 | `.env.production` 缺 `VITE_USE_MOCK=false` |
 | 登录后白屏/被踢回登录页 | 旧会话失效,`sessionStorage.auth_cleared=1` 触发;重新登录 |
 | 结算成功但订单列表没有 | mock 关闭后订单只存在于服务端;Phase 2 修复前属预期 |
-| 改了后端不生效 | 本地需重启 Spring Boot;Docker 需 `docker compose up -d --build` |
-| 本机 MySQL 端口冲突 | Docker MySQL 已映射 3307,本地开发改连 3307 或本机 3306 |
-| 迁移 SQL 中文变乱码 | 经 `docker exec ... mysql` 导入含中文的 SQL 必须加 `--default-character-set=utf8mb4`;mysql CLI 默认 latin1,会把 UTF-8 字节双重编码入库 |
+| 改了后端不生效 | 本地需重启 Spring Boot |
+| 本机 MySQL 端口冲突 | 改 `application.yaml` 中 datasource 端口,或换用另一实例 |
+| 迁移 SQL 中文变乱码 | 导入含中文的 SQL 必须加 `--default-character-set=utf8mb4`;mysql CLI 默认 latin1,会把 UTF-8 字节双重编码入库 |

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS user (
   tel VARCHAR(255),
   email VARCHAR(255),
   status VARCHAR(128),
-  balance DOUBLE DEFAULT 0,
+  balance DECIMAL(10,2) DEFAULT 0.00,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS product (
   main_img VARCHAR(500),
   img_list VARCHAR(1000),
   product_type_id INT,
-  price DOUBLE DEFAULT 0,
+  price DECIMAL(10,2) DEFAULT 0.00,
   stock INT DEFAULT 0,
   sales_volume INT DEFAULT 0,
   intro TEXT,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS product_order (
   product_name VARCHAR(255),
   shop_id INT,
   shop_name VARCHAR(255),
-  total_money DOUBLE DEFAULT 0,
+  total_money DECIMAL(10,2) DEFAULT 0.00,
   quantity INT DEFAULT 1,
   user_id INT,
   username VARCHAR(255),
@@ -187,11 +187,12 @@ CREATE TABLE IF NOT EXISTS message (
 );
 
 -- Seed data for tests
-INSERT INTO admin (id, username, password, nickname, status) VALUES (1, 'admin', '123456', 'Admin', '启用');
-INSERT INTO user (id, username, password, nickname, email, status) VALUES (1, 'user1', '123456', 'Test User', 'user@test.com', '启用');
-INSERT INTO user (id, username, password, nickname, email, status) VALUES (2, 'user2', '123456', 'User Two', 'user2@test.com', '启用');
-INSERT INTO shop (id, username, password, nickname, name, status, email) VALUES (1, 'shop1', '123456', 'Store One', 'Test Store', '启用', 'shop@test.com');
-INSERT INTO shop (id, username, password, nickname, name, status, email) VALUES (2, 'shop2', '123456', 'Store Two', 'Another Store', '启用', 'shop2@test.com');
+-- 演示账号统一密码 123456,DB 中存 BCrypt 哈希
+INSERT INTO admin (id, username, password, nickname, status) VALUES (1, 'admin', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', 'Admin', '启用');
+INSERT INTO user (id, username, password, nickname, email, tel, status) VALUES (1, 'user1', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', 'Test User', 'user@test.com', '13800000001', '启用');
+INSERT INTO user (id, username, password, nickname, email, tel, status) VALUES (2, 'user2', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', 'User Two', 'user2@test.com', '13800000002', '启用');
+INSERT INTO shop (id, username, password, nickname, name, status, email) VALUES (1, 'shop1', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', 'Store One', 'Test Store', '启用', 'shop@test.com');
+INSERT INTO shop (id, username, password, nickname, name, status, email) VALUES (2, 'shop2', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', 'Store Two', 'Another Store', '启用', 'shop2@test.com');
 INSERT INTO product_type (id, name) VALUES (1, 'Electronics');
 INSERT INTO product_type (id, name) VALUES (2, 'Clothing');
 INSERT INTO product (id, name, main_img, product_type_id, price, stock, sales_volume, shop_id) VALUES (1, 'Test Product 1', '/img/p1.jpg', 1, 99.00, 50, 10, 1);
@@ -200,7 +201,7 @@ INSERT INTO product (id, name, main_img, product_type_id, price, stock, sales_vo
 INSERT INTO product_order (id, product_id, product_name, shop_id, shop_name, total_money, quantity, user_id, username, status, create_time) VALUES (1, 1, 'Test Product 1', 1, 'Test Store', 99.00, 1, 1, 'Test User', '已完成', CURRENT_TIMESTAMP);
 INSERT INTO shipping_address (id, name, tel, address, user_id, username) VALUES (1, 'Home', '1234567890', '123 Main St', 1, 'Test User');
 
--- ── Phase 1 tables (mirrors docker/mysql/init/01-schema.sql) ─────────
+-- ── Phase 1 tables (mirrors sql/ migration-2026-08-08-phase1.sql) ─────────
 CREATE TABLE IF NOT EXISTS user_notification_pref (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,

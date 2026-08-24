@@ -213,6 +213,11 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/pages/dashboard/Coupons.vue')
           },
           {
+            path: 'loyalty',
+            name: 'DashboardLoyalty',
+            component: () => import('@/pages/dashboard/Loyalty.vue')
+          },
+          {
             path: 'settings',
             name: 'AccountSettings',
             component: () => import('@/pages/dashboard/Settings.vue')
@@ -221,6 +226,11 @@ const routes: RouteRecordRaw[] = [
             path: 'messages',
             name: 'UserMessages',
             component: () => import('@/pages/dashboard/Messages.vue')
+          },
+          {
+            path: 'followed-stores',
+            name: 'FollowedStores',
+            component: () => import('@/pages/dashboard/FollowedStores.vue')
           }
         ]
       },

@@ -1,4 +1,5 @@
 import { get, post, put } from '@/api/http'
+import { USE_MOCK } from '@/config/env'
 import { useAuthStore } from '@/stores/auth'
 
 export interface Message {
@@ -52,6 +53,34 @@ function isMerchant(): boolean {
   return auth.user?.role === 'merchant'
 }
 
+// ── Mock 分支 ─────────────────────────────────────────────────────────
+// mock 模式(本地 dev / 无后端)下聊天全走本地假数据,避免假 token 打真实
+// 后端 /chat/* 触发 401 → 全局拦截器清会话 → 登录死循环。
+const MOCK_CONVERSATIONS: Conversation[] = [
+  {
+    id: '1',
+    participantId: '1',
+    participantName: 'Customer Support',
+    participantAvatar: '',
+    lastMessage: 'Hi there! How can we help you today?',
+    lastMessageTime: Date.now() - 60_000,
+    unreadCount: 1
+  }
+]
+
+const MOCK_MESSAGES: Message[] = [
+  {
+    id: 1,
+    conversationId: 1,
+    senderId: 0,
+    senderType: 'SHOP',
+    content: 'Hi there! How can we help you today?',
+    type: 'text',
+    isRead: true,
+    createTime: new Date(Date.now() - 60_000).toISOString()
+  }
+]
+
 function mapConversation(c: BackendConversation): Conversation {
   const merchant = isMerchant()
   return {
@@ -69,11 +98,13 @@ function mapConversation(c: BackendConversation): Conversation {
 }
 
 export async function getConversations(): Promise<Conversation[]> {
+  if (USE_MOCK) return MOCK_CONVERSATIONS
   const raw = await get<BackendConversation[]>('/chat/conversations')
   return (raw || []).map(mapConversation)
 }
 
 export async function getMessages(conversationId: string | number): Promise<Message[]> {
+  if (USE_MOCK) return MOCK_MESSAGES
   return get<Message[]>(`/chat/conversations/${conversationId}/messages`)
 }
 
@@ -84,6 +115,18 @@ export async function sendMessage(payload: {
   productId?: number
   isMerchant: boolean
 }): Promise<Message> {
+  if (USE_MOCK) {
+    return {
+      id: Date.now(),
+      conversationId: payload.conversationId ? Number(payload.conversationId) : 1,
+      senderId: payload.isMerchant ? 1 : 1,
+      senderType: payload.isMerchant ? 'SHOP' : 'USER',
+      content: payload.content,
+      type: 'text',
+      isRead: false,
+      createTime: new Date().toISOString()
+    }
+  }
   return post<Message>('/chat/messages', {
     conversationId: payload.conversationId ? Number(payload.conversationId) : null,
     receiverId: Number(payload.receiverId),
@@ -94,5 +137,6 @@ export async function sendMessage(payload: {
 }
 
 export async function markAsRead(conversationId: string | number): Promise<void> {
+  if (USE_MOCK) return
   return put(`/chat/conversations/${conversationId}/read`)
 }

@@ -10,12 +10,14 @@ import com.project.platform.service.AdminService;
 import com.project.platform.service.CommonService;
 import com.project.platform.service.ShopService;
 import com.project.platform.service.UserService;
+import com.project.platform.service.impl.ResetCodeStore;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.utils.JwtUtils;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -33,6 +35,9 @@ public class CommonController {
 
     @Resource
     private ShopService shopService;
+
+    @Resource
+    private ResetCodeStore resetCodeStore;
 
     /**
      * 登录
@@ -59,6 +64,10 @@ public class CommonController {
     @PutMapping("register")
     public ResponseVO register(@RequestBody JSONObject data) {
         String type = data.getString("type");
+        // 仅允许普通用户自助注册;SHOP 走商家入驻审核,ADMIN 一律拒绝,杜绝匿名建管理员
+        if (!"USER".equals(type)) {
+            throw new CustomException(HttpStatus.FORBIDDEN, "仅支持普通用户注册");
+        }
         CommonService commonService = getCommonService(type);
         commonService.register(data);
         return ResponseVO.ok();
@@ -91,6 +100,22 @@ public class CommonController {
     }
 
     /**
+     * 发送找回密码验证码(演示环境直接返回验证码,便于页面展示;接入短信后改为下发)
+     *
+     * @param data {type, tel}
+     */
+    @PostMapping("sendResetCode")
+    public ResponseVO<String> sendResetCode(@RequestBody JSONObject data) {
+        String type = data.getString("type");
+        String tel = data.getString("tel");
+        if (type == null || type.isEmpty() || tel == null || tel.isEmpty()) {
+            throw new CustomException("用户类型与手机号不能为空");
+        }
+        String code = resetCodeStore.send(type, tel);
+        return ResponseVO.ok(code);
+    }
+
+    /**
      * 忘记密码
      * @param retrievePasswordDTO
      * @return
@@ -112,6 +137,11 @@ public class CommonController {
 
     @PostMapping("resetPassword")
     public ResponseVO resetPassword(@RequestParam String type, @RequestParam Integer id) {
+        // 重置他人密码为默认值属后台能力,仅管理员可用;普通用户找回密码走 retrievePassword(带验证码)
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        if (current == null || !"ADMIN".equals(current.getType())) {
+            throw new CustomException(HttpStatus.FORBIDDEN, "仅管理员可重置密码");
+        }
         CommonService commonService = getCommonService(type);
         commonService.resetPassword(id);
         return ResponseVO.ok();

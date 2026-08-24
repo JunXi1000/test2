@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import i18n from './i18n'
 import './assets/css/tailwind.css'
 // Programmatic APIs (ElMessageBox / ElMessage) are not tied to SFC auto-import — include their styles or overlays render unpositioned (top-left).
 import 'element-plus/es/components/message-box/style/css'
@@ -15,6 +16,11 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
+app.use(i18n)
+
+// 初始化时同步 <html lang>（界面语言固定为 English，中英切换已移除）
+document.documentElement.setAttribute('lang', 'en')
+document.documentElement.setAttribute('data-locale', 'en')
 
 function getHomeByRole(role?: 'user' | 'admin' | 'merchant') {
   if (role === 'admin') return '/admin/dashboard'

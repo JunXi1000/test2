@@ -15,6 +15,7 @@ import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -32,6 +33,23 @@ public class AdminServiceImpl implements AdminService {
 
     @Value("${resetPassword}")
     private String resetPassword;
+
+    @Resource
+    private PasswordEncoder passwordEncoder;
+
+    @Resource
+    private ResetCodeStore resetCodeStore;
+
+    /**
+     * 密码统一编码入口:null 保持 null;$2 开头(BCrypt)视为已编码原样返回,其余编码。
+     * 防止 updateById 局部更新时对已哈希密码重复编码。
+     */
+    private String encodeIfNeeded(String raw) {
+        if (raw == null || raw.startsWith("$2")) {
+            return raw;
+        }
+        return passwordEncoder.encode(raw);
+    }
 
     @Override
     public PageVO<Admin> page(Map<String, Object> query, Integer pageNum, Integer pageSize) {
@@ -60,18 +78,20 @@ public class AdminServiceImpl implements AdminService {
         if (entity.getPassword() == null) {
             entity.setPassword(resetPassword);
         }
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         adminMapper.insert(entity);
     }
 
     @Override
     public void updateById(Admin entity) {
         check(entity);
+        entity.setPassword(encodeIfNeeded(entity.getPassword()));
         adminMapper.updateById(entity);
     }
 
     private void check(Admin entity) {
         Admin admin = adminMapper.selectByUserName(entity.getUsername());
-        if (admin != null && admin.getId() != entity.getId()) {
+        if (admin != null && !admin.getId().equals(entity.getId())) {
             throw new CustomException("用户名已存在");
         }
     }
@@ -84,7 +104,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public CurrentUserDTO login(String username, String password) {
         Admin admin = adminMapper.selectByUserName(username);
-        if (admin == null || !admin.getPassword().equals(password)) {
+        if (admin == null || !passwordEncoder.matches(password, admin.getPassword())) {
             throw new CustomException("用户名或密码错误");
         }
         if (admin.getStatus().equals("禁用")) {
@@ -97,6 +117,11 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public void register(JSONObject data) {
+        // 双保险:即使绕过 Controller 白名单,也禁止匿名创建管理员
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        if (current == null || !"ADMIN".equals(current.getType())) {
+            throw new CustomException(HttpStatus.FORBIDDEN, "禁止匿名创建管理员");
+        }
         Admin admin = new Admin();
         admin.setUsername(data.getString("username"));
         admin.setNickname(data.getString("nickname"));
@@ -121,28 +146,31 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public void updateCurrentUserPassword(UpdatePasswordDTO updatePassword) {
         Admin admin = adminMapper.selectById(CurrentUserThreadLocal.getCurrentUser().getId());
-        if (!admin.getPassword().equals(updatePassword.getOldPassword())) {
+        if (!passwordEncoder.matches(updatePassword.getOldPassword(), admin.getPassword())) {
             throw new CustomException("旧密码不正确");
         }
-        admin.setPassword(updatePassword.getNewPassword());
+        admin.setPassword(encodeIfNeeded(updatePassword.getNewPassword()));
         adminMapper.updateById(admin);
     }
 
     @Override
     public void resetPassword(Integer id) {
         Admin admin = adminMapper.selectById(id);
-        admin.setPassword(resetPassword);
+        admin.setPassword(encodeIfNeeded(resetPassword));
         adminMapper.updateById(admin);
     }
 
     @Override
     public void retrievePassword(RetrievePasswordDTO retrievePasswordDTO) {
+        // 先校验验证码(不存在/过期/不匹配均拒绝),杜绝仅凭手机号改密
+        if (!resetCodeStore.verify(retrievePasswordDTO.getType(), retrievePasswordDTO.getTel(), retrievePasswordDTO.getCode())) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "验证码无效或已过期");
+        }
         Admin admin = adminMapper.selectByTel(retrievePasswordDTO.getTel());
         if (admin == null) {
             throw new CustomException("手机号不存在");
         }
-        //TODO 校验验证码
-        admin.setPassword(retrievePasswordDTO.getPassword());
+        admin.setPassword(encodeIfNeeded(retrievePasswordDTO.getPassword()));
         adminMapper.updateById(admin);
     }
 

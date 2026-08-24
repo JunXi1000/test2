@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { User, Package, MapPin, Settings, LogOut, LayoutDashboard, MessageSquare, Heart, Ticket, RotateCcw } from 'lucide-vue-next'
+import { User, Package, MapPin, Settings, LogOut, LayoutDashboard, MessageSquare, Heart, Ticket, RotateCcw, Store, Gem } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useLoyaltyStore } from '@/stores/loyalty'
 import { preloadByPath } from '@/router/preload'
 
 const router = useRouter()
@@ -11,11 +12,16 @@ const route = useRoute()
 const isFullBleedRoute = computed(() => route.name === 'UserMessages')
 const { toast } = useToast()
 const authStore = useAuthStore()
+const loyaltyStore = useLoyaltyStore()
+
+const memberLabel = computed(() => (authStore.isAuthenticated ? `${loyaltyStore.tier} Member` : 'Guest'))
 
 const sidebarItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'My Orders', path: '/dashboard/orders', icon: Package },
   { name: 'Wishlist', path: '/dashboard/wishlist', icon: Heart },
+  { name: 'Followed Stores', path: '/dashboard/followed-stores', icon: Store },
+  { name: 'Loyalty', path: '/dashboard/loyalty', icon: Gem },
   { name: 'Coupons', path: '/dashboard/coupons', icon: Ticket },
   { name: 'Returns', path: '/dashboard/returns', icon: RotateCcw },
   { name: 'Messages', path: '/dashboard/messages', icon: MessageSquare },
@@ -62,7 +68,7 @@ const preloadRoute = (path: string) => {
               </div>
               <div>
                 <h3 class="text-lg font-bold leading-tight">{{ authStore.user?.name || 'Guest' }}</h3>
-                <p class="text-xs text-muted-foreground">Gold Member</p>
+                <p class="text-xs text-muted-foreground">{{ memberLabel }}</p>
               </div>
             </div>
 

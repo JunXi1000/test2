@@ -135,31 +135,38 @@ export async function register(payload: RegisterPayload): Promise<void> {
 }
 
 // ── Password reset ───────────────────────────────────────────────────
-export const MOCK_PASSWORD_RESET_TOKEN = 'mock-dev-reset-token'
 
-export async function requestPasswordReset(email: string): Promise<void> {
+/**
+ * 第一步:请求发送重置验证码。
+ * @returns 6 位验证码(演示环境后端直接返回,便于页面展示;接入短信后不再返回)
+ */
+export async function requestPasswordReset(email: string): Promise<string> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 800))
-    return
+    return '123456' // 演示验证码
   }
-  // Backend: POST /common/retrievePassword expects RetrievePasswordDTO { type, tel, code, password }
-  // Frontend sends email; backend uses tel field — this is inherently mismatched
-  // For now, send as best-effort
-  await post('/common/retrievePassword', {
+  // 真实分支:POST /common/sendResetCode { type, tel }
+  return post<string>('/common/sendResetCode', {
     type: 'USER',
-    tel: email,
-    password: ''
+    tel: email
   })
 }
 
-export async function resetPasswordWithToken(token: string, newPassword: string): Promise<void> {
+/**
+ * 第二步:用验证码 + 手机号 + 新密码完成改密。
+ * 后端校验验证码(不存在/过期/不匹配均拒绝)后才写入新密码。
+ */
+export async function resetPasswordWithToken(code: string, email: string, newPassword: string): Promise<void> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 800))
-    const t = token.trim()
-    if (!t) throw new Error('无效的重置链接。')
+    if (!code.trim()) throw new Error('无效的重置验证码。')
     return
   }
-  // Backend: POST /common/resetPassword?type=USER&id=<userId>
-  // The token from the email would need to encode the user ID
-  await post(`/common/resetPassword?type=USER&id=${token}`)
+  // 真实分支:POST /common/retrievePassword { type, tel, code, password }
+  await post('/common/retrievePassword', {
+    type: 'USER',
+    tel: email,
+    code,
+    password: newPassword
+  })
 }

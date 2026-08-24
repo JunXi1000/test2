@@ -5,6 +5,7 @@ import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductOrder;
 import com.project.platform.entity.Shop;
 import com.project.platform.service.*;
+import com.project.platform.utils.AccessGuard;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
@@ -88,12 +89,16 @@ public class MerchantApiController {
     @PutMapping("/products/{id}")
     public ResponseVO<Product> updateProduct(@PathVariable Integer id, @RequestBody Product entity) {
         entity.setId(id);
+        Product existing = productService.selectById(id);
+        AccessGuard.checkOwner(existing != null ? existing.getShopId() : null, CurrentUserThreadLocal.getCurrentUser(), "商品");
         productService.updateById(entity);
         return ResponseVO.ok(productService.selectById(id));
     }
 
     @DeleteMapping("/products/{id}")
     public ResponseVO<?> deleteProduct(@PathVariable Integer id) {
+        Product existing = productService.selectById(id);
+        AccessGuard.checkOwner(existing != null ? existing.getShopId() : null, CurrentUserThreadLocal.getCurrentUser(), "商品");
         productService.removeByIds(List.of(id));
         return ResponseVO.ok();
     }

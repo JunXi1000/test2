@@ -1,43 +1,46 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
-import { ArrowRight, Lock } from 'lucide-vue-next'
+import { ArrowRight, KeyRound, Lock, Mail } from 'lucide-vue-next'
 import { resetPasswordWithToken } from '@/api/modules/auth'
 
 const route = useRoute()
 const router = useRouter()
 const { toast } = useToast()
+const { t } = useI18n()
 
-const token = computed(() => {
-  const t = route.query.token
-  if (typeof t === 'string') return t
-  if (Array.isArray(t) && typeof t[0] === 'string') return t[0]
-  return ''
-})
+// 邮件链接带入 token(验证码)与 email
+const rawToken = route.query.token
+const token = typeof rawToken === 'string' ? rawToken : Array.isArray(rawToken) && typeof rawToken[0] === 'string' ? rawToken[0] : ''
+const rawEmail = route.query.email
+const initialEmail = typeof rawEmail === 'string' ? rawEmail : ''
 
+const email = ref(initialEmail)
+const code = ref(token)
 const password = ref('')
 const confirmPassword = ref('')
 const isLoading = ref(false)
 const done = ref(false)
 
-const canSubmit = computed(() => token.value.trim().length > 0)
+const canSubmit = computed(() => email.value.trim().length > 0 && code.value.trim().length > 0)
 
 async function handleSubmit() {
   if (!canSubmit.value) return
   if (password.value.length < 8) {
     toast({
-      title: '密码过短',
-      description: '请至少使用 8 位密码。',
+      title: t('auth.passwordTooShort'),
+      description: t('auth.passwordTooShortDesc'),
       variant: 'destructive'
     })
     return
   }
   if (password.value !== confirmPassword.value) {
     toast({
-      title: '不一致',
-      description: '两次输入的密码不一致。',
+      title: t('auth.passwordMismatch'),
+      description: t('auth.passwordMismatchDesc'),
       variant: 'destructive'
     })
     return
@@ -45,16 +48,16 @@ async function handleSubmit() {
 
   isLoading.value = true
   try {
-    await resetPasswordWithToken(token.value, password.value)
+    await resetPasswordWithToken(code.value, email.value, password.value)
     done.value = true
     toast({
-      title: '已更新密码',
-      description: '请使用新密码登录。',
+      title: t('auth.passwordUpdated'),
+      description: t('auth.passwordUpdatedDesc'),
       variant: 'success'
     })
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '重置失败，请稍后重试或重新申请邮件。'
-    toast({ title: '重置失败', description: msg, variant: 'destructive' })
+    const msg = e instanceof Error ? e.message : t('auth.resetFailedDesc')
+    toast({ title: t('auth.resetFailed'), description: msg, variant: 'destructive' })
   } finally {
     isLoading.value = false
   }
@@ -82,29 +85,56 @@ async function handleSubmit() {
           </router-link>
 
           <template v-if="!canSubmit">
-            <h1 class="text-2xl font-bold tracking-tight mb-2">链接无效</h1>
-            <p class="text-muted-foreground text-sm">缺少重置口令。请从邮件中的链接打开，或重新申请重置邮件。</p>
+            <h1 class="text-2xl font-bold tracking-tight mb-2">{{ $t('auth.resetInvalidTitle') }}</h1>
+            <p class="text-muted-foreground text-sm">{{ $t('auth.resetInvalidDesc') }}</p>
             <div class="mt-6 space-y-3">
-              <Button class="w-full" @click="router.push({ name: 'ForgotPassword' })">重新发送重置邮件</Button>
-              <Button variant="outline" class="w-full" @click="router.push({ name: 'Login' })">返回登录</Button>
+              <Button class="w-full" @click="router.push({ name: 'ForgotPassword' })">{{ $t('auth.resendCode') }}</Button>
+              <Button variant="outline" class="w-full" @click="router.push({ name: 'Login' })">{{ $t('auth.backToLogin') }}</Button>
             </div>
           </template>
 
           <template v-else-if="done">
-            <h1 class="text-2xl font-bold tracking-tight mb-2">密码已更新</h1>
-            <p class="text-muted-foreground text-sm">现在可以使用新密码登录账户。</p>
-            <Button class="w-full mt-6" @click="router.push({ name: 'Login' })">前往登录</Button>
+            <h1 class="text-2xl font-bold tracking-tight mb-2">{{ $t('auth.passwordUpdated') }}</h1>
+            <p class="text-muted-foreground text-sm">{{ $t('auth.passwordUpdatedDesc') }}</p>
+            <Button class="w-full mt-6" @click="router.push({ name: 'Login' })">{{ $t('auth.goToLogin') }}</Button>
           </template>
 
           <template v-else>
-            <h1 class="text-2xl font-bold tracking-tight mb-2">设置新密码</h1>
-            <p class="text-muted-foreground text-sm">请输入新密码（至少 8 位）</p>
+            <h1 class="text-2xl font-bold tracking-tight mb-2">{{ $t('auth.resetTitle') }}</h1>
+            <p class="text-muted-foreground text-sm">{{ $t('auth.resetSubtitle') }}</p>
           </template>
         </div>
 
         <form v-if="canSubmit && !done" @submit.prevent="handleSubmit" class="space-y-4">
           <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">新密码</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }}</label>
+            <div class="relative group">
+              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input
+                v-model="email"
+                type="email"
+                :placeholder="$t('auth.emailPlaceholder')"
+                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
+                required
+              />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.resetCode') }}</label>
+            <div class="relative group">
+              <KeyRound class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input
+                v-model="code"
+                type="text"
+                :placeholder="$t('auth.resetCodePlaceholder')"
+                maxlength="6"
+                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
+                required
+              />
+            </div>
+          </div>
+          <div class="space-y-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.newPassword') }}</label>
             <div class="relative group">
               <Lock
                 class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
@@ -113,7 +143,7 @@ async function handleSubmit() {
                 v-model="password"
                 type="password"
                 autocomplete="new-password"
-                placeholder="至少 8 位"
+                :placeholder="$t('auth.newPasswordPlaceholder')"
                 minlength="8"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
@@ -121,7 +151,7 @@ async function handleSubmit() {
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">确认新密码</label>
+            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.confirmPassword') }}</label>
             <div class="relative group">
               <Lock
                 class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
@@ -130,7 +160,7 @@ async function handleSubmit() {
                 v-model="confirmPassword"
                 type="password"
                 autocomplete="new-password"
-                placeholder="再次输入"
+                :placeholder="$t('auth.confirmPasswordPlaceholder')"
                 class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
                 required
               />
@@ -144,16 +174,16 @@ async function handleSubmit() {
           >
             <span v-if="isLoading" class="flex items-center gap-2">
               <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              提交中…
+              {{ $t('auth.submitting') }}
             </span>
             <span v-else class="flex items-center justify-center gap-2">
-              确认新密码 <ArrowRight class="w-4 h-4" />
+              {{ $t('auth.resetSubmit') }} <ArrowRight class="w-4 h-4" />
             </span>
           </Button>
         </form>
 
         <div v-if="canSubmit && !done" class="text-center mt-8 text-sm text-muted-foreground">
-          <router-link to="/login" class="text-primary hover:underline font-medium">返回登录</router-link>
+          <router-link to="/login" class="text-primary hover:underline font-medium">{{ $t('auth.backToLogin') }}</router-link>
         </div>
       </div>
     </div>

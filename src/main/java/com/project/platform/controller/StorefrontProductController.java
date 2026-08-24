@@ -4,11 +4,13 @@ import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductType;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.ProductTypeService;
+import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -100,5 +102,90 @@ public class StorefrontProductController {
     @GetMapping("/sales-top/{size}")
     public ResponseVO<List<Product>> salesTop(@PathVariable int size) {
         return ResponseVO.ok(productService.salesVolumeTop(size));
+    }
+
+    /**
+     * GET /products/{id}/related?limit= — 相关推荐:同分类商品(排除自身),不足补其他分类
+     */
+    @GetMapping("/{id}/related")
+    public ResponseVO<List<Product>> related(@PathVariable Integer id,
+                                             @RequestParam(defaultValue = "6") Integer limit) {
+        Product current = productService.selectById(id);
+        if (current == null) {
+            return ResponseVO.ok(Collections.emptyList());
+        }
+        List<Product> all = productService.page(new HashMap<>(), 1, PageParams.MAX_PAGE_SIZE).getList();
+        Integer typeId = current.getProductTypeId();
+        List<Product> sameCat = new ArrayList<>();
+        List<Product> others = new ArrayList<>();
+        for (Product p : all) {
+            if (p.getId().equals(id)) {
+                continue;
+            }
+            if (typeId != null && typeId.equals(p.getProductTypeId())) {
+                sameCat.add(p);
+            } else {
+                others.add(p);
+            }
+        }
+        List<Product> result = new ArrayList<>(sameCat);
+        for (Product p : others) {
+            if (result.size() >= limit) {
+                break;
+            }
+            result.add(p);
+        }
+        if (result.size() > limit) {
+            result = result.subList(0, limit);
+        }
+        return ResponseVO.ok(result);
+    }
+
+    /**
+     * GET /products/{id}/bought-together?limit= — 搭配购买:价格区间相近的商品(Frequently Bought Together)
+     */
+    @GetMapping("/{id}/bought-together")
+    public ResponseVO<List<Product>> boughtTogether(@PathVariable Integer id,
+                                                    @RequestParam(defaultValue = "3") Integer limit) {
+        Product current = productService.selectById(id);
+        if (current == null || current.getPrice() == null) {
+            return ResponseVO.ok(Collections.emptyList());
+        }
+        List<Product> all = productService.page(new HashMap<>(), 1, PageParams.MAX_PAGE_SIZE).getList();
+        BigDecimal lo = current.getPrice().multiply(new BigDecimal("0.35"));
+        BigDecimal hi = current.getPrice().multiply(new BigDecimal("1.5"));
+        List<Product> pool = all.stream()
+                .filter(p -> !p.getId().equals(id))
+                .filter(p -> p.getPrice() != null
+                        && p.getPrice().compareTo(lo) >= 0
+                        && p.getPrice().compareTo(hi) <= 0)
+                .limit(limit)
+                .collect(Collectors.toList());
+        return ResponseVO.ok(pool);
+    }
+
+    /**
+     * GET /products/{id}/complete-the-look?limit= — 结算页"Complete the Look":不同分类的价格相近商品(追加购买)
+     */
+    @GetMapping("/{id}/complete-the-look")
+    public ResponseVO<List<Product>> completeTheLook(@PathVariable Integer id,
+                                                     @RequestParam(defaultValue = "3") Integer limit) {
+        Product current = productService.selectById(id);
+        if (current == null || current.getPrice() == null) {
+            return ResponseVO.ok(Collections.emptyList());
+        }
+        List<Product> all = productService.page(new HashMap<>(), 1, PageParams.MAX_PAGE_SIZE).getList();
+        BigDecimal lo = current.getPrice().multiply(new BigDecimal("0.3"));
+        BigDecimal hi = current.getPrice().multiply(new BigDecimal("1.8"));
+        Integer typeId = current.getProductTypeId();
+        List<Product> pool = all.stream()
+                .filter(p -> !p.getId().equals(id))
+                .filter(p -> typeId == null || !typeId.equals(p.getProductTypeId()))
+                .filter(p -> p.getPrice() != null
+                        && p.getPrice().compareTo(lo) >= 0
+                        && p.getPrice().compareTo(hi) <= 0)
+                .limit(limit)
+                .collect(Collectors.toList());
+        return ResponseVO.ok(pool);
     }
 }
