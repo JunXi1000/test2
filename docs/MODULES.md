@@ -73,7 +73,6 @@
 |------|------|
 | `UserServiceImpl.check` L213 | `entity.getId() != entity.getId()` 恒 false → 用户名查重失效 |
 | `ProductOrderServiceImpl` L107/L125 | `//TODO 退款`(退款逻辑未完成) |
-| `AdminServiceImpl.retrievePassword` / `ShopServiceImpl.retrievePassword` | `//TODO 校验验证码` |
 | `ProductMapper` L32 | `//TODO 图表` |
 
 ### 前端纯占位 / 本地模拟

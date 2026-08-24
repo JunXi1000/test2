@@ -3,6 +3,10 @@ mybatis:
   configuration:
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
+# 生产禁止在响应中返回找回密码验证码(接入短信/邮件后下发),防止接口泄漏验证码
+security:
+  expose-reset-code: false
+
 logging:
   level:
     root: WARN

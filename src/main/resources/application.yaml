@@ -40,6 +40,11 @@ mybatis:
 
 resetPassword: ${RESET_PASSWORD:123456}
 
+# 是否在 /common/sendResetCode 响应中直接返回验证码(演示环境便于页面展示)。
+# 接入真实短信/邮件后置为 false 并改为下发;prod profile 已显式关闭。
+security:
+  expose-reset-code: ${EXPOSE_RESET_CODE:true}
+
 files:
   uploads:
     path: ${FILES_UPLOADS_PATH:uploads/}

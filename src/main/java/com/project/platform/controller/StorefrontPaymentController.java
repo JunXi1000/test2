@@ -27,7 +27,8 @@ public class StorefrontPaymentController {
 
     @PostMapping("/create")
     public ResponseVO<Map<String, Object>> createPayment(@RequestBody JSONObject body) {
-        // Create order from cart items
+        // ⚠️ MOCK 实现,仅限演示:创建订单后返回假支付凭据,不产生真实支付单。
+        //    接入真实网关时必须替换:创建支付单落库 + 网关下单,并按订单金额核对回调。
         CreateOrderByShoppingCartDTO dto = new CreateOrderByShoppingCartDTO();
         var items = body.getJSONArray("items");
         if (items != null) {
@@ -59,6 +60,9 @@ public class StorefrontPaymentController {
 
     @PostMapping("/confirm")
     public ResponseVO<Map<String, Object>> confirmPayment(@RequestBody JSONObject body) {
+        // ⚠️ MOCK 实现,仅限演示:对任意传入 orderId 一律返回 succeeded,不改任何订单/支付状态。
+        //    接入真实网关时必须删除并替换为:校验 HMAC/签名、核对支付单归属与金额,
+        //    仅在网关确认后更新订单状态。切勿把本方法当作真实支付结果。
         Map<String, Object> result = new HashMap<>();
         result.put("status", "succeeded");
         result.put("orderId", body.getString("orderId"));

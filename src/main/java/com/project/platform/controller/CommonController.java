@@ -17,6 +17,7 @@ import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,6 +39,13 @@ public class CommonController {
 
     @Resource
     private ResetCodeStore resetCodeStore;
+
+    /**
+     * 是否在响应中直接返回验证码(演示环境默认开启,便于页面展示)。
+     * 接入真实短信/邮件后应关闭并改为下发:prod profile 默认 false。
+     */
+    @Value("${security.expose-reset-code:true}")
+    private boolean exposeResetCode;
 
     /**
      * 登录
@@ -100,7 +108,9 @@ public class CommonController {
     }
 
     /**
-     * 发送找回密码验证码(演示环境直接返回验证码,便于页面展示;接入短信后改为下发)
+     * 发送找回密码验证码。
+     * 演示环境默认直接返回验证码,便于页面展示(security.expose-reset-code=true);
+     * 接入真实短信后应改为下发,此时仅返回提示文案。
      *
      * @param data {type, tel}
      */
@@ -112,7 +122,7 @@ public class CommonController {
             throw new CustomException("用户类型与手机号不能为空");
         }
         String code = resetCodeStore.send(type, tel);
-        return ResponseVO.ok(code);
+        return ResponseVO.ok(exposeResetCode ? code : "验证码已发送");
     }
 
     /**

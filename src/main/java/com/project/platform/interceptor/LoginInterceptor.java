@@ -14,9 +14,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.util.Set;
+
 @Component
 @Slf4j
 public class LoginInterceptor implements HandlerInterceptor {
+
+    /**
+     * 公开下载的图片扩展名(与上传白名单中的图片部分一致)。
+     * 仅这些允许免登录 GET,避免通过上传托管文档/压缩包等任意文件公开分发。
+     * 不含 svg(上传白名单本来也没有),防止同源脚本执行面。
+     */
+    private static final Set<String> PUBLIC_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp", "bmp");
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         long startTime = System.currentTimeMillis();
@@ -26,9 +36,10 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (request.getMethod().toUpperCase().equals("OPTIONS")) {
             return true;
         }
-        // /file/** 的 GET 下载公开(商品图片/附件由 <img src> 直连, 无法携带 token),
-        // 其余方法(上传 POST 等)走下方登录校验
-        if (request.getRequestURI().startsWith("/file") && "GET".equalsIgnoreCase(request.getMethod())) {
+        // /file/** 仅「图片」GET 免登录(商品图/头像/logo 由 <img src> 直连, 无法携带 token);
+        // 文档/压缩包等其他扩展名与上传 POST 一样需登录校验, 避免公开托管任意文件
+        if (request.getRequestURI().startsWith("/file") && "GET".equalsIgnoreCase(request.getMethod())
+                && isPublicImage(request.getRequestURI())) {
             return true;
         }
         String path = request.getRequestURL().toString();
@@ -86,6 +97,15 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
         // 其余接口(公开白名单外的)保持"任意登录用户可访问"
         return true;
+    }
+
+    private boolean isPublicImage(String uri) {
+        String name = uri.substring(uri.lastIndexOf('/') + 1);
+        int dot = name.lastIndexOf('.');
+        if (dot < 0 || dot == name.length() - 1) {
+            return false;
+        }
+        return PUBLIC_IMAGE_EXTENSIONS.contains(name.substring(dot + 1).toLowerCase());
     }
 
     @Override
