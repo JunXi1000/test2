@@ -22,9 +22,11 @@
 
 **验收**:关 mock 后——改密码成功、商家 logo 上传回显、领券出现在「我的优惠券」、提交退换货可查、订阅到货可取消、通知偏好读写生效;`mvn test` 通过。
 
-## Phase 2 — 核心电商链路真数据化
+## Phase 2 — 核心电商链路真数据化 ✅ 已完成(2026-08-25)
 
 **目标**:打通「结算 → 支付 → 订单 → 用户中心」主链路,关 mock 可完整跑通。
+
+> **完成情况**:`product_order` 加 `order_no` 分组字段、新增 `payment` 表(订单支付记录);结算服务端按 DB 价格重算;`/payments/create` 真实落库(订单行 + 支付单 + 购物车清除),confirm 走状态机且幂等;订单按 order_no 聚合展示 + 取消回补库存/退款 + 30min 未支付超时自动取消;前端订单映射、结算页直传商品 id、购物车登录态对接 `/shoppingCart`(越权收紧:list/update/delBatch 均按当前用户过滤)。新增 `StorefrontPaymentControllerTest` 覆盖 下单→支付→幂等确认→订单可见→库存扣减→取消越权 403;`vue-tsc` 变更文件零错误。**迁移**:对 dev MySQL 执行 `sql/migrations/V3__phase2_order_payment.sql`(须带 `--default-character-set=utf8mb4`)。
 
 | 范围 | 说明 |
 |------|------|
@@ -35,7 +37,7 @@
 | 优惠码统一 | `/checkout/promo` 与 Phase 1 coupon 打通 |
 | 顺带修复 | `setDefaultAddress` no-op、结算成功订单写入服务端 |
 
-**验收**:mock 关闭,新注册用户可完整走通 浏览→加购→结算→支付→订单列表 且数据落库;取消订单回补库存。
+**验收** ✅:mock 关闭,新注册用户可完整走通 浏览→加购→结算→支付→订单列表 且数据落库;取消订单回补库存。
 
 ## Phase 3 — 商家/管理后台真实化
 

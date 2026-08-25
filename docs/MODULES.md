@@ -11,10 +11,10 @@
 | 商品 | 列表/详情/推荐/销量榜 | Home / ProductDetail / Compare | `/products` `/products/:id` `/products/recommend/:size` `/products/sales-top/:size` | 🟢 真实 |
 | 商品 | 分类计数 | Home 分类栏 | `/products/category-counts` | 🔴 占位(全部计数硬编码 0) |
 | 搜索 | 建议/结果/趋势/分面 | SearchResults | `/search/suggestions` `/search` `/search/trending` | 🟡 suggestions 真实;trending 硬编码、facets 空 |
-| 购物车 | 增删改/下单 | Cart | `/shoppingCart`(CRUD + `createOrder`) | 🟡 后端真实;**前端仍用 localStorage,未走后端** |
-| 结算 | 金额汇总/优惠码 | Checkout | `/checkout/summary` `/checkout/promo` | 🟡 优惠码已接 coupon 表(`/checkout/promo` 先查券再兜底);金额仍信任前端 price(Phase 2 服务端校验) |
-| 支付 | 创建/确认支付 | Checkout | `/payments/create` `/payments/confirm` | 🔴 纯 mock 返回,无表无业务 |
-| 订单 | 我的订单/最近/仪表盘 | DashboardHome / Orders | `/orders` `/orders/recent` `/dashboard/stats` | 🟢 真实(代理 ProductOrderService) |
+| 购物车 | 增删改/下单 | Cart | `/shoppingCart`(page/add/update/delBatch + createOrder) | 🟢 后端真实(登录态前端已对接、越权已收紧;guest 仍走 localStorage) |
+| 结算 | 金额汇总/优惠码 | Checkout | `/checkout/summary` `/checkout/promo` | 🟢 金额按 DB 价格服务端重算;优惠码已接 coupon 表;优惠/运费/税为展示用不入账 |
+| 支付 | 创建/确认支付 | Checkout | `/payments/create` `/payments/confirm` `/payments/complete-action` | 🟢 模拟网关真实落库(`payment` 表 + 订单行 + 库存扣减,channel=card/balance);无真实商户号,接入微信/支付宝需替换 |
+| 订单 | 我的订单/最近/仪表盘 | DashboardHome / Orders | `/orders` `/orders/recent` `/orders/{orderNo}/cancel` `/dashboard/stats` | 🟢 真实(按 order_no 分组;取消回补库存/退款;30min 未支付自动取消) |
 | 账户 | 资料/通知偏好 | dashboard/Settings | `/account/profile` `/account/notifications` | 🟢 真实(通知偏好落库 `user_notification_pref`) |
 | 地址 | CRUD/默认 | dashboard/Addresses | `/addresses` CRUD | 🟡 CRUD 真实;`setDefaultAddress` no-op |
 | 聊天 | 会话/消息/未读 | UserMessages / MerchantMessages / ChatWidget | `/chat/*` | 🟢 全量真实(唯一无 mock 兜底的模块) |
@@ -58,14 +58,11 @@
 | `MerchantApiController.getTransactions` | L161-164 | `Collections.emptyList()` |
 | `MerchantApiController.withdraw` | L166-169 | no-op |
 | `MerchantApiController.updateSettings` | L191-194 | no-op(getSettings 部分硬编码) |
-| `StorefrontPaymentController.createPayment` | L47-57 | 吞异常,返回 mock `pay_*`/`ORD-随机`/`mock_secret` |
-| `StorefrontPaymentController.confirmPayment` | L60-66 | 永远 `succeeded` |
 | `StorefrontSearchController.getTrending` | L54-59 | 硬编码关键词数组 |
 | `StorefrontSearchController.search` | L101-103 | facets 空 Map、relatedSearches 空 |
 | `StorefrontProductController.getCategoryCounts` | L77-87 | 计数全部 0(注释 "Placeholder") |
 | `StorefrontMerchantController.getProfile` | L45-59 | stats 硬编码、featuredProducts 空、policies 硬编码 |
 | `StorefrontAddressController.setDefaultAddress` | L51-55 | no-op,不设默认地址 |
-| `StorefrontCheckoutController` | L22-59 | `/checkout/summary` 用前端传入 price 直接计算(未服务端校验);`/checkout/promo` 已接 coupon 表(硬编码 SAVE10/VIP15 仅兜底) |
 
 ### 后端明确 TODO / Bug
 
@@ -86,7 +83,7 @@
 
 | store | localStorage 键 | 后端对应 | 是否同步 |
 |-------|----------------|----------|----------|
-| cart | `nexus_cart_items` | `/shoppingCart` | ❌ 未同步 |
+| cart | `nexus_cart_items` | `/shoppingCart`(page/add/update/delBatch) | ✅ 登录态后端同步 / guest 本地 |
 | wishlist | `nexus_wishlist_items` | `/productCollect` | ❌ 未同步 |
 | browsingHistory | `nexus_browsing_history` | `/productBrowsingHistory` | ❌ 未同步 |
 | compare | `nexus_compare_items` | — | ❌ 仅本地 |
@@ -98,7 +95,7 @@
 ## 3. 关键依赖关系与风险
 
 1. **聊天是唯一无 mock 兜底的模块**(`chat.ts` 不读 USE_MOCK)→ 后端未启动时消息页/悬浮聊天必然报错。
-2. **结算→支付→订单 主链路是断裂的**:`/checkout` 伪计算 + `/payments` 纯 mock + 订单虽真实但前端结算成功只在 mock 模式写本地订单(`Checkout.vue` L426-428)→ **关 mock 后结算成功不会出现在订单列表**。Phase 2 核心目标。
+2. **结算→支付→订单 主链路已打通(Phase 2 ✅)**:结算按 DB 价格服务端校验、支付模拟网关真实落库、订单按 order_no 分组展示;遗留限制——优惠/运费/税为展示用不入账、支付无真实商户号。
 3. **生产构建默认 mock=true**(`.env.production` 未覆盖 `VITE_USE_MOCK`)→ 产物若后端未就绪会静默用假数据。
 4. **密码找回前后端字段不匹配**:前端发 `email`、后端 `retrievePassword` 用 `tel`;`resetPasswordWithToken` 把 token 当 userId 拼 URL。
 5. **前端 Debug 工具残留**:`FEATURE_DEV_LOGOUT` 仅定义无引用;原 `web/docs/` 陈旧工具文档(DebugPanel/Force Logout/Seed Data)描述的界面代码中不存在,文档已删除(2026-08-24)。
@@ -109,6 +106,6 @@
 见 [ROADMAP.md](ROADMAP.md) Phase 1–4。简单结论:
 
 - **Phase 1(✅ 2026-08-08 已完成)**:改密码对接、logo 上传、通知偏好落库、优惠券/退换货/到货订阅/通知后端化。
-- **Phase 2**:主链路——结算服务端校验、模拟支付落库、购物车/订单全链路。
+- **Phase 2(✅ 2026-08-25 已完成)**:主链路——结算服务端校验、模拟支付落库、购物车/订单全链路。
 - **Phase 3**:后台真实化——钱包、dashboard 统计、设置持久化、搜索/店铺页真实化。
 - **Phase 4**:质量收尾——生产 mock 开关、查重 bug、密码找回、JWT 密钥、退款、验证码、测试、文档同步。
