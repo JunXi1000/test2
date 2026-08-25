@@ -1,0 +1,10 @@
+# 仓库统一 LF 行尾。以下关键运行文件即使 Windows 检出也强制 LF:
+#   - *.sh:shebang(#!/usr/bin/env bash)遇 CRLF 会变成 bash\r 导致容器崩溃
+#   - Dockerfile: 反斜杠续行遇 CRLF 会解析失败
+#   - docker-compose.yml: YAML 统一 LF
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker/Dockerfile text eol=lf
+docker/docker-compose.yml text eol=lf
+docker/entrypoint.sh text eol=lf

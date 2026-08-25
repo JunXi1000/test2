@@ -1,0 +1,11 @@
+# 环境镜像不 COPY 代码,仅需 docker/ 目录;其余全部排除以加速构建上下文
+.git
+target
+web/node_modules
+test-results
+**/target
+**/node_modules
+**/*.log
+.idea
+.vscode
+*.iml

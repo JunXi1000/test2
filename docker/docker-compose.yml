@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Nexus Market 开发环境编排
+#   - 镜像只含运行环境(JDK/Maven/Node/MySQL),不含项目代码
+#   - 代码通过 ../ → /workspace 挂载;改代码即时生效,无需重建镜像
+#   - 首次启动自动初始化 MySQL 并导入建表脚本(见 entrypoint.sh)
+#
+# 用法:
+#   cd docker && docker compose up -d --build    # 构建并后台启动
+#   docker compose exec dev bash                 # 进入容器
+#   docker compose down                          # 停止(加 -v 连 mysql 数据卷一起删)
+#
+# 发布为「他人可拉取」镜像:
+#   docker compose build                         # 或直接 docker build ../ -f Dockerfile
+#   docker tag nexus-market/dev-env:1.0 <你的registry>/nexus-dev-env:1.0
+#   docker push <你的registry>/nexus-dev-env:1.0
+#   他人: docker pull <你的registry>/nexus-dev-env:1.0
+# ─────────────────────────────────────────────────────────────────────────
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: nexus-market/dev-env:1.0
+    container_name: nexus-dev
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: template_v3
+      # 后端连接本容器内的 MySQL(默认 localhost:3306 即可,无需覆盖)
+      # SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/template_v3?useUnicode=true&useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      # SPRING_DATASOURCE_USERNAME: root
+      # SPRING_DATASOURCE_PASSWORD: "123456"
+    ports:
+      - "127.0.0.1:3306:3306"    # MySQL:仅宿主机回环,不暴露到局域网
+      - "1000:1000"              # 后端 Spring Boot
+      - "5173:5173"              # 前端 Vite dev server
+    volumes:
+      - ../:/workspace                          # 项目代码(不打包进镜像,运行挂载)
+      - mysql-data:/var/lib/mysql               # MySQL 数据持久化
+      - m2cache:/root/.m2                       # Maven 依赖缓存,避免每次下载
+      - node_modules:/workspace/web/node_modules # 前端依赖缓存(隔离宿主机 win32 二进制)
+    working_dir: /workspace
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  m2cache:
+  node_modules:

@@ -9,3 +9,6 @@ web/node_modules/
 
 # 运行时上传数据(不入库)
 uploads/*
+
+# 测试残留产物(不入库)
+test-results/
