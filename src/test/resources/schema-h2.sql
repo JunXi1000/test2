@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS product (
 
 CREATE TABLE IF NOT EXISTS product_order (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  order_no VARCHAR(64),
   product_id INT,
   product_name VARCHAR(255),
   shop_id INT,
@@ -80,6 +81,21 @@ CREATE TABLE IF NOT EXISTS product_order (
   remark VARCHAR(500),
   order_evaluate_id INT,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_no ON product_order (order_no);
+
+CREATE TABLE IF NOT EXISTS payment (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_no VARCHAR(64) NOT NULL,
+  user_id INT,
+  amount DECIMAL(10,2) DEFAULT 0.00,
+  channel VARCHAR(20) DEFAULT 'card',
+  transaction_no VARCHAR(64),
+  status VARCHAR(20) DEFAULT '待支付',
+  paid_time TIMESTAMP,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (order_no)
 );
 
 CREATE TABLE IF NOT EXISTS product_order_evaluate (

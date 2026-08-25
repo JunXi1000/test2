@@ -3,13 +3,17 @@ package com.project.platform.entity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 /**
- * 商品订单
+ * 商品订单(扁平:每行一单;同一结算批次共享 order_no)
  */
 public class ProductOrder  {
    /**
     * id
     */
    private Integer id;
+   /**
+    * 订单分组号(一次结算共享;存量行可为空,各自成组)
+    */
+   private String orderNo;
    /**
     * 商品
     */
@@ -18,6 +22,10 @@ public class ProductOrder  {
     * 商品名称
     */
    private String productName;
+   /**
+    * 商品主图(联表查询冗余字段,非数据库列)
+    */
+   private String productMainImg;
    /**
     * 店铺
     */
@@ -82,6 +90,14 @@ public class ProductOrder  {
    public void setId(Integer id) {
       this.id = id;
    }
+
+   public String getOrderNo() {
+      return orderNo;
+   }
+
+   public void setOrderNo(String orderNo) {
+      this.orderNo = orderNo;
+   }
    public Integer getProductId() {
       return productId;
    }
@@ -96,6 +112,14 @@ public class ProductOrder  {
 
    public void setProductName(String productName) {
       this.productName = productName;
+   }
+
+   public String getProductMainImg() {
+      return productMainImg;
+   }
+
+   public void setProductMainImg(String productMainImg) {
+      this.productMainImg = productMainImg;
    }
 
    public Integer getShopId() {

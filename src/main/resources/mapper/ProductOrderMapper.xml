@@ -5,6 +5,7 @@
     <select id="queryPage"  resultType="com.project.platform.entity.ProductOrder">
         SELECT product_order.*
         ,product.name AS productName
+        ,product.main_img AS productMainImg
         ,shop.name AS shopName
         ,user.username AS username
         FROM product_order
@@ -61,6 +62,7 @@
     <insert id="insert" parameterType="com.project.platform.entity.ProductOrder" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO product_order
         <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="orderNo != null">order_no,</if>
             <if test="productId != null">product_id,</if>
             <if test="shopId != null">shop_id,</if>
             <if test="totalMoney != null">total_money,</if>
@@ -77,6 +79,7 @@
         </trim>
         VALUES
         <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="orderNo != null">#{orderNo},</if>
             <if test="productId != null">#{productId},</if>
             <if test="shopId != null">#{shopId},</if>
             <if test="totalMoney != null">#{totalMoney},</if>
@@ -99,6 +102,9 @@
     <update id="updateById" parameterType="com.project.platform.entity.ProductOrder">
         UPDATE product_order
         <set>
+            <if test="orderNo != null">
+                order_no = #{orderNo},
+            </if>
             <if test="productId != null">
                 product_id = #{productId},
             </if>
