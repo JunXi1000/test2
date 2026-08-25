@@ -1,89 +1,81 @@
 package com.project.platform.controller;
 
 import com.alibaba.fastjson2.JSONObject;
-import com.project.platform.dto.CreateOrderByShoppingCartDTO;
-import com.project.platform.entity.ProductOrder;
+import com.project.platform.dto.StorefrontCheckoutDTO;
+import com.project.platform.service.PaymentService;
 import com.project.platform.service.ProductOrderService;
-import com.project.platform.service.ShoppingCartService;
-import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.ResponseVO;
+import com.project.platform.vo.StorefrontCheckoutResult;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Payment API — matches frontend's expected /payments contract.
+ *
+ * ⚠️ 模拟网关(非真实):订单/支付记录**真实落库**、库存**真实扣减**,
+ * 但不存在真实商户号与回调验签。接入微信/支付宝时必须替换为
+ * 「网关下单 + 回调验签 + 幂等入账」,并移除本页的三个方法。
  */
 @RestController
 @RequestMapping("/payments")
 public class StorefrontPaymentController {
 
     @Resource
-    private ShoppingCartService shoppingCartService;
-
-    @Resource
     private ProductOrderService productOrderService;
 
+    @Resource
+    private PaymentService paymentService;
+
+    /**
+     * POST /payments/create — 结算下单并创建支付单(模拟网关)。
+     * 真实创建订单行 + 支付单,原子扣库存;orderNo 同时充当 paymentId/orderId。
+     */
     @PostMapping("/create")
-    public ResponseVO<Map<String, Object>> createPayment(@RequestBody JSONObject body) {
-        // ⚠️ MOCK 实现,仅限演示:创建订单后返回假支付凭据,不产生真实支付单。
-        //    接入真实网关时必须替换:创建支付单落库 + 网关下单,并按订单金额核对回调。
-        CreateOrderByShoppingCartDTO dto = new CreateOrderByShoppingCartDTO();
-        var items = body.getJSONArray("items");
-        if (items != null) {
-            List<Integer> ids = new ArrayList<>();
-            for (int i = 0; i < items.size(); i++) {
-                ids.add(items.getJSONObject(i).getInteger("productId"));
-            }
-            dto.setIds(ids);
-        }
-        var shipping = body.getJSONObject("shipping");
-        if (shipping != null) {
-            dto.setConsigneeName(shipping.getString("name"));
-            dto.setConsigneeAddress(shipping.getString("address"));
-            dto.setConsigneeTel("");
-        }
-
-        try {
-            shoppingCartService.createOrder(dto);
-        } catch (Exception e) {
-            // Order creation may fail if cart is empty — return a placeholder
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("paymentId", "pay_" + System.currentTimeMillis());
-        result.put("orderId", "ORD-" + (1000 + new Random().nextInt(9000)));
-        result.put("clientSecret", "mock_secret");
-        return ResponseVO.ok(result);
+    public ResponseVO<Map<String, Object>> createPayment(@RequestBody StorefrontCheckoutDTO dto) {
+        StorefrontCheckoutResult result = productOrderService.createStorefrontOrder(dto);
+        Map<String, Object> map = new HashMap<>();
+        map.put("paymentId", result.getOrderNo());
+        map.put("orderId", result.getOrderNo());
+        map.put("clientSecret", null); // 模拟网关无真实 client_secret
+        map.put("amount", result.getAmount());
+        return ResponseVO.ok(map);
     }
 
+    /**
+     * POST /payments/confirm — 确认支付。
+     * 前端以 paymentId 携带 orderNo;channel 缺省读支付单记录。
+     * 幂等:支付单已支付时直接返回 succeeded,不重复扣款。
+     */
     @PostMapping("/confirm")
     public ResponseVO<Map<String, Object>> confirmPayment(@RequestBody JSONObject body) {
-        // ⚠️ MOCK 实现,仅限演示:对任意传入 orderId 一律返回 succeeded,不改任何订单/支付状态。
-        //    接入真实网关时必须删除并替换为:校验 HMAC/签名、核对支付单归属与金额,
-        //    仅在网关确认后更新订单状态。切勿把本方法当作真实支付结果。
+        String orderNo = body.getString("orderId");
+        if (orderNo == null || orderNo.isEmpty()) {
+            orderNo = body.getString("paymentId");
+        }
+        paymentService.confirm(orderNo, body.getString("channel"));
         Map<String, Object> result = new HashMap<>();
         result.put("status", "succeeded");
-        result.put("orderId", body.getString("orderId"));
+        result.put("orderId", orderNo);
         return ResponseVO.ok(result);
     }
 
     /**
      * POST /payments/complete-action — 3DS 认证完成后的银行回调。
-     *
-     * ⚠️ MOCK 实现,仅限演示:直接返回 succeeded,不校验支付网关、不落库改单。
-     *    - 该接口需登录(JWT),但任意登录用户都可调用,切勿当作真实支付结果。
-     *    - 接入真实网关时必须替换:校验 HMAC/签名、核对 paymentId 与订单金额、
-     *      仅在网关确认后更新订单状态,并移除本方法。
+     * 读支付单 channel 转调 confirm,与 confirm 同语义(幂等)。
      */
     @PostMapping("/complete-action")
     public ResponseVO<Map<String, Object>> completeAction(@RequestBody JSONObject body) {
+        String orderNo = body.getString("paymentId");
+        if (orderNo == null || orderNo.isEmpty()) {
+            orderNo = body.getString("orderId");
+        }
+        paymentService.complete(orderNo);
         Map<String, Object> result = new HashMap<>();
         result.put("status", "succeeded");
-        result.put("orderId", body.getString("orderId") != null
-                ? body.getString("orderId")
-                : "ORD-" + (1000 + new Random().nextInt(9000)));
+        result.put("orderId", orderNo);
         return ResponseVO.ok(result);
     }
 }

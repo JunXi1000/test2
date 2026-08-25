@@ -1,23 +1,30 @@
 package com.project.platform.service.impl;
 
 import com.project.platform.dto.CurrentUserDTO;
+import com.project.platform.dto.StorefrontCheckoutDTO;
+import com.project.platform.entity.Payment;
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductOrder;
 import com.project.platform.exception.CustomException;
+import com.project.platform.mapper.PaymentMapper;
 import com.project.platform.mapper.ProductOrderMapper;
+import com.project.platform.mapper.ShoppingCartMapper;
 import com.project.platform.service.ProductOrderService;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.UserService;
 import com.project.platform.utils.AccessGuard;
 import com.project.platform.utils.CurrentUserThreadLocal;
+import com.project.platform.utils.OrderNoGenerator;
 import com.project.platform.utils.PageParams;
 import jakarta.annotation.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.project.platform.vo.PageVO;
+import com.project.platform.vo.StorefrontCheckoutResult;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +35,12 @@ import java.util.Map;
 public class ProductOrderServiceImpl implements ProductOrderService {
     @Resource
     private ProductOrderMapper productOrderMapper;
+
+    @Resource
+    private PaymentMapper paymentMapper;
+
+    @Resource
+    private ShoppingCartMapper shoppingCartMapper;
 
     @Resource
     private ProductService productService;
@@ -68,8 +81,18 @@ public class ProductOrderServiceImpl implements ProductOrderService {
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void insert(ProductOrder entity) {
+        doInsert(entity);
+    }
+
+    /**
+     * 下单核心:校验 USER 角色、生成/沿用 order_no、原子扣库存、服务端重算金额、落库。
+     */
+    private void doInsert(ProductOrder entity) {
         if (!CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
             throw new CustomException("普通用户才允许下单");
+        }
+        if (entity.getOrderNo() == null) {
+            entity.setOrderNo(OrderNoGenerator.next());
         }
         entity.setUserId(CurrentUserThreadLocal.getCurrentUser().getId());
         entity.setStatus("待支付");
@@ -103,6 +126,108 @@ public class ProductOrderServiceImpl implements ProductOrderService {
     @Override
     public void removeByIds(List<Integer> ids) {
         productOrderMapper.removeByIds(ids);
+    }
+
+    /**
+     * 前台结算下单(Phase 2):一次结算一个 order_no 分组 + 一张支付单。
+     * 逐 item 以 DB 价格落单、原子扣库存;成功后按当前用户清除对应购物车行。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public StorefrontCheckoutResult createStorefrontOrder(StorefrontCheckoutDTO dto) {
+        if (!CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
+            throw new CustomException("普通用户才允许下单");
+        }
+        List<StorefrontCheckoutDTO.Item> items = dto.getItems();
+        if (items == null || items.isEmpty()) {
+            throw new CustomException("请选择要购买的商品");
+        }
+        String orderNo = OrderNoGenerator.next();
+        BigDecimal amount = BigDecimal.ZERO;
+        for (StorefrontCheckoutDTO.Item item : items) {
+            Integer productId = item.resolveProductId();
+            Integer qty = item.getQuantity();
+            if (productId == null || qty == null || qty <= 0) {
+                throw new CustomException("商品参数不合法");
+            }
+            ProductOrder order = new ProductOrder();
+            order.setOrderNo(orderNo);
+            order.setProductId(productId);
+            order.setQuantity(qty);
+            if (dto.getShipping() != null) {
+                order.setConsigneeName(dto.getShipping().getName());
+                order.setConsigneeTel(dto.getShipping().getTel());
+                order.setConsigneeAddress(dto.getShipping().getAddress());
+            }
+            order.setRemark(dto.getRemark());
+            doInsert(order);
+            amount = amount.add(order.getTotalMoney());
+        }
+        // 支付单(待支付)
+        Payment payment = new Payment();
+        payment.setOrderNo(orderNo);
+        payment.setUserId(CurrentUserThreadLocal.getCurrentUser().getId());
+        payment.setAmount(amount);
+        payment.setChannel(dto.getChannel() == null || dto.getChannel().isBlank() ? "card" : dto.getChannel());
+        payment.setStatus("待支付");
+        payment.setCreateTime(LocalDateTime.now());
+        paymentMapper.insert(payment);
+        // 下单成功后清除对应购物车行(仅限当前用户的行,防御横向越权)
+        if (dto.getCartItemIds() != null && !dto.getCartItemIds().isEmpty()) {
+            shoppingCartMapper.removeByIdsOfUser(CurrentUserThreadLocal.getCurrentUser().getId(), dto.getCartItemIds());
+        }
+        return new StorefrontCheckoutResult(orderNo, amount);
+    }
+
+    /**
+     * 按订单分组号取消(Phase 2):归属校验 + 幂等取消(回补库存/退款/支付单推进)。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void cancelByOrderNo(String orderNo) {
+        List<ProductOrder> rows = productOrderMapper.selectByOrderNo(orderNo);
+        if (rows == null || rows.isEmpty()) {
+            throw new CustomException(HttpStatus.NOT_FOUND, "订单不存在");
+        }
+        // 归属校验:所有行都必须属于当前用户
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        for (ProductOrder row : rows) {
+            AccessGuard.checkOrderOwner(row, current);
+        }
+        cancelRows(orderNo, rows, "已取消");
+    }
+
+    /**
+     * 取消订单分组:回补库存 + 已付款退款 + 支付单推进,幂等(全已取消则直接返回)。
+     * 无用户上下文可调用(超时任务),故行状态更新走 mapper 而非带归属校验的 updateById。
+     *
+     * @param payStatus 支付单目标状态:用户取消->已取消,超时自动取消->已超时
+     */
+    private void cancelRows(String orderNo, List<ProductOrder> rows, String payStatus) {
+        boolean anyActive = rows.stream()
+                .anyMatch(r -> "待支付".equals(r.getStatus()) || "待发货".equals(r.getStatus()));
+        if (!anyActive) {
+            return; // 幂等:全已取消/已完成,不再重复退款
+        }
+        for (ProductOrder row : rows) {
+            if (!"待支付".equals(row.getStatus()) && !"待发货".equals(row.getStatus())) {
+                continue;
+            }
+            productService.in(row.getProductId(), row.getQuantity()); // 回补库存
+            if ("待发货".equals(row.getStatus())) {
+                userService.topUp(row.getUserId(), row.getTotalMoney()); // 已付款退款
+            }
+            row.setStatus("已取消");
+            productOrderMapper.updateById(row);
+        }
+        Payment payment = paymentMapper.selectByOrderNo(orderNo);
+        if (payment != null) {
+            if ("已支付".equals(payment.getStatus())) {
+                paymentMapper.updateStatus(orderNo, "已退款");
+            } else if ("待支付".equals(payment.getStatus())) {
+                paymentMapper.updateStatus(orderNo, payStatus);
+            }
+        }
     }
 
 

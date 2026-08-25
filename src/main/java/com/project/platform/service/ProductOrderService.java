@@ -1,7 +1,9 @@
 package com.project.platform.service;
 
+import com.project.platform.dto.StorefrontCheckoutDTO;
 import com.project.platform.entity.ProductOrder;
 import com.project.platform.vo.PageVO;
+import com.project.platform.vo.StorefrontCheckoutResult;
 
 import java.util.List;
 import java.util.Map;
@@ -30,4 +32,15 @@ public interface ProductOrderService {
     void delivery(Integer id, String deliveryNo);
 
     void confirm(Integer id);
+
+    /**
+     * 前台结算下单(Phase 2):一次结算一个 order_no 分组 + 一张支付单,原子扣库存。
+     * 返回分组号与待支付金额。
+     */
+    StorefrontCheckoutResult createStorefrontOrder(StorefrontCheckoutDTO dto);
+
+    /**
+     * 按订单分组号取消(Phase 2):回补库存 + 已付款退款 + 支付单推进,幂等。
+     */
+    void cancelByOrderNo(String orderNo);
 }
