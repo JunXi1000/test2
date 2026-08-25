@@ -12,12 +12,14 @@ import com.project.platform.service.ProductService;
 import com.project.platform.service.ShoppingCartService;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import jakarta.annotation.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.project.platform.utils.PageParams;
 import com.project.platform.vo.PageVO;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +58,12 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
 
     @Override
     public List<ShoppingCart> list() {
+        // 越权防御:USER 只能看自己的购物车(否则 /shoppingCart/list 会泄漏所有用户行)
+        if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
+            Map<String, Object> query = new HashMap<>();
+            query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
+            return shoppingCartMapper.queryPage(0, 1000, query);
+        }
         return shoppingCartMapper.list();
     }
 
@@ -76,12 +84,30 @@ public class ShoppingCartServiceImpl implements ShoppingCartService {
 
     @Override
     public void updateById(ShoppingCart entity) {
+        // 越权防御:USER 只能改自己购物车的数量,归属/商品由服务端兜底防篡改
+        if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
+            ShoppingCart existing = shoppingCartMapper.selectById(entity.getId());
+            if (existing == null) {
+                throw new CustomException(HttpStatus.NOT_FOUND, "购物车项不存在");
+            }
+            Integer existingUserId = existing.getUserId();
+            if (existingUserId == null || !existingUserId.equals(CurrentUserThreadLocal.getCurrentUser().getId())) {
+                throw new CustomException(HttpStatus.FORBIDDEN, "无权修改该购物车项");
+            }
+            entity.setUserId(existingUserId);
+            entity.setProductId(existing.getProductId());
+        }
         shoppingCartMapper.updateById(entity);
     }
 
 
     @Override
     public void removeByIds(List<Integer> ids) {
+        // 越权防御:USER 仅可删除当前用户的行(复用按 userId 过滤的删除)
+        if (CurrentUserThreadLocal.getCurrentUser().getType().equals("USER")) {
+            shoppingCartMapper.removeByIdsOfUser(CurrentUserThreadLocal.getCurrentUser().getId(), ids);
+            return;
+        }
         shoppingCartMapper.removeByIds(ids);
     }
 

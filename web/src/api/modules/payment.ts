@@ -1,11 +1,15 @@
 import { USE_MOCK } from '@/config/env'
 import { post } from '@/api/http'
-import type { CartItem } from '@/stores/cart'
 
 export interface PaymentCreatePayload {
-  items: CartItem[]
+  /** 仅传商品 id + 数量;金额一律以服务端 DB 价格重算为准 */
+  items: { productId: number; quantity: number }[]
   amount: number
   currency: string
+  /** 支付渠道:card=模拟银行卡 / balance=钱包余额 */
+  channel?: string
+  /** 下单成功后待清除的购物车行 id(登录态购物车的 serverId,可选) */
+  cartItemIds?: number[]
   shipping: {
     name: string
     address: string

@@ -484,9 +484,13 @@ const handlePayment = async () => {
     paymentErrorRef.value = ''
     isProcessing.value = true
     const payload = {
-      items: checkoutItems.value,
+      // 只传商品 id + 数量;金额由服务端按 DB 价格重算(/checkout/summary 已同源)
+      items: checkoutItems.value.map(it => ({ productId: it.id, quantity: it.quantity })),
       amount: total.value,
       currency: 'USD',
+      // 模拟银行卡网关;cartItemIds 让后端下单成功后清除对应购物车行(仅登录态有 serverId)
+      channel: 'card',
+      cartItemIds: checkoutItems.value.map(it => it.serverId).filter((id): id is number => !!id),
       shipping: {
         name: `${formData.firstName} ${formData.lastName}`.trim(),
         address: formData.address,
