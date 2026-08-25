@@ -22,9 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.StorefrontCheckoutResult;
+import com.project.platform.vo.StorefrontOrderVO;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -228,6 +231,86 @@ public class ProductOrderServiceImpl implements ProductOrderService {
                 paymentMapper.updateStatus(orderNo, payStatus);
             }
         }
+    }
+
+    /**
+     * 前台订单分组列表:复用 page()(USER 已按 userId 过滤),Java 内按 order_no 聚合。
+     * 旧行(order_no 为空)各自成组,orderNo 展示为 LEGACY-{id}。
+     */
+    @Override
+    public List<StorefrontOrderVO> listStorefrontOrders(Integer pageNum, Integer pageSize) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        query.put("userId", CurrentUserThreadLocal.getCurrentUser().getId());
+        PageVO<ProductOrder> page = page(query, pageNum, pageSize);
+
+        Map<String, List<ProductOrder>> groups = new LinkedHashMap<>();
+        for (ProductOrder row : page.getList()) {
+            String key = (row.getOrderNo() != null && !row.getOrderNo().isEmpty())
+                    ? row.getOrderNo() : "LEGACY-" + row.getId();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        }
+        List<StorefrontOrderVO> result = new ArrayList<>();
+        for (Map.Entry<String, List<ProductOrder>> e : groups.entrySet()) {
+            result.add(toStorefrontOrderVO(e.getKey(), e.getValue()));
+        }
+        result.sort((a, b) -> {
+            LocalDateTime ta = a.getCreateTime();
+            LocalDateTime tb = b.getCreateTime();
+            if (ta == null) {
+                return tb == null ? 0 : 1;
+            }
+            if (tb == null) {
+                return -1;
+            }
+            return tb.compareTo(ta);
+        });
+        return result;
+    }
+
+    private StorefrontOrderVO toStorefrontOrderVO(String key, List<ProductOrder> rows) {
+        StorefrontOrderVO vo = new StorefrontOrderVO();
+        ProductOrder head = rows.get(0);
+        vo.setOrderNo(key);
+        vo.setStatus(head.getStatus());
+        vo.setCreateTime(head.getCreateTime());
+        vo.setConsigneeName(head.getConsigneeName());
+        vo.setConsigneeTel(head.getConsigneeTel());
+        vo.setConsigneeAddress(head.getConsigneeAddress());
+        vo.setTrackingNumber(head.getTrackingNumber());
+        vo.setRemark(head.getRemark());
+        BigDecimal total = BigDecimal.ZERO;
+        int quantity = 0;
+        List<StorefrontOrderVO.Item> items = new ArrayList<>();
+        for (ProductOrder row : rows) {
+            total = total.add(row.getTotalMoney());
+            quantity += row.getQuantity();
+            StorefrontOrderVO.Item item = new StorefrontOrderVO.Item();
+            item.setId(row.getId());
+            item.setProductId(row.getProductId());
+            item.setProductName(row.getProductName());
+            item.setProductMainImg(row.getProductMainImg());
+            item.setTotalMoney(row.getTotalMoney());
+            item.setQuantity(row.getQuantity());
+            item.setStatus(row.getStatus());
+            items.add(item);
+        }
+        vo.setTotalMoney(total);
+        vo.setQuantity(quantity);
+        vo.setItems(items);
+        return vo;
+    }
+
+    /**
+     * 超时自动取消(无用户上下文):回补库存 + 支付单置已超时。
+     * 由 OrderTimeoutTask 调用,仅处理仍待支付的订单行。
+     */
+    @Override
+    public void cancelTimeoutOrder(String orderNo) {
+        List<ProductOrder> rows = productOrderMapper.selectByOrderNo(orderNo);
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        cancelRows(orderNo, rows, "已超时");
     }
 
 

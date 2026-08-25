@@ -4,6 +4,7 @@ import com.project.platform.dto.StorefrontCheckoutDTO;
 import com.project.platform.entity.ProductOrder;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.StorefrontCheckoutResult;
+import com.project.platform.vo.StorefrontOrderVO;
 
 import java.util.List;
 import java.util.Map;
@@ -43,4 +44,14 @@ public interface ProductOrderService {
      * 按订单分组号取消(Phase 2):回补库存 + 已付款退款 + 支付单推进,幂等。
      */
     void cancelByOrderNo(String orderNo);
+
+    /**
+     * 前台订单分组列表(Phase 2):按 order_no 聚合成订单,旧行各自成组,按 createTime 倒序。
+     */
+    List<StorefrontOrderVO> listStorefrontOrders(Integer pageNum, Integer pageSize);
+
+    /**
+     * 超时自动取消(Phase 2,无用户上下文):回补库存 + 支付单置已超时。
+     */
+    void cancelTimeoutOrder(String orderNo);
 }
