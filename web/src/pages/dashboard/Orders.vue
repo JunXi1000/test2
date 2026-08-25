@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Package, Search, Filter, MapPin, CreditCard, Truck, Copy, FileText, ShoppingBag, RotateCcw, MessageSquare } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { getOrders, persistUserCheckoutOrderStatus, type Order } from '@/api/modules/orders'
+import { getOrders, cancelOrder, type Order } from '@/api/modules/orders'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useToast } from '@/composables/useToast'
 import { normalizeForSearch } from '@/utils/search'
@@ -20,7 +20,7 @@ const { toast } = useToast()
 const router = useRouter()
 const cartStore = useCartStore()
 const searchQuery = ref('')
-const statusFilter = ref<'all' | 'In Transit' | 'Delivered' | 'Cancelled'>('all')
+const statusFilter = ref<'all' | 'Pending' | 'Processing' | 'In Transit' | 'Delivered' | 'Cancelled'>('all')
 const detailsDialogVisible = ref(false)
 const trackingDialogVisible = ref(false)
 const cancelDialogVisible = ref(false)
@@ -87,36 +87,46 @@ watch([filteredOrdersTotal, ordersPageSize], () => {
 })
 
 function handleStatusCommand(cmd: string) {
-  if (cmd === 'all' || cmd === 'In Transit' || cmd === 'Delivered' || cmd === 'Cancelled') {
+  if (
+    cmd === 'all' || cmd === 'Pending' || cmd === 'Processing' ||
+    cmd === 'In Transit' || cmd === 'Delivered' || cmd === 'Cancelled'
+  ) {
     statusFilter.value = cmd
   }
 }
 
 function requestCancelOrder(order: Order) {
   if (!canCancelOrder(order)) {
-    toast({ title: 'Cannot cancel', description: 'This order can no longer be cancelled.', variant: 'warning' })
+    toast({ title: 'Cannot cancel', description: 'This order can no longer be cancelled.', variant: 'destructive' })
     return
   }
   cancelTargetOrder.value = order
   cancelDialogVisible.value = true
 }
 
-function confirmCancelOrder() {
+async function confirmCancelOrder() {
   const pending = cancelTargetOrder.value
   if (!pending) return
   const id = pending.id
   const target = orders.value.find(o => o.id === id)
   if (!target || target.status === 'Delivered' || target.status === 'Cancelled') {
-    toast({ title: 'Cannot cancel', description: 'This order can no longer be cancelled.', variant: 'warning' })
+    toast({ title: 'Cannot cancel', description: 'This order can no longer be cancelled.', variant: 'destructive' })
     cancelDialogVisible.value = false
     cancelTargetOrder.value = null
     return
   }
-  target.status = 'Cancelled'
-  persistUserCheckoutOrderStatus(id, 'Cancelled')
+  const prevStatus = target.status
+  target.status = 'Cancelled' // 乐观反馈,失败回滚
   cancelDialogVisible.value = false
   cancelTargetOrder.value = null
-  toast({ title: 'Order cancelled', description: `Order ${id} has been cancelled.`, variant: 'success' })
+  try {
+    await cancelOrder(id) // 真实订单走后端;mock 订单写本地状态
+    toast({ title: 'Order cancelled', description: `Order ${id} has been cancelled.`, variant: 'success' })
+    await fetchOrders() // 从真实来源刷新
+  } catch (e: any) {
+    target.status = prevStatus
+    toast({ title: 'Cancel failed', description: e?.response?.data?.msg || e?.message || 'Failed to cancel order.', variant: 'destructive' })
+  }
 }
 
 function closeCancelDialog() {
@@ -124,8 +134,9 @@ function closeCancelDialog() {
   cancelTargetOrder.value = null
 }
 
+/** 后端仅支持 待支付/待发货(即 Pending/Processing)取消 */
 function canCancelOrder(order: Order) {
-  return order.status !== 'Delivered' && order.status !== 'Cancelled'
+  return order.status === 'Pending' || order.status === 'Processing'
 }
 
 function getCancelButtonLabel(order: Order) {
@@ -145,18 +156,26 @@ function openTracking(order: Order) {
 }
 
 function buildTrackingSteps(order: Order) {
-  const base = [
-    { label: 'Order Placed', desc: `${order.date} - Payment confirmed.` },
-    { label: 'Packed', desc: 'Warehouse prepared your package.' }
-  ]
+  const base = [{ label: 'Order Placed', desc: order.date }]
   if (order.status === 'Cancelled') {
     return [...base, { label: 'Cancelled', desc: 'This order was cancelled.' }]
   }
+  if (order.status === 'Pending') {
+    return [...base, { label: 'Pending Payment', desc: 'Awaiting payment confirmation.' }]
+  }
+  if (order.status === 'Processing') {
+    return [...base, { label: 'Packed', desc: 'Payment confirmed. Warehouse prepared your package.' }]
+  }
   if (order.status === 'In Transit') {
-    return [...base, { label: 'In Transit', desc: 'Carrier picked up and is transporting.' }]
+    return [
+      ...base,
+      { label: 'Packed', desc: 'Warehouse prepared your package.' },
+      { label: 'In Transit', desc: 'Carrier picked up and is transporting.' }
+    ]
   }
   return [
     ...base,
+    { label: 'Packed', desc: 'Warehouse prepared your package.' },
     { label: 'In Transit', desc: 'Package left the sorting center.' },
     { label: 'Delivered', desc: 'Package delivered successfully.' }
   ]
@@ -240,6 +259,8 @@ function contactSupport() {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="all" :class="{ 'text-primary bg-primary/10': statusFilter === 'all' }">All status</el-dropdown-item>
+              <el-dropdown-item command="Pending" :class="{ 'text-primary bg-primary/10': statusFilter === 'Pending' }">Pending</el-dropdown-item>
+              <el-dropdown-item command="Processing" :class="{ 'text-primary bg-primary/10': statusFilter === 'Processing' }">Processing</el-dropdown-item>
               <el-dropdown-item command="In Transit" :class="{ 'text-primary bg-primary/10': statusFilter === 'In Transit' }">In Transit</el-dropdown-item>
               <el-dropdown-item command="Delivered" :class="{ 'text-primary bg-primary/10': statusFilter === 'Delivered' }">Delivered</el-dropdown-item>
               <el-dropdown-item command="Cancelled" :class="{ 'text-primary bg-primary/10': statusFilter === 'Cancelled' }">Cancelled</el-dropdown-item>

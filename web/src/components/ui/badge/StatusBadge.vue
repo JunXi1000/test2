@@ -22,6 +22,7 @@ const baseClass = computed(() =>
 const colorClass = computed(() => {
   const s = props.status
   if (s === 'Pending') return 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+  if (s === 'Processing') return 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20'
   if (s === 'In Transit') return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
   if (s === 'Delivered') return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
   if (s === 'Cancelled') return 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'

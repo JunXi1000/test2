@@ -1,5 +1,5 @@
 import { USE_MOCK } from '@/config/env'
-import { get } from '@/api/http'
+import { get, post } from '@/api/http'
 import { scopedKey } from '@/stores/userScope'
 
 export interface OrderItem {
@@ -36,13 +36,109 @@ export interface Order {
   shippingFee: number
   tax: number
   discount: number
-  status: 'In Transit' | 'Delivered' | 'Cancelled'
+  status: 'Pending' | 'Processing' | 'In Transit' | 'Delivered' | 'Cancelled'
   items: OrderItem[]
   shipping: OrderShipping
   payment: OrderPayment
   trackingNumber?: string
   estimatedDelivery?: string
   note?: string
+}
+
+/**
+ * 后端 /orders 返回的分组订单结构(Phase 2)。status 为中文状态机值:
+ * 待支付 / 待发货 / 待收货 / 已完成 / 已取消 / 已退款 / 已超时。
+ */
+export interface StorefrontOrderItemDTO {
+  id: number
+  productId: number
+  productName: string
+  productMainImg?: string | null
+  totalMoney: number
+  quantity: number
+  status: string
+}
+
+export interface StorefrontOrderDTO {
+  orderNo: string
+  status: string
+  createTime?: string | null
+  totalMoney: number
+  quantity: number
+  consigneeName?: string | null
+  consigneeTel?: string | null
+  consigneeAddress?: string | null
+  trackingNumber?: string | null
+  remark?: string | null
+  items?: StorefrontOrderItemDTO[]
+}
+
+/** 后端未带主图时的占位图(内联 SVG,避免 broken img) */
+const FALLBACK_IMG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-size="10" text-anchor="middle" dominant-baseline="middle">Nexus</text></svg>'
+  )
+
+function formatOrderDate(iso?: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** 后端中文状态 -> 前端英文状态 */
+function mapStatus(raw: string): Order['status'] {
+  switch (raw) {
+    case '待支付':
+      return 'Pending'
+    case '待发货':
+      return 'Processing'
+    case '待收货':
+      return 'In Transit'
+    case '已完成':
+      return 'Delivered'
+    case '已取消':
+    case '已退款':
+    case '已超时':
+      return 'Cancelled'
+    default:
+      return 'Pending'
+  }
+}
+
+function mapStorefrontOrder(raw: StorefrontOrderDTO): Order {
+  const items: OrderItem[] = (raw.items || []).map((it) => ({
+    productId: it.productId,
+    name: it.productName || 'Product',
+    image: it.productMainImg || FALLBACK_IMG,
+    price: it.totalMoney,
+    quantity: it.quantity,
+  }))
+  const total = raw.totalMoney || 0
+  return {
+    id: raw.orderNo,
+    date: formatOrderDate(raw.createTime),
+    total,
+    // 后端未持久化 运费/税/优惠(展示用,不入账),明细里 Subtotal 以合计呈现
+    subtotal: total,
+    shippingFee: 0,
+    tax: 0,
+    discount: 0,
+    status: mapStatus(raw.status),
+    items,
+    shipping: {
+      name: raw.consigneeName || '',
+      phone: raw.consigneeTel || '',
+      address: raw.consigneeAddress || '',
+      city: '',
+      country: '',
+      zip: '',
+    },
+    payment: { method: 'card', paidAt: formatOrderDate(raw.createTime) },
+    trackingNumber: raw.trackingNumber || undefined,
+    note: raw.remark || undefined,
+  }
 }
 
 const MOCK_ORDERS: Order[] = [
@@ -142,10 +238,23 @@ export async function getOrders(): Promise<Order[]> {
   if (USE_MOCK) {
     return Promise.resolve(getMergedMockOrders())
   }
-  return get<Order[]>('/orders')
+  const raw = await get<StorefrontOrderDTO[]>('/orders')
+  return (raw || []).map(mapStorefrontOrder)
 }
 
 export async function getRecentOrders(): Promise<Order[]> {
   if (USE_MOCK) return Promise.resolve(getMergedMockOrders().slice(0, 2))
-  return get<Order[]>('/orders/recent')
+  const raw = await get<StorefrontOrderDTO[]>('/orders/recent')
+  return (raw || []).map(mapStorefrontOrder)
+}
+
+/**
+ * 取消订单(按 orderNo)。mock 模式只改本地 checkout 订单状态;真实模式调用后端。
+ */
+export async function cancelOrder(orderId: string): Promise<void> {
+  if (USE_MOCK) {
+    persistUserCheckoutOrderStatus(orderId, 'Cancelled')
+    return Promise.resolve()
+  }
+  await post(`/orders/${encodeURIComponent(orderId)}/cancel`)
 }
