@@ -68,7 +68,7 @@ docker exec -it nexus-dev bash   # 进入容器
 
 ## 容器内启动前后端
 
-**默认 `AUTO_START=true`,容器启动即自动拉起后端+前端,无需手动命令。** 首次启动会下载 Maven/Node 依赖并编译(约 5-10 分钟,缓存进 `m2cache`/`node_modules` 卷,之后秒级)。日志:`/var/log/backend.log`、`/var/log/frontend.log`(容器内 `tail -f` 查看)。改代码后**后端不会热重载**,需重启后端;前端 Vite 自动热更新。
+**默认 `AUTO_START=true`,容器启动即自动拉起后端+前端,无需手动命令。** 顺序是先起后端、**等它就绪(轮询 `:1000`,最多 300s)再起前端**——因为前端 Vite 约 1s 就绪而后端要 ~60s(首次 5-10min),并行起会撞上"后端未监听→代理 500"的启动窗口期,首页报错。首次启动会下载 Maven/Node 依赖并编译(约 5-10 分钟,缓存进 `m2cache`/`node_modules` 卷,之后秒级)。日志:`/var/log/backend.log`、`/var/log/frontend.log`(容器内 `tail -f` 查看)。改代码后**后端不会热重载**,需重启后端;前端 Vite 自动热更新。
 
 ```bash
 # 后端(端口 1000,连接容器内 MySQL localhost:3306)
@@ -97,6 +97,7 @@ mvn test
 | `MYSQL_DATABASE` | `template_v3` | 自动创建的项目库 |
 | `MYSQL_DATA_DIR` | `/var/lib/mysql` | MySQL 数据目录(挂载卷可持久化) |
 | `AUTO_START` | `true` | 容器启动时自动拉起前后端(`mvn spring-boot:run` + `npm run dev`);纯环境用设 `false` |
+| `AUTO_START_WAIT_BACKEND` | `true` | 起前端前先等后端就绪(轮询 `:1000`,最多 300s),避免打开页面撞上代理 500;想立刻用前端可设 `false` |
 | `SPRING_DATASOURCE_URL` | 容器内默认 | 后端如需连其他库可覆盖(见 compose 注释) |
 
 > 后端 `application.yaml` 默认读 `SPRING_DATASOURCE_URL` 等环境变量;容器内直连 `localhost:3306` 即可,通常无需覆盖。

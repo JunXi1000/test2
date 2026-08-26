@@ -142,7 +142,10 @@ echo "  进入容器: docker exec -it $(hostname 2>/dev/null || echo '<容器名
 echo "======================================================================"
 echo ""
 
-# ── 5) 可选:AUTO_START=true 时自动启动挂载的前后端(默认关闭) ──────
+# ── 5) AUTO_START=true 时自动启动挂载的前后端(Dockerfile ENV 默认 true) ──
+# 关键顺序:先起后端,等它健康(监听 :1000)再起前端。
+# 原因:前端 Vite 约 1s 就绪、后端约 60s(首次编译 5-10min),若并行起,
+# 容器起来后立刻打开页面会撞上 vite 代理 500(后端尚未监听 :1000)→ 首页报错。
 if [ "${AUTO_START:-false}" = "true" ]; then
   echo "==> AUTO_START=true:自动启动后端 + 前端(首次会下载依赖,较慢)..."
   if [ -f /workspace/pom.xml ]; then
@@ -155,6 +158,22 @@ if [ "${AUTO_START:-false}" = "true" ]; then
     if [ ! -d /workspace/web/node_modules ]; then
       echo "    首次 npm install(视网络 1-5 分钟)..."
       (cd /workspace/web && npm install) || echo "    !! npm install 失败,请进容器重试"
+    fi
+    if [ "${AUTO_START_WAIT_BACKEND:-true}" = "true" ] && [ -f /workspace/pom.xml ]; then
+      echo "    等待后端就绪(http://localhost:1000,最多 300s)后启动前端 ..."
+      backend_ok=0
+      for _ in $(seq 1 300); do
+        if curl -s -o /dev/null --max-time 2 http://localhost:1000/ >/dev/null 2>&1; then
+          backend_ok=1
+          break
+        fi
+        sleep 1
+      done
+      if [ "${backend_ok}" = "1" ]; then
+        echo "    后端已就绪(Tomcat :1000)"
+      else
+        echo "    !! 300s 后端仍未就绪(首次编译较慢?),继续启动前端;页面可能短暂报错"
+      fi
     fi
     echo "    前端  -> npm run dev (日志: /var/log/frontend.log)"
     (cd /workspace/web && npm run dev >/var/log/frontend.log 2>&1) &
