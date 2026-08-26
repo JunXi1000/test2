@@ -231,7 +231,9 @@ CREATE TABLE IF NOT EXISTS `advertising` (
 -- ============================================================
 INSERT INTO `user` (`id`, `username`, `password`, `nickname`, `email`, `tel`, `status`, `balance`) VALUES
 (1, 'user1', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '体验用户一', 'user@test.com', '13800000001', '启用', 1000.00),
-(2, 'user2', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '体验用户二', 'user2@test.com', '13800000002', '启用', 500.00);
+(2, 'user2', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '体验用户二', 'user2@test.com', '13800000002', '启用', 500.00),
+-- e2e 凭据账号:username=email=test@example.com,密码 password123(与前端 e2e/mock 约定一致,真实后端也可登录)
+(3, 'test@example.com', '$2b$10$yLqKTLeZFhlQebmYtW2IL.Jo4j3mxzMbHd0fW.Z2dBp20XkVtvnVe', '测试用户', 'test@example.com', '13800000000', '启用', 1000.00);
 
 INSERT INTO `shop` (`id`, `username`, `password`, `nickname`, `name`, `email`, `status`) VALUES
 (1, 'shop1', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '店长一号', '一号数码旗舰店', 'shop@test.com', '启用'),

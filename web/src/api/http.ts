@@ -59,6 +59,18 @@ http.interceptors.response.use(
           isHandlingUnauthorized = false
         }
       }
+    } else if (error?.response?.data) {
+      // 非 401 业务错误(如登录凭据错误 → 409):透传后端具体原因,
+      // 否则用户只会看到笼统的 "Request failed with status code 409"。
+      // 后端错误体形如 { code, msg: '操作失败', data: '用户名或密码错误' } —— data 才是具体原因。
+      const res = error.response.data as any
+      const msg =
+        typeof res?.data === 'string' && res.data
+          ? res.data
+          : typeof res?.msg === 'string' && res.msg
+            ? res.msg
+            : ''
+      if (msg) error.message = msg
     }
     return Promise.reject(error)
   }
