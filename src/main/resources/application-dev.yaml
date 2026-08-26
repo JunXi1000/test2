@@ -3,6 +3,10 @@ mybatis:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+# 演示便利:找回密码验证码直接回显(仅 dev/演示 profile;prod 已关闭,可用 EXPOSE_RESET_CODE 覆盖)
+security:
+  expose-reset-code: true
+
 logging:
   level:
     root: INFO

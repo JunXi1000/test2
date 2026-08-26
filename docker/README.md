@@ -107,6 +107,7 @@ mvn test
 - **为什么 node_modules 单独挂卷?** 宿主机若是 Windows,其 `node_modules` 内 esbuild/sass 等为 win32 二进制,容器(Linux)无法使用。compose 用命名卷 `node_modules:/workspace/web/node_modules` 隔离,容器内 `npm install` 安装 Linux 版,互不干扰。
 - **中文乱码 / 双重编码?** 导库一律带 `--default-character-set=utf8mb4`(entrypoint 已内置)。手动导库请保持该参数。
 - **root 为什么用 mysql_native_password?** 项目 JDBC URL 未配 `allowPublicKeyRetrieval`,非 SSL 下 `caching_sha2_password` 会导致连接失败;8.0 的 `mysql_native_password` 兼容现有代码,无需改任何配置。
+- **找回密码验证码会被直接返回?** 仅演示模式(dev profile,容器默认)为了页面展示会回显 6 位验证码;生产/默认已关闭(`expose-reset-code: ${EXPOSE_RESET_CODE:false}`,prod profile 显式 `false`),接入真实短信/邮件后验证码应走下发。需要时可 `-e EXPOSE_RESET_CODE=true/false` 覆盖。
 - **改代码要重建镜像吗?** 不需要。代码是卷挂载的,容器内改动即生效;镜像只更新环境(`docker compose up -d --build`)。
 - **Docker VM 内存不足?** 本机 Docker Desktop VM 同时跑多个容器(ES/Kibana/多个 MySQL)会 OOM。开发本镜像时请停用无关容器。
 - **MySQL 端口为什么只绑回环?** MySQL 默认密码是弱口令 `123456`,compose 用 `127.0.0.1:3306:3306` 只暴露给宿主机(本机 Navicat 可连),不暴露到局域网。若需他人远程连库,请先用 `-e MYSQL_ROOT_PASSWORD=强密码` 覆盖再改映射;后端/前端端口 `1000/5173` 按需自行调整。

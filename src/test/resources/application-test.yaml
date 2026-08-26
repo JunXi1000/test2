@@ -22,6 +22,10 @@ server:
 
 resetPassword: 123456
 
+# 测试全流程需读取回显验证码(sendResetCode → retrievePassword)
+security:
+  expose-reset-code: true
+
 files:
   uploads:
     path: uploads/

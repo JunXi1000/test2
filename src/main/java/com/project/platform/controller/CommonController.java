@@ -41,10 +41,11 @@ public class CommonController {
     private ResetCodeStore resetCodeStore;
 
     /**
-     * 是否在响应中直接返回验证码(演示环境默认开启,便于页面展示)。
-     * 接入真实短信/邮件后应关闭并改为下发:prod profile 默认 false。
+     * 是否在响应中直接返回验证码。
+     * 默认 false(安全,验证码应走短信/邮件下发);仅 dev/演示与 test profile 显式开启回显,
+     * 便于页面展示。可用环境变量 EXPOSE_RESET_CODE 覆盖。
      */
-    @Value("${security.expose-reset-code:true}")
+    @Value("${security.expose-reset-code:false}")
     private boolean exposeResetCode;
 
     /**

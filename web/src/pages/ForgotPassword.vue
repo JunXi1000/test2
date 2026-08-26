@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
@@ -15,6 +15,9 @@ const email = ref('')
 const isLoading = ref(false)
 const isSent = ref(false)
 const resetCode = ref('')
+
+// 后端回显的是 6 位验证码时为 true;生产/EXPOSE_RESET_CODE=false 时返回的是提示文案
+const isRealCode = computed(() => /^\d{6}$/.test(resetCode.value))
 
 const handleReset = async () => {
   if (!email.value) return
@@ -37,7 +40,12 @@ const handleReset = async () => {
 }
 
 const goReset = () => {
-  router.push({ name: 'ResetPassword', query: { token: resetCode.value, email: email.value.trim() } })
+  // 仅当后端确实回显了 6 位验证码(演示/回显模式)才预填 token;
+  // 不回显时(生产/EXPOSE_RESET_CODE=false)跳到下一步由用户手动输入收到的验证码。
+  router.push({
+    name: 'ResetPassword',
+    query: { ...(isRealCode.value ? { token: resetCode.value } : {}), email: email.value.trim() }
+  })
 }
 </script>
 
@@ -72,7 +80,14 @@ const goReset = () => {
         <div v-if="isSent" class="text-center space-y-6">
           <div class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl text-sm border border-emerald-500/20 text-left space-y-2">
             <p v-html="$t('auth.forgotSentTo', { email })"></p>
-            <p class="text-2xl font-mono font-bold tracking-[0.3em] text-center py-2 text-foreground">{{ resetCode }}</p>
+            <p
+              v-if="isRealCode"
+              class="text-2xl font-mono font-bold tracking-[0.3em] text-center py-2 text-foreground"
+            >{{ resetCode }}</p>
+            <p
+              v-else
+              class="text-center py-2 text-sm text-muted-foreground"
+            >{{ resetCode }}</p>
             <p class="text-xs text-muted-foreground border-t border-emerald-500/20 pt-2 mt-2">
               {{ $t('auth.forgotCodeHint') }}
             </p>
