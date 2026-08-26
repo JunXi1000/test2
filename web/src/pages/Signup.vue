@@ -5,6 +5,9 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { register as registerApi } from '@/api/modules/auth'
 import Button from '@/components/ui/button/Button.vue'
+import FormField from '@/components/ui/form/FormField.vue'
+import { useFormValidation, type Rules } from '@/composables/useFormValidation'
+import { isValidEmail } from '@/utils/validators'
 import { ArrowRight, Mail, Lock, User, Store, ShieldAlert } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -38,29 +41,57 @@ const isMerchant = computed(() => role.value === 'merchant')
 function switchRole(r: 'user' | 'merchant') {
   role.value = r
   errorMessage.value = ''
+  reset()
 }
+
+// ── 字段级校验 ─────────────────────────────────────────────────────
+const fieldRefs: Record<string, { focus(): void }> = {}
+function setFieldRef(name: string) {
+  return (el: unknown) => {
+    if (el) fieldRefs[name] = el as { focus(): void }
+  }
+}
+function targetValue(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
+const termsAccepted = ref(false)
+
+// key 顺序与 DOM 顺序一致:storeName(仅商家)→ name → email → password → confirmPassword → terms
+const rules = computed<Rules>(() => {
+  const r: Rules = {}
+  if (isMerchant.value) {
+    r.storeName = (v) =>
+      !v.trim() ? t('auth.storeNameRequired') : v.trim().length < 2 ? t('auth.storeNameTooShort') : ''
+  }
+  r.name = (v) => (!v.trim() ? t('auth.nameRequired') : v.trim().length < 2 ? t('auth.nameTooShort') : '')
+  r.email = (v) => (!v.trim() ? t('auth.emailRequired') : isValidEmail(v) ? '' : t('auth.emailInvalid'))
+  r.password = (v) => (!v ? t('auth.passwordRequired') : v.length < 6 ? t('auth.passwordMinLength') : '')
+  r.confirmPassword = (v) =>
+    !v ? t('auth.confirmPasswordRequired') : v !== password.value ? t('auth.passwordsNotMatch') : ''
+  r.terms = () => (termsAccepted.value ? '' : t('auth.termsRequired'))
+  return r
+})
+
+const { errors, validateField, onInput, validateAll, isFieldValid, reset } = useFormValidation(
+  rules,
+  (n) =>
+    ({
+      storeName: storeName.value,
+      name: name.value,
+      email: email.value,
+      password: password.value,
+      confirmPassword: confirmPassword.value,
+      terms: String(termsAccepted.value)
+    })[n] ?? ''
+)
 
 const handleSignup = async () => {
   errorMessage.value = ''
 
-  // Validation
-  if (!email.value || !password.value || !name.value) {
-    errorMessage.value = t('auth.fillAllFields')
-    return
-  }
-
-  if (isMerchant.value && !storeName.value.trim()) {
-    errorMessage.value = t('auth.enterStoreName')
-    return
-  }
-
-  if (password.value.length < 6) {
-    errorMessage.value = t('auth.passwordMinLength')
-    return
-  }
-
-  if (password.value !== confirmPassword.value) {
-    errorMessage.value = t('auth.passwordsNotMatch')
+  const invalid = validateAll()
+  if (invalid.length) {
+    fieldRefs[invalid[0]]?.focus()
     return
   }
 
@@ -160,93 +191,108 @@ const handleSignup = async () => {
         </div>
 
         <!-- Form -->
-        <form @submit.prevent="handleSignup" class="space-y-3.5">
+        <form @submit.prevent="handleSignup" class="space-y-3.5" novalidate>
           <!-- Merchant: Store Name -->
-          <div v-if="isMerchant" class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.storeNameLabel') }} *</label>
-            <div class="relative group">
-              <Store class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="storeName"
-                type="text"
-                :placeholder="$t('auth.storeNamePlaceholder')"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            v-if="isMerchant"
+            v-model="storeName"
+            type="text"
+            :label="`${t('auth.storeNameLabel')} *`"
+            :placeholder="t('auth.storeNamePlaceholder')"
+            :error="errors.storeName"
+            :valid="isFieldValid('storeName', storeName)"
+            :ref="setFieldRef('storeName')"
+            @blur="validateField('storeName', targetValue($event))"
+            @input="onInput('storeName', targetValue($event))"
+          >
+            <template #icon>
+              <Store class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <!-- Full Name / Owner Name -->
-          <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">
-              {{ isMerchant ? $t('auth.ownerNameLabel') : $t('auth.fullNameLabel') }} *
-            </label>
-            <div class="relative group">
-              <User class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="name"
-                type="text"
-                placeholder="John Doe"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            v-model="name"
+            type="text"
+            placeholder="John Doe"
+            :error="errors.name"
+            :valid="isFieldValid('name', name)"
+            :ref="setFieldRef('name')"
+            @blur="validateField('name', targetValue($event))"
+            @input="onInput('name', targetValue($event))"
+          >
+            <template #label>{{ isMerchant ? t('auth.ownerNameLabel') : t('auth.fullNameLabel') }} *</template>
+            <template #icon>
+              <User class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <!-- Email -->
-          <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }} *</label>
-            <div class="relative group">
-              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="email"
-                type="email"
-                placeholder="name@example.com"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            v-model="email"
+            type="email"
+            :label="`${t('auth.email')} *`"
+            placeholder="name@example.com"
+            :error="errors.email"
+            :valid="isFieldValid('email', email)"
+            :ref="setFieldRef('email')"
+            @blur="validateField('email', targetValue($event))"
+            @input="onInput('email', targetValue($event))"
+          >
+            <template #icon>
+              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <!-- Password -->
-          <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.password') }} *</label>
-            <div class="relative group">
-              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="password"
-                type="password"
-                :placeholder="$t('auth.passwordMinPlaceholder')"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-                minlength="6"
-              />
-            </div>
-          </div>
+          <FormField
+            v-model="password"
+            type="password"
+            :label="`${t('auth.password')} *`"
+            :placeholder="t('auth.passwordMinPlaceholder')"
+            :error="errors.password"
+            :valid="isFieldValid('password', password)"
+            :ref="setFieldRef('password')"
+            @blur="validateField('password', targetValue($event))"
+            @input="onInput('password', targetValue($event))"
+          >
+            <template #icon>
+              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <!-- Confirm Password -->
-          <div class="space-y-1.5">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.confirmPassword') }} *</label>
-            <div class="relative group">
-              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="confirmPassword"
-                type="password"
-                :placeholder="$t('auth.confirmPasswordPlaceholder')"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            v-model="confirmPassword"
+            type="password"
+            :label="`${t('auth.confirmPassword')} *`"
+            :placeholder="t('auth.confirmPasswordPlaceholder')"
+            :error="errors.confirmPassword"
+            :valid="isFieldValid('confirmPassword', confirmPassword)"
+            :ref="setFieldRef('confirmPassword')"
+            @blur="validateField('confirmPassword', targetValue($event))"
+            @input="onInput('confirmPassword', targetValue($event))"
+          >
+            <template #icon>
+              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <!-- Submit -->
           <div class="pt-2">
             <div class="flex items-start gap-2 mb-4">
-              <input type="checkbox" id="terms" class="mt-1" required />
+              <input
+                type="checkbox"
+                id="terms"
+                v-model="termsAccepted"
+                class="mt-1"
+                @change="onInput('terms', String(termsAccepted))"
+              />
               <label for="terms" class="text-xs text-muted-foreground leading-relaxed">
                 <span v-html="$t('auth.agreeTerms')"></span>
               </label>
             </div>
+            <p v-if="errors.terms" class="mt-0.5 ml-1 text-xs text-red-500">{{ errors.terms }}</p>
 
             <Button
               type="submit"

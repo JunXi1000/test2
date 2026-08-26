@@ -6,7 +6,10 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { login as loginApi } from '@/api/modules/auth'
 import Button from '@/components/ui/button/Button.vue'
-import { ArrowRight, Github, User, Lock } from 'lucide-vue-next'
+import FormField from '@/components/ui/form/FormField.vue'
+import { useFormValidation, type Rules } from '@/composables/useFormValidation'
+import { isValidLoginId } from '@/utils/validators'
+import { ArrowRight, Github, Mail, Lock } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -72,13 +75,42 @@ onMounted(() => {
   }
 })
 
+// ── 字段级校验 ─────────────────────────────────────────────────────
+const fieldRefs: Record<string, { focus(): void }> = {}
+function setFieldRef(name: string) {
+  return (el: unknown) => {
+    if (el) fieldRefs[name] = el as { focus(): void }
+  }
+}
+function targetValue(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
+const rules = computed<Rules>(() => ({
+  email: (v) => {
+    const s = v.trim()
+    if (!s) return t('auth.emailRequired')
+    return isValidLoginId(s) ? '' : s.includes('@') ? t('auth.emailInvalid') : t('auth.loginIdTooShort')
+  },
+  password: (v) => (!v ? t('auth.passwordRequired') : '')
+}))
+
+const { errors, validateField, onInput, validateAll, isFieldValid } = useFormValidation(
+  rules,
+  (n) => ({ email: email.value, password: password.value })[n] ?? ''
+)
+
 const handleLogin = async () => {
-  if (!email.value || !password.value) return
+  const invalid = validateAll()
+  if (invalid.length) {
+    fieldRefs[invalid[0]]?.focus()
+    return
+  }
 
   isLoading.value = true
   try {
     const result = await loginApi({
-      email: email.value,
+      email: email.value.trim(),
       password: password.value,
       role: role.value
     })
@@ -164,43 +196,44 @@ const handleLogin = async () => {
         </div>
 
         <!-- Form -->
-        <form @submit.prevent="handleLogin" class="space-y-4">
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.username') }}</label>
-            <div class="relative group">
-              <User
-                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
-              />
-              <input
-                v-model="email"
-                type="text"
-                autocomplete="username"
-                :placeholder="$t('auth.usernamePlaceholder')"
-                data-testid="login-username"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+        <form @submit.prevent="handleLogin" class="space-y-4" novalidate>
+          <FormField
+            v-model="email"
+            type="email"
+            autocomplete="email"
+            :label="t('auth.email')"
+            :placeholder="t('auth.emailPlaceholder')"
+            data-testid="login-username"
+            :error="errors.email"
+            :valid="isFieldValid('email', email)"
+            :ref="setFieldRef('email')"
+            @blur="validateField('email', targetValue($event))"
+            @input="onInput('email', targetValue($event))"
+          >
+            <template #icon>
+              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
-          <div class="space-y-2">
-            <div class="flex justify-between items-center ml-1">
-              <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground">{{ $t('auth.password') }}</label>
-              <router-link to="/forgot-password" class="text-xs text-primary hover:underline">{{ $t('auth.forgotShort') }}</router-link>
-            </div>
-            <div class="relative group">
-              <Lock
-                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
-              />
-              <input
-                v-model="password"
-                type="password"
-                placeholder="••••••••"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+          <FormField
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            :label="t('auth.password')"
+            placeholder="••••••••"
+            :error="errors.password"
+            :valid="isFieldValid('password', password)"
+            :ref="setFieldRef('password')"
+            @blur="validateField('password', targetValue($event))"
+            @input="onInput('password', targetValue($event))"
+          >
+            <template #label-end>
+              <router-link to="/forgot-password" class="text-xs text-primary hover:underline">{{ t('auth.forgotShort') }}</router-link>
+            </template>
+            <template #icon>
+              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <Button
             type="submit"

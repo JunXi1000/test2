@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
+import FormField from '@/components/ui/form/FormField.vue'
+import { useFormValidation, type Rules } from '@/composables/useFormValidation'
+import { isValidEmail } from '@/utils/validators'
 import { ArrowRight, Mail } from 'lucide-vue-next'
 import { requestPasswordReset } from '@/api/modules/auth'
 
@@ -19,8 +22,32 @@ const resetCode = ref('')
 // 后端回显的是 6 位验证码时为 true;生产/EXPOSE_RESET_CODE=false 时返回的是提示文案
 const isRealCode = computed(() => /^\d{6}$/.test(resetCode.value))
 
+// ── 字段级校验 ─────────────────────────────────────────────────────
+const fieldRefs: Record<string, { focus(): void }> = {}
+function setFieldRef(name: string) {
+  return (el: unknown) => {
+    if (el) fieldRefs[name] = el as { focus(): void }
+  }
+}
+function targetValue(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
+const rules = computed<Rules>(() => ({
+  email: (v) => (!v.trim() ? t('auth.emailRequired') : isValidEmail(v) ? '' : t('auth.emailInvalid'))
+}))
+
+const { errors, validateField, onInput, validateAll, isFieldValid } = useFormValidation(
+  rules,
+  (n) => ({ email: email.value })[n] ?? ''
+)
+
 const handleReset = async () => {
-  if (!email.value) return
+  const invalid = validateAll()
+  if (invalid.length) {
+    fieldRefs[invalid[0]]?.focus()
+    return
+  }
 
   isLoading.value = true
   try {
@@ -97,20 +124,23 @@ const goReset = () => {
         </div>
 
         <!-- Form -->
-        <form v-else @submit.prevent="handleReset" class="space-y-4">
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }}</label>
-            <div class="relative group">
-              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="email"
-                type="email"
-                placeholder="name@example.com"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+        <form v-else @submit.prevent="handleReset" class="space-y-4" novalidate>
+          <FormField
+            v-model="email"
+            type="email"
+            autocomplete="email"
+            :label="t('auth.email')"
+            placeholder="name@example.com"
+            :error="errors.email"
+            :valid="isFieldValid('email', email)"
+            :ref="setFieldRef('email')"
+            @blur="validateField('email', targetValue($event))"
+            @input="onInput('email', targetValue($event))"
+          >
+            <template #icon>
+              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <Button
             type="submit"

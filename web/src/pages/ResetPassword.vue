@@ -6,6 +6,9 @@ import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
 import { ArrowRight, KeyRound, Lock, Mail } from 'lucide-vue-next'
 import { resetPasswordWithToken } from '@/api/modules/auth'
+import FormField from '@/components/ui/form/FormField.vue'
+import { useFormValidation, type Rules } from '@/composables/useFormValidation'
+import { isValidEmail } from '@/utils/validators'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,22 +30,41 @@ const done = ref(false)
 
 const canSubmit = computed(() => email.value.trim().length > 0 && code.value.trim().length > 0)
 
+// ── 字段级校验 ─────────────────────────────────────────────────────
+const fieldRefs: Record<string, { focus(): void }> = {}
+function setFieldRef(name: string) {
+  return (el: unknown) => {
+    if (el) fieldRefs[name] = el as { focus(): void }
+  }
+}
+function targetValue(e: Event): string {
+  return (e.target as HTMLInputElement).value
+}
+
+const rules = computed<Rules>(() => ({
+  email: (v) => (!v.trim() ? t('auth.emailRequired') : isValidEmail(v) ? '' : t('auth.emailInvalid')),
+  code: (v) => (!v.trim() ? t('auth.codeRequired') : /^\d{6}$/.test(v.trim()) ? '' : t('auth.codeInvalid')),
+  password: (v) => (!v ? t('auth.passwordRequired') : v.length < 8 ? t('auth.passwordTooShortDesc') : ''),
+  confirmPassword: (v) =>
+    !v ? t('auth.confirmPasswordRequired') : v !== password.value ? t('auth.passwordsNotMatch') : ''
+}))
+
+const { errors, validateField, onInput, validateAll, isFieldValid } = useFormValidation(
+  rules,
+  (n) =>
+    ({
+      email: email.value,
+      code: code.value,
+      password: password.value,
+      confirmPassword: confirmPassword.value
+    })[n] ?? ''
+)
+
 async function handleSubmit() {
   if (!canSubmit.value) return
-  if (password.value.length < 8) {
-    toast({
-      title: t('auth.passwordTooShort'),
-      description: t('auth.passwordTooShortDesc'),
-      variant: 'destructive'
-    })
-    return
-  }
-  if (password.value !== confirmPassword.value) {
-    toast({
-      title: t('auth.passwordMismatch'),
-      description: t('auth.passwordMismatchDesc'),
-      variant: 'destructive'
-    })
+  const invalid = validateAll()
+  if (invalid.length) {
+    fieldRefs[invalid[0]]?.focus()
     return
   }
 
@@ -105,67 +127,71 @@ async function handleSubmit() {
           </template>
         </div>
 
-        <form v-if="canSubmit && !done" @submit.prevent="handleSubmit" class="space-y-4">
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.email') }}</label>
-            <div class="relative group">
-              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="email"
-                type="email"
-                :placeholder="$t('auth.emailPlaceholder')"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.resetCode') }}</label>
-            <div class="relative group">
-              <KeyRound class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <input
-                v-model="code"
-                type="text"
-                :placeholder="$t('auth.resetCodePlaceholder')"
-                maxlength="6"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.newPassword') }}</label>
-            <div class="relative group">
-              <Lock
-                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
-              />
-              <input
-                v-model="password"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="$t('auth.newPasswordPlaceholder')"
-                minlength="8"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
-          <div class="space-y-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-muted-foreground ml-1">{{ $t('auth.confirmPassword') }}</label>
-            <div class="relative group">
-              <Lock
-                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors"
-              />
-              <input
-                v-model="confirmPassword"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="$t('auth.confirmPasswordPlaceholder')"
-                class="w-full h-10 bg-secondary/50 border border-transparent rounded-xl pl-10 pr-4 text-sm outline-none focus:border-primary/50 focus:bg-secondary transition-all"
-                required
-              />
-            </div>
-          </div>
+        <form v-if="canSubmit && !done" @submit.prevent="handleSubmit" class="space-y-4" novalidate>
+          <FormField
+            v-model="email"
+            type="email"
+            autocomplete="email"
+            :label="t('auth.email')"
+            :placeholder="t('auth.emailPlaceholder')"
+            :error="errors.email"
+            :valid="isFieldValid('email', email)"
+            :ref="setFieldRef('email')"
+            @blur="validateField('email', targetValue($event))"
+            @input="onInput('email', targetValue($event))"
+          >
+            <template #icon>
+              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
+          <FormField
+            v-model="code"
+            type="text"
+            :label="t('auth.resetCode')"
+            :placeholder="t('auth.resetCodePlaceholder')"
+            maxlength="6"
+            :error="errors.code"
+            :valid="isFieldValid('code', code)"
+            :ref="setFieldRef('code')"
+            @blur="validateField('code', targetValue($event))"
+            @input="onInput('code', targetValue($event))"
+          >
+            <template #icon>
+              <KeyRound class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
+          <FormField
+            v-model="password"
+            type="password"
+            autocomplete="new-password"
+            :label="t('auth.newPassword')"
+            :placeholder="t('auth.newPasswordPlaceholder')"
+            :error="errors.password"
+            :valid="isFieldValid('password', password)"
+            :ref="setFieldRef('password')"
+            @blur="validateField('password', targetValue($event))"
+            @input="onInput('password', targetValue($event))"
+          >
+            <template #icon>
+              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
+          <FormField
+            v-model="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            :label="t('auth.confirmPassword')"
+            :placeholder="t('auth.confirmPasswordPlaceholder')"
+            :error="errors.confirmPassword"
+            :valid="isFieldValid('confirmPassword', confirmPassword)"
+            :ref="setFieldRef('confirmPassword')"
+            @blur="validateField('confirmPassword', targetValue($event))"
+            @input="onInput('confirmPassword', targetValue($event))"
+          >
+            <template #icon>
+              <Lock class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+            </template>
+          </FormField>
 
           <Button
             type="submit"
