@@ -17,10 +17,7 @@ http.interceptors.request.use((config) => {
   // Read token from centralized auth storage
   const token = getStoredToken()
   if (token) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${token}`,
-    }
+    config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })

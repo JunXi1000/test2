@@ -43,9 +43,7 @@ onMounted(() => {
     finish()
   })
   onUnmounted(() => {
-    // @ts-expect-error Some router versions return void for guards
     removeBefore?.()
-    // @ts-expect-error Some router versions return void for guards
     removeAfter?.()
     clearTimer()
   })

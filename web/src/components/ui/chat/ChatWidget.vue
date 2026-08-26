@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { MessageSquare, X, Send, Minus } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -99,10 +99,6 @@ function toggleChat() {
   }
 }
 
-function minimizeChat() {
-  isMinimized.value = !isMinimized.value
-}
-
 async function sendMessage() {
   if (!newMessage.value.trim() || isSending.value) return
 
@@ -162,15 +158,6 @@ function stopPolling() {
 
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
-}
-
-function formatDate(date: Date) {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  if (days === 0) return formatTime(date)
-  if (days === 1) return 'Yesterday'
-  return date.toLocaleDateString()
 }
 
 onBeforeUnmount(() => {

@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 
 /**
  * 动画工具组合
@@ -167,8 +167,7 @@ export function useCountUp(target: number, options: {
 } = {}) {
   const {
     duration = 2000,
-    start = 0,
-    decimals = 0
+    start = 0
   } = options
 
   const current = ref(start)
@@ -343,7 +342,6 @@ export function useStaggerAnimation(count: number, options: {
 } = {}) {
   const {
     delay = 0,
-    duration = 300,
     stagger = 50
   } = options
 
@@ -418,7 +416,6 @@ export function useScrollProgress() {
 export function useParallax(speed = 0.5) {
   const offset = ref(0)
   const isScrolling = ref(false)
-  let rafId: number
 
   const handleScroll = () => {
     if (!isScrolling.value) {
@@ -439,9 +436,6 @@ export function useParallax(speed = 0.5) {
 
   onUnmounted(() => {
     window.removeEventListener('scroll', handleScroll)
-    if (rafId) {
-      cancelAnimationFrame(rafId)
-    }
   })
 
   return {

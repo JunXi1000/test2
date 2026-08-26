@@ -3,7 +3,6 @@ import { ref, onMounted, computed, nextTick, onBeforeUnmount } from 'vue'
 import {
   Search,
   Send,
-  Image as ImageIcon,
   Paperclip,
   Check,
   CheckCheck,
@@ -92,7 +91,6 @@ const conversations = ref<LocalConversation[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const {
-  sidebarWidth,
   isSidebarCollapsed,
   mobileViewMode,
   ultraWideMode,

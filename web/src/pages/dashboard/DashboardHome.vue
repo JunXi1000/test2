@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { Package, Truck, Clock, CheckCircle2 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
@@ -11,7 +11,7 @@ import StatusBadge from '@/components/ui/badge/StatusBadge.vue'
 
 const isLoadingRef = ref<boolean>(true)
 
-const stats = ref<Array<Stat & { icon?: any }>>([
+const stats = ref<Array<Omit<Stat, 'icon'> & { icon: Component }>>([
   { label: 'Total Orders', value: '—', icon: Package },
   { label: 'In Transit', value: '—', icon: Truck },
   { label: 'Pending', value: '—', icon: Clock },

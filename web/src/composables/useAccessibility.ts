@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, type Ref } from 'vue'
 
 /**
  * 可访问性工具组合
@@ -250,7 +250,7 @@ export function useAriaLabels() {
     'aria-haspopup': hasSubmenu ? 'true' : undefined,
   })
 
-  const generateDialogAria = (title: string, description?: string) => ({
+  const generateDialogAria = (_title: string, description?: string) => ({
     role: 'dialog',
     'aria-modal': 'true',
     'aria-labelledby': 'dialog-title',

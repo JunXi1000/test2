@@ -15,12 +15,10 @@ import {
   type SearchResults as SearchResultsType,
 } from '@/api/modules/search'
 import { Search, X, Clock, TrendingUp, Trash2, SlidersHorizontal, ChevronDown, Star } from 'lucide-vue-next'
-import { useToast } from '@/composables/useToast'
 import Breadcrumb from '@/components/ui/Breadcrumb.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { toast } = useToast()
 
 // ── State ────────────────────────────────────────────────────────────
 const query = ref((route.query.q as string) || '')

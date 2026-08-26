@@ -90,7 +90,7 @@
               v-if="row.status !== 'cancelled' && row.status !== 'delivered'"
               type="button"
               class="h-9 rounded-full border border-rose-500/35 bg-rose-950/50 px-3 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-900/40"
-              @click="requestCancel(row)"
+              @click="requestCancel(row as AdminOrder)"
             >
               Cancel
             </button>

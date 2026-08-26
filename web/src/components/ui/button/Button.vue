@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type VariantProps, cva } from 'class-variance-authority'
+import { cva } from 'class-variance-authority'
 import { cn } from '@/utils/cn'
 
 const buttonVariants = cva(

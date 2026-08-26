@@ -9,8 +9,8 @@
             clearable
             class="!w-full"
             @input="debouncedLoadData"
-            @clear="loadData"
-            @keyup.enter="loadData"
+            @clear="loadData()"
+            @keyup.enter="loadData()"
           >
             <template #prefix>
               <el-icon><SearchIcon /></el-icon>

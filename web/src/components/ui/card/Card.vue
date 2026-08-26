@@ -2,7 +2,7 @@
 import { cn } from '@/utils/cn'
 
 interface Props {
-  class?: string
+  class?: string | string[] | Record<string, boolean>
 }
 
 const props = defineProps<Props>()

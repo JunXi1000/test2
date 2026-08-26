@@ -27,7 +27,7 @@ const MOCK_TRANSACTIONS: WalletTransaction[] = [
   { id: 'TX-002', type: 'withdrawal', amount: -5000.00, status: 'completed', date: '2023-10-24', description: 'Payout to Bank **** 1234' },
   { id: 'TX-003', type: 'sale', amount: 299.00, status: 'completed', date: '2023-10-23', description: 'Order #ORD-2023-002' },
   { id: 'TX-004', type: 'fee', amount: -25.00, status: 'completed', date: '2023-10-23', description: 'Monthly Subscription' },
-  { id: 'TX-005', type: 'pending', amount: 340.00, status: 'pending', date: '2023-10-26', description: 'Order #ORD-2023-006 (Escrow)' }
+  { id: 'TX-005', type: 'sale', amount: 340.00, status: 'pending', date: '2023-10-26', description: 'Order #ORD-2023-006 (Escrow)' }
 ]
 
 export async function getWalletBalance(): Promise<MerchantWallet> {

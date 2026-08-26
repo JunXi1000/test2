@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { MapPin, Plus, Edit2, Trash2, Check } from 'lucide-vue-next'
+import { MapPin, Plus, Edit2, Trash2 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { 

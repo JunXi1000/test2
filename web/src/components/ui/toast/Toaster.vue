@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useToast } from '@/composables/useToast'
 import { X, CheckCircle2, AlertCircle, Info } from 'lucide-vue-next'
-import { onMounted } from 'vue'
 
 const { toasts, dismiss } = useToast()
 

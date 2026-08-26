@@ -62,7 +62,7 @@
             <button
               type="button"
               class="font-mono text-[15px] font-semibold text-violet-600 transition-colors hover:text-violet-700 hover:underline"
-              @click="viewDetails(row)"
+              @click="viewDetails(row as MerchantOrder)"
             >
               {{ row.id }}
             </button>
@@ -112,7 +112,7 @@
             <button
               type="button"
               class="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
-              @click="viewDetails(row)"
+              @click="viewDetails(row as MerchantOrder)"
             >
               View Details
             </button>

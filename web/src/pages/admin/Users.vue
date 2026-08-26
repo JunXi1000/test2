@@ -95,7 +95,7 @@
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-600/70 bg-zinc-800/95 text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/40"
-                  @click="openDrawer(row)"
+                  @click="openDrawer(row as AdminUser)"
                 >
                   <Eye class="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -104,7 +104,7 @@
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-600/70 bg-zinc-800/95 text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/40"
-                  @click="openEditFromTable(row)"
+                  @click="openEditFromTable(row as AdminUser)"
                 >
                   <Pencil class="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -117,7 +117,7 @@
                     ? 'border-rose-500/35 bg-rose-950/50 text-rose-300 hover:bg-rose-900/40'
                     : 'border-emerald-500/40 bg-emerald-950/55 text-emerald-300 hover:bg-emerald-900/45'
                 "
-                @click="handleToggleStatus(row)"
+                @click="handleToggleStatus(row as AdminUser)"
               >
                 {{ row.status === 'active' ? 'Suspend' : 'Activate' }}
               </button>

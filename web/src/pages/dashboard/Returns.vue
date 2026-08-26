@@ -6,7 +6,7 @@ import Button from '@/components/ui/button/Button.vue'
 import Card from '@/components/ui/card/Card.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import StatusBadge from '@/components/ui/badge/StatusBadge.vue'
-import { RotateCcw, Clock, CheckCircle, XCircle, DollarSign, Package } from 'lucide-vue-next'
+import { RotateCcw, Package } from 'lucide-vue-next'
 
 const returnStore = useReturnStore()
 const { toast } = useToast()
@@ -64,15 +64,6 @@ function submitReturn() {
   showForm.value = false
 }
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case 'pending': return Clock
-    case 'approved': return CheckCircle
-    case 'rejected': return XCircle
-    case 'refunded': return DollarSign
-    default: return Package
-  }
-}
 </script>
 
 <template>

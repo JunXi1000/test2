@@ -92,7 +92,7 @@
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-600/70 bg-zinc-800/95 text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/40"
-                  @click="openDrawer(row)"
+                  @click="openDrawer(row as AdminMerchant)"
                 >
                   <Eye class="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -101,7 +101,7 @@
                 <button
                   type="button"
                   class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-600/70 bg-zinc-800/95 text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/40"
-                  @click="handleEditMerchant(row)"
+                  @click="handleEditMerchant(row as AdminMerchant)"
                 >
                   <Pencil class="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -111,14 +111,14 @@
                 <button
                   type="button"
                   class="h-9 shrink-0 rounded-full border border-emerald-500/40 bg-emerald-950/55 px-3 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-900/45"
-                  @click="handleApprove(row)"
+                  @click="handleApprove(row as AdminMerchant)"
                 >
                   Approve
                 </button>
                 <button
                   type="button"
                   class="h-9 shrink-0 rounded-full border border-rose-500/35 bg-rose-950/50 px-3 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-900/40"
-                  @click="handleReject(row)"
+                  @click="handleReject(row as AdminMerchant)"
                 >
                   Reject
                 </button>
@@ -127,7 +127,7 @@
                 v-else-if="row.status === 'active'"
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-rose-500/35 bg-rose-950/50 px-3 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-900/40"
-                @click="handleSuspend(row)"
+                @click="handleSuspend(row as AdminMerchant)"
               >
                 Suspend
               </button>
@@ -135,7 +135,7 @@
                 v-else-if="row.status === 'suspended'"
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-emerald-500/40 bg-emerald-950/55 px-3 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-900/45"
-                @click="handleActivate(row)"
+                @click="handleActivate(row as AdminMerchant)"
               >
                 Activate
               </button>
@@ -143,7 +143,7 @@
                 v-else-if="row.status === 'rejected'"
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-zinc-500/45 bg-zinc-800/80 px-3 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-700/90"
-                @click="handleReopenAsPending(row)"
+                @click="handleReopenAsPending(row as AdminMerchant)"
               >
                 Reopen
               </button>
@@ -153,7 +153,7 @@
                   type="button"
                   class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-500/30 bg-rose-950/35 text-rose-300 transition-colors hover:border-rose-400/50 hover:bg-rose-900/45 hover:text-rose-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/30"
                   aria-label="Delete merchant"
-                  @click="handleDelete(row)"
+                  @click="handleDelete(row as AdminMerchant)"
                 >
                   <Trash2 class="h-4 w-4" aria-hidden="true" />
                 </button>

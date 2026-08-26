@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw, type LocationQueryRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { loginRouteNameFromAppPath } from '@/utils/loginRoutes'
@@ -269,7 +269,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const qRole = to.query.role
   if (to.name === 'Login' && (qRole === 'admin' || qRole === 'merchant')) {
-    const rest = { ...to.query } as Record<string, unknown>
+    const rest = { ...to.query } as LocationQueryRaw
     delete rest.role
     const path = qRole === 'admin' ? '/admin/login' : '/merchant/login'
     return next({ path, query: rest, replace: true })

@@ -73,7 +73,7 @@
         <el-table-column prop="content" label="Content" min-width="200">
           <template #default="{ row }">
             <p class="text-zinc-300 text-sm line-clamp-2 m-0">{{ row.content }}</p>
-            <el-button link type="primary" class="!p-0 !h-auto mt-1" @click="openDrawer(row)">
+            <el-button link type="primary" class="!p-0 !h-auto mt-1" @click="openDrawer(row as AdminReview)">
               View full
             </el-button>
           </template>
@@ -107,7 +107,7 @@
                 v-if="row.status === 'visible'"
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-amber-500/40 bg-amber-950/50 px-3 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-900/40"
-                @click="setStatus(row, 'hidden')"
+                @click="setStatus(row as AdminReview, 'hidden')"
               >
                 Hide
               </button>
@@ -115,14 +115,14 @@
                 v-else
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-emerald-500/40 bg-emerald-950/55 px-3 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-900/45"
-                @click="setStatus(row, 'visible')"
+                @click="setStatus(row as AdminReview, 'visible')"
               >
                 Show
               </button>
               <button
                 type="button"
                 class="h-9 shrink-0 rounded-full border border-rose-500/35 bg-rose-950/50 px-3 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-900/40"
-                @click="requestDelete(row)"
+                @click="requestDelete(row as AdminReview)"
               >
                 Delete
               </button>

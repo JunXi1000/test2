@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 /**
  * 响应式工具组合
@@ -200,6 +200,7 @@ export function useResponsiveImage(sources: {
   md?: string
   lg?: string
   xl?: string
+  '2xl'?: string
   fallback: string
 }) {
   const { breakpoint } = useBreakpoint()

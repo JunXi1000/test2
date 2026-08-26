@@ -4,7 +4,6 @@ import {
   Search,
   Send,
   MessageSquare,
-  Image as ImageIcon,
   Paperclip,
   Check,
   CheckCheck,
@@ -24,7 +23,6 @@ import {
   Package
 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
-import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { useMessagesLayout } from '@/composables/useMessagesLayout'
@@ -90,7 +88,6 @@ function mapApiConversation(c: ApiConversation): LocalConversation {
 }
 
 // ── State ────────────────────────────────────────────────────────────
-const authStore = useAuthStore()
 const { toast } = useToast()
 const searchQuery = ref('')
 const activeConversationId = ref<string | null>(null)
@@ -107,7 +104,6 @@ const conversations = ref<LocalConversation[]>([])
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const {
-  sidebarWidth,
   isSidebarCollapsed,
   mobileViewMode,
   ultraWideMode,
