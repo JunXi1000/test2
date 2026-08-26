@@ -157,6 +157,9 @@ public class UserServiceImpl implements UserService {
         user.setPassword(data.getString("password"));
         user.setNickname(data.getString("nickname"));
         user.setAvatarUrl(data.getString("avatarUrl"));
+        // 注册时邮箱必须同时落 email 列(前端把邮箱既当 username 又作为 email 字段传入),
+        // 否则管理端用户列表 email 为空(登录用 username,这里两者一致)。
+        user.setEmail(data.getString("email"));
         //设置时间
         user.setCreateTime(LocalDateTime.now());
         //设置用户状态

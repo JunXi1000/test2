@@ -123,7 +123,9 @@ export async function register(payload: RegisterPayload): Promise<void> {
     type,
     username: payload.email,
     password: payload.password,
-    nickname: payload.nickname
+    nickname: payload.nickname,
+    // 邮箱必须同时以 email 字段传给后端,否则后端 email 列落空,管理端用户列表显示为空
+    email: payload.email
   }
 
   if (type === 'SHOP') {

@@ -1,13 +1,19 @@
 package com.project.platform.controller;
 
+import com.project.platform.mapper.UserMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Tests for /common (auth) endpoints.
  */
 class AuthControllerTest extends BaseControllerTest {
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Test
     @DisplayName("POST /common/login — should authenticate with valid credentials")
@@ -28,15 +34,18 @@ class AuthControllerTest extends BaseControllerTest {
     }
 
     @Test
-    @DisplayName("PUT /common/register — should register a new user")
+    @DisplayName("PUT /common/register — should register a new user and persist email")
     void registerUser() throws Exception {
         put("/common/register", "", java.util.Map.of(
                 "type", "USER",
                 "username", "newuser",
                 "password", "123456",
-                "nickname", "New User"
+                "nickname", "New User",
+                "email", "newuser@example.com"
         )).andExpect(status().isOk())
           .andExpect(jsonPath("$.code").value(200));
+        // 回归:注册必须把 email 落入 user.email 列,否则管理端用户列表邮箱为空
+        assertEquals("newuser@example.com", userMapper.selectByUsername("newuser").getEmail());
     }
 
     @Test
