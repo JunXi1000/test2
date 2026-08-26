@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -35,7 +36,7 @@ class StorefrontPaymentControllerTest extends BaseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andReturn();
-        return JSONObject.parseObject(result.getResponse().getContentAsString());
+        return JSONObject.parseObject(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -92,7 +93,7 @@ class StorefrontPaymentControllerTest extends BaseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andReturn();
-        return JSONObject.parseObject(result.getResponse().getContentAsString());
+        return JSONObject.parseObject(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
     /** 在 GET /orders 结果中按 orderNo 找到分组订单,不存在返回 null */
@@ -101,7 +102,7 @@ class StorefrontPaymentControllerTest extends BaseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andReturn();
-        JSONArray orders = JSONObject.parseObject(result.getResponse().getContentAsString()).getJSONArray("data");
+        JSONArray orders = JSONObject.parseObject(result.getResponse().getContentAsString(StandardCharsets.UTF_8)).getJSONArray("data");
         for (int i = 0; i < orders.size(); i++) {
             JSONObject o = orders.getJSONObject(i);
             if (orderNo.equals(o.getString("orderNo"))) {

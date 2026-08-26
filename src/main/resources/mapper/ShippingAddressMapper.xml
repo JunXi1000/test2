@@ -4,9 +4,9 @@
     <!-- 分页查询 -->
     <select id="queryPage"  resultType="com.project.platform.entity.ShippingAddress">
         SELECT shipping_address.*
-        ,user.username AS username
+        ,u.username AS username
         FROM shipping_address
-        LEFT JOIN user ON shipping_address.user_id=user.id
+        LEFT JOIN user u ON shipping_address.user_id=u.id
         <include refid="queryConditions"/>
         ORDER BY shipping_address.id DESC
         LIMIT #{offset}, #{pageSize}
@@ -14,7 +14,7 @@
     <!-- 查询总数 -->
     <select id="queryCount"  resultType="int">
         SELECT count(shipping_address.id) FROM shipping_address
-        LEFT JOIN user ON shipping_address.user_id=user.id
+        LEFT JOIN user u ON shipping_address.user_id=u.id
         <include refid="queryConditions"/>
     </select>
 

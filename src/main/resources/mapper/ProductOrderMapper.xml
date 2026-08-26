@@ -7,11 +7,11 @@
         ,product.name AS productName
         ,product.main_img AS productMainImg
         ,shop.name AS shopName
-        ,user.username AS username
+        ,u.username AS username
         FROM product_order
         LEFT JOIN product ON product_order.product_id=product.id
         LEFT JOIN shop ON product_order.shop_id=shop.id
-        LEFT JOIN user ON product_order.user_id=user.id
+        LEFT JOIN user u ON product_order.user_id=u.id
         <include refid="queryConditions"/>
         ORDER BY product_order.id DESC
         LIMIT #{offset}, #{pageSize}
@@ -21,7 +21,7 @@
         SELECT count(product_order.id) FROM product_order
         LEFT JOIN product ON product_order.product_id=product.id
         LEFT JOIN shop ON product_order.shop_id=shop.id
-        LEFT JOIN user ON product_order.user_id=user.id
+        LEFT JOIN user u ON product_order.user_id=u.id
         <include refid="queryConditions"/>
     </select>
 
@@ -38,7 +38,7 @@
                 AND product_order.user_id = #{query.userId}
             </if>
             <if test="query.username != null and query.username.trim() != ''">
-                AND user.username LIKE CONCAT('%', #{query.username}, '%')
+                AND u.username LIKE CONCAT('%', #{query.username}, '%')
             </if>
             <if test="query.status != null and query.status.trim() != ''">
                 AND product_order.status = #{query.status}
