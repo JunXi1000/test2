@@ -53,11 +53,13 @@ public interface UserMapper {
     User selectById(Integer id);
 
     /**
-     * 根据电话号码查询
+     * 根据手机号或邮箱查询(仅找回密码使用):
+     * 前端找回密码按「邮箱」发送验证码,但既有用户可能是手机号注册(仅 tel 列有值)
+     * 或邮箱注册(仅 email 列有值),故两列同时匹配,保证任一注册方式都能找回。
      * @param tel
      * @return
      */
-    @Select("SELECT * FROM user WHERE tel = #{tel}")
+    @Select("SELECT * FROM user WHERE tel = #{tel} OR email = #{tel}")
     User selectByTel(String tel);
 
     /**

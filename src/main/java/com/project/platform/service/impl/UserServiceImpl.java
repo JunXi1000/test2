@@ -23,9 +23,13 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Service
 public class UserServiceImpl implements UserService {
+
+    /** 与前端 web/src/utils/validators.ts 一致的邮箱格式(注册校验用) */
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     @Resource
     private UserMapper userMapper;
@@ -40,8 +44,9 @@ public class UserServiceImpl implements UserService {
     private ResetCodeStore resetCodeStore;
 
     /**
-     * 密码统一编码入口:null 保持 null;$2 开头(BCrypt)视为已编码原样返回,其余编码。
-     * 防止 updateById 局部更新时对已哈希密码重复编码。
+     * 密码编码(局部更新用):null 保持 null;$2 开头(BCrypt)视为已编码原样返回,其余编码。
+     * 仅用于 updateById —— 该路径的实体往往已从 DB 加载出 BCrypt 哈希,不能重复编码。
+     * 面向「设置新密码」的方法(注册/改密/找回/重置)一律直接 passwordEncoder.encode,不做此跳过。
      */
     private String encodeIfNeeded(String raw) {
         if (raw == null || raw.startsWith("$2")) {
@@ -100,7 +105,9 @@ public class UserServiceImpl implements UserService {
         if (entity.getPassword() == null) {
             entity.setPassword(resetPassword);
         }
-        entity.setPassword(encodeIfNeeded(entity.getPassword()));
+        // insert 收到的永远是「新密码」(注册/管理员新建),一律编码;
+        // 不跳过 $2 前缀,避免用户把 BCrypt 形态的字符串当密码注册后存储原文导致无法登录。
+        entity.setPassword(passwordEncoder.encode(entity.getPassword()));
         userMapper.insert(entity);
     }
 
@@ -134,7 +141,8 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public CurrentUserDTO login(String username, String password) {
-        User user = userMapper.selectByUsername(username);
+        // trim 用户名:前端登录前同样会 trim,防首尾空格导致与注册值不一致而登录失败
+        User user = userMapper.selectByUsername(username == null ? null : username.trim());
         if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             throw new CustomException("用户名或密码错误");
         }
@@ -147,19 +155,42 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * 注册
-     * @param data
+     * 注册(仅普通用户,SHOP/ADMIN 已在 Controller 拒绝)。
+     * 服务端二次校验必填/格式/长度,避免绕过前端直接 POST 脏数据:
+     * 空白用户名、弱密码、非法邮箱、超长字段会导致入库脏数据或 DB 列宽溢出报错。
      */
     @Override
     public void register(JSONObject data) {
+        String username = data.getString("username");
+        String password = data.getString("password");
+        String nickname = data.getString("nickname");
+        String email = data.getString("email");
+
+        if (username == null || username.trim().isEmpty()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "用户名不能为空");
+        }
+        if (username.trim().length() > 50) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "用户名过长");
+        }
+        if (password == null || password.length() < 6) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "密码长度不能少于 6 位");
+        }
+        if (password.length() > 72) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "密码过长");
+        }
+        if (email == null || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "邮箱格式不正确");
+        }
+
         User user = new User();
-        user.setUsername(data.getString("username"));
-        user.setPassword(data.getString("password"));
-        user.setNickname(data.getString("nickname"));
+        // trim 用户名:前端登录前同样会 trim,保证注册/登录一致,避免首尾空格导致登录不上
+        user.setUsername(username.trim());
+        user.setPassword(password);
+        user.setNickname(nickname);
         user.setAvatarUrl(data.getString("avatarUrl"));
         // 注册时邮箱必须同时落 email 列(前端把邮箱既当 username 又作为 email 字段传入),
         // 否则管理端用户列表 email 为空(登录用 username,这里两者一致)。
-        user.setEmail(data.getString("email"));
+        user.setEmail(email.trim());
         //设置时间
         user.setCreateTime(LocalDateTime.now());
         //设置用户状态
@@ -173,8 +204,13 @@ public class UserServiceImpl implements UserService {
      */
     @Override
     public void updateCurrentUserInfo(CurrentUserDTO currentUserDTO) {
-        User user = userMapper.selectById(currentUserDTO.getId());
-        user.setId(currentUserDTO.getId());
+        // 仅允许修改自己的信息:以当前登录用户的 id 为准,忽略请求体中的 id,
+        // 防止水平越权(登录用户提交他人 id 篡改对方昵称/头像/手机/邮箱)。
+        Integer currentId = CurrentUserThreadLocal.getCurrentUser().getId();
+        User user = userMapper.selectById(currentId);
+        if (user == null) {
+            throw new CustomException("用户不存在");
+        }
         user.setNickname(currentUserDTO.getNickname());
         user.setAvatarUrl(currentUserDTO.getAvatarUrl());
         user.setTel(currentUserDTO.getTel());
@@ -193,7 +229,8 @@ public class UserServiceImpl implements UserService {
         if (!passwordEncoder.matches(updatePassword.getOldPassword(), user.getPassword())){
             throw new CustomException("旧密码不正确");
         }
-        user.setPassword(encodeIfNeeded(updatePassword.getNewPassword()));
+        // 新密码为用户新输入的明文,一律重新编码(不做 $2 前缀跳过)
+        user.setPassword(passwordEncoder.encode(updatePassword.getNewPassword()));
         userMapper.updateById(user);
     }
 
@@ -204,7 +241,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public void resetPassword(Integer id) {
         User user = userMapper.selectById(id);
-        user.setPassword(encodeIfNeeded(resetPassword));
+        // 后台重置到默认密码(明文配置),一律重新编码
+        user.setPassword(passwordEncoder.encode(resetPassword));
         userMapper.updateById(user);
     }
 
@@ -224,7 +262,8 @@ public class UserServiceImpl implements UserService {
             throw  new CustomException("手机号不存在");
         }
 
-        user.setPassword(encodeIfNeeded(retrievePasswordDTO.getPassword()));
+        // 新密码为用户新输入的明文,一律重新编码
+        user.setPassword(passwordEncoder.encode(retrievePasswordDTO.getPassword()));
         userMapper.updateById(user);
     }
 

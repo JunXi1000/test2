@@ -98,12 +98,13 @@ const handleSignup = async () => {
   isLoading.value = true
 
   try {
+    // email 同时作为后端 username 存储,必须 trim —— 否则首尾空格与登录(登录前会 trim)不一致导致登录不上
     await registerApi({
       role: role.value,
-      email: email.value,
+      email: email.value.trim(),
       password: password.value,
-      nickname: name.value,
-      storeName: isMerchant.value ? storeName.value : undefined
+      nickname: name.value.trim(),
+      storeName: isMerchant.value ? storeName.value.trim() : undefined
     })
 
     const notice = isMerchant.value ? t('auth.storePendingNotice') : t('auth.accountReadyNotice')

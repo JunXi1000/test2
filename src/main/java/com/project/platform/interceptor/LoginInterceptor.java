@@ -55,8 +55,9 @@ public class LoginInterceptor implements HandlerInterceptor {
         log.debug("登录校验 token 是否为空={}", token == null || token.isEmpty());
         if (token == null || token.isEmpty()) {
             log.debug("token 为空，请求被拦截");
-            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            return false;
+            // 与下方无效 token 一致,抛 CustomException 走全局异常处理,返回统一 JSON 错误体
+            // (而非裸 401 空 body),保证前端错误格式一致。
+            throw new CustomException(HttpStatus.UNAUTHORIZED, "未登录或登录已过期");
         }
         Claims claims = JwtUtils.verifyJwt(token);
         //获取用户ID

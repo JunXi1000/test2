@@ -16,7 +16,7 @@
 | 后端框架 | Spring Boot | 3.2.10 | Java 17 |
 | 持久层 | MyBatis | 3.0.4 | Mapper 接口 + XML,手写动态 SQL |
 | 数据库 | MySQL | 8.0 | utf8mb4 |
-| 认证 | JWT | jjwt 0.9.1 | HS256,30 天有效期 |
+| 认证 | JWT | jjwt 0.9.1 | HS256,24 小时有效期 |
 | 部署 | 本地运行 | — | 前端 Vite :5173 + 后端 Spring Boot :1000(见 [DEVELOPMENT.md](DEVELOPMENT.md)) |
 
 ## 2. 系统拓扑
@@ -83,7 +83,7 @@ Controller                 Service(接口)            Mapper(接口)          re
 
 > ⚠️ `/payments/create` **不在**白名单——创建支付需登录(后端依赖当前用户下单)。
 
-**Token 细节**:HS256,硬编码密钥 `1234567890`(`utils/JwtUtils.java`),30 天过期。密钥外置已列入 [ROADMAP.md](ROADMAP.md) Phase 4。
+**Token 细节**:HS256(`utils/JwtUtils.java`),24 小时过期,每次签发带唯一 `jti` 防重放。密钥由环境变量 `JWT_SECRET` / `-Djwt.secret` 注入(生产必须配置),未注入时仅回退到开发兜底值——**生产切勿使用兜底值**。
 
 ## 5. 前端结构
 
