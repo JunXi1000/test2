@@ -114,10 +114,9 @@ if [ ! -f "${MARKER}" ] && [ -d /workspace/sql ]; then
       echo "        可稍后手动执行: mysql --default-character-set=utf8mb4 -h127.0.0.1 -uroot -p<密码> ${DB} < ${f}"
     fi
   }
-  # 顺序 = 依赖序:基础建表(schema) → admin 规范行 → 聊天 → 通知/优惠 → 增量迁移
+  # 顺序 = 依赖序:基础建表(schema,含 admin 种子) → 聊天 → 通知/优惠 → 增量迁移
   for base in \
     /workspace/sql/schema.sql \
-    /workspace/sql/templatev3_s.sql \
     /workspace/sql/chat.sql \
     /workspace/sql/migration-2026-08-08-phase1.sql; do
     [ -f "$base" ] && import_sql "$base"

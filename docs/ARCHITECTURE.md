@@ -129,8 +129,8 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 ## 7. 数据库
 
-- 建表/迁移脚本位于 `sql/`:`sql/templatev3_s.sql`(仅 admin 表)、`sql/chat.sql`(聊天表)、`sql/migrations/`(增量调整)、`sql/migration-2026-08-08-phase1.sql`(一期新增表增量迁移,含中文种子,执行时须加 `--default-character-set=utf8mb4`,否则中文双重编码成乱码)。
-- ⚠️ `sql/templatev3_s.sql` **只有 admin 表,已过时**;完整 schema 需以 `sql/migrations/` + `migration-2026-08-08-phase1.sql` 逐步搭建。
+- 建表/迁移脚本位于 `sql/`:`sql/schema.sql`(基础表+演示种子,含 admin 账号)、`sql/chat.sql`(聊天表)、`sql/migrations/`(增量调整)、`sql/migration-2026-08-08-phase1.sql`(一期新增表增量迁移,含中文种子,执行时须加 `--default-character-set=utf8mb4`,否则中文双重编码成乱码)。
+- ⚠️ 完整 schema 以 `sql/schema.sql` 为基础,再由 `sql/migrations/` + `migration-2026-08-08-phase1.sql` 逐步叠加。
 - 测试用 H2 建表:`src/test/resources/schema-h2.sql`(MODE=MySQL)。
 
 ## 8. 已知架构层面的技术债

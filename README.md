@@ -37,7 +37,6 @@
 ```
 .
 ├── sql/                      # 数据库脚本
-│   ├── templatev3_s.sql      # ⚠️ 已过时（仅 admin 表），勿导入
 │   ├── chat.sql              # 聊天表
 │   └── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
 ├── src/                      # 后端 Java 源码（Spring Boot）
@@ -81,7 +80,7 @@
 
 1.  启动你的 MySQL 数据库服务。
 2.  创建一个新的数据库，例如 `template_v3`。
-3.  将项目根目录下的 `sql/templatev3_s.sql` 文件导入到你创建的数据库中，以初始化表结构和基础数据。
+3.  将项目根目录下的 `sql/schema.sql` 文件导入到你创建的数据库中，以初始化表结构和基础数据（admin 种子账号已包含其中）。
 4.  打开后端配置文件 `src/main/resources/application.yaml`，根据你的本地环境修改数据库连接信息：
 
     ```yaml

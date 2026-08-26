@@ -5,7 +5,7 @@
 --     这两项由 migrations/V3__phase2_order_payment.sql 增量添加。
 --   * conversation/message 由 chat.sql 负责;通知/优惠 6 表由
 --     migration-2026-08-08-phase1.sql 负责。
---   * admin 表规范行(含原始头像/手机号)由 templatev3_s.sql 负责。
+--   * admin 账号种子行内联于下方(密码 BCrypt,与 user/shop 种子一致)。
 --   * 演示账号密码统一 123456(DB 存 BCrypt 哈希),V1__security.sql 幂等兜底。
 --   * 含中文,导入必须带 --default-character-set=utf8mb4,否则双重编码乱码。
 -- 幂等性: CREATE TABLE IF NOT EXISTS + 显式 id 种子,可安全重复执行。
@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS `admin` (
   `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='后台管理员';
+
+-- admin 种子账号:admin / 123456(BCrypt 哈希,与 user/shop 一致)
+INSERT INTO `admin` (`id`, `username`, `password`, `nickname`, `avatar_url`, `tel`, `email`, `status`) VALUES
+(1, 'admin', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '管理员', 'http://localhost:1000/file/8826e8c280cb3bec6a4fbeb61514ee74.png', '123456', '123456@javadh.com', '启用');
 
 -- ----------------------------
 -- 商城用户

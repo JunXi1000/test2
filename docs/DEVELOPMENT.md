@@ -15,7 +15,7 @@
 
 ### 2.1 本地开发
 
-1. **数据库**:建库 `template_v3`。`sql/` 下脚本按需导入:`sql/templatev3_s.sql`(仅 admin 表,已过时)、`sql/chat.sql`(聊天表)、`sql/migrations/` + `sql/migration-2026-08-08-phase1.sql`(增量迁移)。
+1. **数据库**:建库 `template_v3`。`sql/` 下脚本按需导入:`sql/schema.sql`(基础表+演示种子,含 admin 账号)、`sql/chat.sql`(聊天表)、`sql/migrations/` + `sql/migration-2026-08-08-phase1.sql`(增量迁移)。
 2. **后端**:IDEA 打开项目根 → 运行 `com.project.platform.ProjectManagement`;或在 `src/main/resources/application.yaml` 改好 DB 连接后 `mvn spring-boot:run`。
 3. **前端**:
    ```bash

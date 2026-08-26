@@ -67,7 +67,7 @@
 | 验证码加固 | ✅ 三个 `retrievePassword` 均已先校验验证码;补充发送限流(60s 间隔/单日 10 次)与 `security.expose-reset-code` 开关(prod 关闭响应返回) |
 | 测试补强 | 现有 H2 冒烟测试 → 增加业务断言级用例(订单状态机/购物车/统计) |
 | 文档同步 | 已删除 `web/docs/` 陈旧工具文档(2026-08-24);其余文档按代码同步 |
-| 清理 | `VITE_APP_API_URL` 无用变量、过时 `sql/templatev3_s.sql` 标注 |
+| 清理 | `VITE_APP_API_URL` 无用变量(templatev3_s.sql 已删除,admin 种子并入 schema.sql) |
 
 **验收**:`mvn test` 全绿;生产构建 mock=false;登录/查重/找回密码行为正确。
 

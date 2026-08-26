@@ -1,5 +1,5 @@
 -- H2-compatible schema for integration tests (MySQL MODE)
--- Mirrors sql/templatev3_s.sql + sql/chat.sql
+-- Mirrors sql/schema.sql + sql/chat.sql
 
 CREATE TABLE IF NOT EXISTS admin (
   id INT AUTO_INCREMENT PRIMARY KEY,

@@ -16,7 +16,7 @@
 1. 初始化并启动 MySQL(`0.0.0.0:3306`,root 密码默认 `123456`);
 2. 创建项目库 `template_v3`(utf8mb4);
 3. **首次运行**若检测到挂载的项目 `sql/` 目录,按依赖顺序自动导入建表脚本(均带 `--default-character-set=utf8mb4`):
-   `schema.sql(基础 14 表+演示种子) → templatev3_s.sql(admin) → chat.sql → migration-2026-08-08-phase1.sql → migrations/V*.sql(BCrypt/金额精度/order_no+payment)`。
+   `schema.sql(基础 14 表+演示种子,含 admin 账号) → chat.sql → migration-2026-08-08-phase1.sql → migrations/V*.sql(BCrypt/金额精度/order_no+payment)`。
 
 内置**演示账号**(密码统一 `123456`):
 
