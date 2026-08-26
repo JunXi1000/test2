@@ -23,7 +23,10 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
     const payload = parts[1]
     // Convert URL-safe base64 to standard base64
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const json = atob(base64)
+    // atob 返回 Latin-1 二进制串,中文等 UTF-8 字节会被逐字节误解释成乱码;
+    // 需先把字节还原成 Uint8Array,再按 UTF-8 解码为字符串。
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+    const json = new TextDecoder('utf-8').decode(bytes)
     return JSON.parse(json)
   } catch {
     return null
