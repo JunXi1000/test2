@@ -36,6 +36,10 @@
 
 ```
 .
+├── docker/                   # 开发环境镜像（JDK/Maven/Node/MySQL，一键起前后端）
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── entrypoint.sh
 ├── sql/                      # 数据库脚本
 │   ├── chat.sql              # 聊天表
 │   └── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
@@ -62,19 +66,81 @@
 
 > 📖 **文档索引**：新开发者从 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 起步（环境/启动/mock 机制），读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 了解架构，用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发。
 
-## 🚀 本地开发（需自行安装环境）
+## 🚀 快速开始（Docker 开发环境，推荐）
 
-### 环境准备
+后端所需的 **JDK 17 / Maven / MySQL 8 / Node 24** 已全部打包在一个开发环境镜像里，**宿主机无需安装任何依赖**。
 
-在启动项目前，请确保你的开发环境中已安装以下软件：
+| 组件 | 版本 | 位置 |
+|------|------|------|
+| JDK | 17 (eclipse-temurin) | 镜像内 `/opt/java/openjdk` |
+| Maven | 3.9.9 | 镜像内 `/opt/maven` |
+| Node + npm | 24.x | 镜像内 |
+| MySQL | 8.0 | 容器内 `localhost:3306` |
+
+镜像 `nexus-market/dev-env:1.0` 由 [docker/Dockerfile](docker/Dockerfile) 构建，**不含项目代码**——代码以卷挂载到容器 `/workspace`，改代码即时生效，无需重建镜像。
+
+### 1. 启动环境
+
+```bash
+cd docker
+docker compose up -d --build      # 已有镜像时直接复用，不重复构建
+```
+
+容器启动即自动完成：初始化并启动 MySQL → 建库 `template_v3` → 首次运行按依赖顺序导入 `sql/*.sql`（必带 `--default-character-set=utf8mb4`，否则中文双重编码乱码）→ `AUTO_START=true` 自动拉起前后端。
+
+> ⏱️ **首次启动约 5–10 分钟**（下载 Maven 依赖 + 编译）；之后依赖缓存在 `m2cache` / `node_modules` 卷里，启动为秒级。
+
+启动顺序是**先起后端、轮询 `:1000` 等它就绪、再起前端**：Vite 约 1s 就绪而后端要 ~60s，若并行启动，页面会撞上「后端未监听 → Vite 代理 500」的窗口期。
+
+### 2. 验证后端已启动
+
+```bash
+docker exec nexus-dev tail -f /var/log/backend.log
+# 出现 Tomcat started on port 1000 (http) with context path '' 即成功
+
+curl -X POST http://localhost:1000/common/login \
+  -H "Content-Type: application/json" \
+  -d '{"type":"ADMIN","username":"admin","password":"123456"}'
+# 返回 code=200，data 为 JWT 字符串
+```
+
+### 3. 访问
+
+| 服务 | 地址 |
+|------|------|
+| 前端页面 | http://localhost:5173 |
+| 后端 API | http://localhost:1000 |
+| MySQL | 容器内 `127.0.0.1:3306`（库 `template_v3`，root / `123456`） |
+
+演示账号（密码均 `123456`）：管理员 `admin` / 买家 `user1` / 商家 `shop1`。
+
+### 4. 常用命令
+
+```bash
+docker compose exec dev bash                       # 进入容器
+docker compose exec dev bash -lc "cd /workspace && mvn spring-boot:run"  # 手动启动/重启后端
+docker compose exec dev bash -lc "cd /workspace && mvn test"             # 后端测试（H2，无需 MySQL）
+docker compose exec dev bash -lc "cd /workspace/web && npm run dev"      # 前端
+docker exec nexus-dev tail -f /var/log/frontend.log                      # 前端日志
+docker compose down                                # 停止
+docker compose down -v                             # 停止并清空数据库（下次启动重新导脚本）
+```
+
+- **后端不热重载**：改 Java 代码后必须重启 `mvn spring-boot:run`（先停掉旧进程，否则 1000 端口被占）。
+- **前端热更新**：Vite 自动 HMR，无需重启。
+- 端口映射、环境变量、常见问题见 [docker/README.md](docker/README.md)。
+
+---
+
+## 💻 裸机开发（可选，需自行安装环境）
+
+不想用 Docker 时，可在宿主机直接跑。需先安装：
 
 - **JDK**: 17 或更高版本
 - **Maven**: 3.6 或更高版本
 - **Node.js**: 16.x 或更高版本
 - **MySQL**: 8.0 或更高版本
 - **IDE**: IntelliJ IDEA, VS Code (推荐)
-
-## 🏁 快速开始
 
 ### 1. 数据库配置
 

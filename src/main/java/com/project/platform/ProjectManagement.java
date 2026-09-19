@@ -13,4 +13,3 @@ public class ProjectManagement {
         SpringApplication.run(ProjectManagement.class, args);
     }
 }
-
