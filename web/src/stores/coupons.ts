@@ -133,15 +133,19 @@ export const useCouponStore = defineStore('coupons', () => {
     load()
   })
 
-  const available = computed(() => myCoupons.value.filter(c => !c.isUsed && new Date(c.expiresAt) > new Date()))
-  const used = computed(() => myCoupons.value.filter(c => c.isUsed))
-  const expired = computed(() => myCoupons.value.filter(c => !c.isUsed && new Date(c.expiresAt) <= new Date()))
+  const available = computed(() =>
+    myCoupons.value.filter((c) => !c.isUsed && new Date(c.expiresAt) > new Date()),
+  )
+  const used = computed(() => myCoupons.value.filter((c) => c.isUsed))
+  const expired = computed(() =>
+    myCoupons.value.filter((c) => !c.isUsed && new Date(c.expiresAt) <= new Date()),
+  )
 
   async function claimCoupon(couponId: string): Promise<boolean> {
     if (RUNTIME_USE_MOCK.value) {
-      const template = AVAILABLE_COUPONS.find(c => c.id === couponId)
+      const template = AVAILABLE_COUPONS.find((c) => c.id === couponId)
       if (!template) return false
-      if (myCoupons.value.some(c => c.id === couponId)) return false
+      if (myCoupons.value.some((c) => c.id === couponId)) return false
 
       myCoupons.value.push({
         ...template,
@@ -171,7 +175,7 @@ export const useCouponStore = defineStore('coupons', () => {
     value: number
     minOrder: number
   }): boolean {
-    if (myCoupons.value.some(c => c.id === reward.id)) return false
+    if (myCoupons.value.some((c) => c.id === reward.id)) return false
     const coupon: Coupon = {
       id: reward.id,
       code: reward.code,
@@ -189,17 +193,15 @@ export const useCouponStore = defineStore('coupons', () => {
     return true
   }
 
-  function markUsed(couponId: string) {
-    const c = myCoupons.value.find(c => c.id === couponId)
-    if (c) {
-      c.isUsed = true
-      if (RUNTIME_USE_MOCK.value) saveToStorage(myCoupons.value)
-    }
-  }
-
   /** Calculate discount for a given order subtotal and optional category */
-  function calculateDiscount(couponId: string, subtotal: number, categories?: string[]): { discount: number; type: string } | null {
-    const coupon = myCoupons.value.find(c => c.id === couponId && !c.isUsed && new Date(c.expiresAt) > new Date())
+  function calculateDiscount(
+    couponId: string,
+    subtotal: number,
+    categories?: string[],
+  ): { discount: number; type: string } | null {
+    const coupon = myCoupons.value.find(
+      (c) => c.id === couponId && !c.isUsed && new Date(c.expiresAt) > new Date(),
+    )
     if (!coupon) return null
     if (subtotal < coupon.minOrder) return null
     // Category restriction
@@ -222,8 +224,19 @@ export const useCouponStore = defineStore('coupons', () => {
   }
 
   function hasClaimed(couponId: string): boolean {
-    return myCoupons.value.some(c => c.id === couponId)
+    return myCoupons.value.some((c) => c.id === couponId)
   }
 
-  return { myCoupons, catalog, available, used, expired, claimCoupon, addRedeemedCoupon, markUsed, calculateDiscount, hasClaimed, load }
+  return {
+    myCoupons,
+    catalog,
+    available,
+    used,
+    expired,
+    claimCoupon,
+    addRedeemedCoupon,
+    calculateDiscount,
+    hasClaimed,
+    load,
+  }
 })
