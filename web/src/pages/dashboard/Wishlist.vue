@@ -7,6 +7,7 @@ import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useToast } from '@/composables/useToast'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 
 const cartStore = useCartStore()
 const wishlistStore = useWishlistStore()
@@ -24,13 +25,13 @@ onMounted(() => {
 function moveToCart(item: { id: number; title: string; price: number; image: string }) {
   cartStore.addItem(
     { id: item.id, title: item.title, price: item.price, image: item.image },
-    { color: 'Default', size: 'Standard', quantity: 1 }
+    { color: 'Default', size: 'Standard', quantity: 1 },
   )
   wishlistStore.removeItem(item.id)
   toast({
     title: 'Moved to Cart',
     description: `${item.title} has been moved to your cart.`,
-    variant: 'success'
+    variant: 'success',
   })
 }
 
@@ -77,13 +78,19 @@ function removeItem(item: { id: number; title: string }) {
     </div>
 
     <!-- Items -->
-    <div v-else-if="wishlistStore.items.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div
+      v-else-if="wishlistStore.items.length > 0"
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+    >
       <Card
         v-for="item in wishlistStore.items"
         :key="item.id"
         class="group overflow-hidden hover:shadow-lg transition-all duration-300 border-border/50"
       >
-        <router-link :to="`/product/${item.id}`" class="block aspect-square relative overflow-hidden bg-secondary">
+        <router-link
+          :to="`/product/${item.id}`"
+          class="block aspect-square relative overflow-hidden bg-secondary"
+        >
           <img
             :src="item.image"
             :alt="item.title"
@@ -91,9 +98,9 @@ function removeItem(item: { id: number; title: string }) {
             loading="lazy"
           />
           <button
-            @click.prevent="removeItem(item)"
             class="absolute top-2 right-2 p-2 rounded-full bg-background/80 backdrop-blur text-muted-foreground hover:text-destructive hover:bg-background transition-colors"
             title="Remove from wishlist"
+            @click.prevent="removeItem(item)"
           >
             <Trash2 class="w-4 h-4" />
           </button>
@@ -104,12 +111,21 @@ function removeItem(item: { id: number; title: string }) {
             <router-link :to="`/product/${item.id}`" class="hover:text-primary transition-colors">
               <h3 class="font-bold text-lg line-clamp-1">{{ item.title }}</h3>
             </router-link>
-            <div v-if="item.rating" class="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+            <div
+              v-if="item.rating"
+              class="flex items-center gap-1 text-sm text-muted-foreground mt-1"
+            >
               <Star class="w-3 h-3 fill-amber-400 text-amber-400" />
               <span>{{ item.rating }}</span>
-              <span v-if="item.reviews">({{ item.reviews >= 1000 ? (item.reviews / 1000).toFixed(1) + 'k' : item.reviews }})</span>
+              <span v-if="item.reviews"
+                >({{
+                  item.reviews >= 1000 ? (item.reviews / 1000).toFixed(1) + 'k' : item.reviews
+                }})</span
+              >
             </div>
-            <p v-if="item.category" class="text-xs text-muted-foreground mt-0.5">{{ item.category }}</p>
+            <p v-if="item.category" class="text-xs text-muted-foreground mt-0.5">
+              {{ item.category }}
+            </p>
           </div>
 
           <div class="flex items-center justify-between pt-2">
@@ -124,18 +140,19 @@ function removeItem(item: { id: number; title: string }) {
     </div>
 
     <!-- Empty -->
-    <div v-else class="py-20 text-center border border-dashed border-border rounded-xl">
-      <div class="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-        <Heart class="w-8 h-8" />
-      </div>
-      <h3 class="text-lg font-medium mb-2">Your wishlist is empty</h3>
-      <p class="text-muted-foreground mb-6">Save items you love to revisit later.</p>
+    <EmptyState
+      v-else
+      :icon="Heart"
+      title="Your wishlist is empty"
+      description="Save items you love to revisit later."
+      class="py-20"
+    >
       <router-link to="/">
         <Button>
           Explore Products
           <ArrowRight class="w-4 h-4 ml-2" />
         </Button>
       </router-link>
-    </div>
+    </EmptyState>
   </div>
 </template>

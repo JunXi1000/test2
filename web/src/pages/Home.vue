@@ -6,7 +6,9 @@ import { getProducts, getRecommendedProducts, type ProductQuery } from '@/api/mo
 import type { Product } from '@/types/product'
 import { useBrowsingHistory } from '@/stores/browsingHistory'
 import { useToast } from '@/composables/useToast'
+import { useAsyncTask } from '@/composables/useAsyncTask'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { useRouter } from 'vue-router'
 import { debounce } from 'lodash-es'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
@@ -21,17 +23,22 @@ const carouselRef = ref<any>(null)
 const activeCarouselIndex = ref(0)
 
 const productsRef = ref<Product[]>([])
-const isLoadingRef = ref<boolean>(false)
-const errorRef = ref<string>('')
+const {
+  isLoading: isLoadingRef,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load products',
+})
 const isRefreshing = ref(false)
 const refreshState = ref<'idle' | 'pulling' | 'release' | 'refreshing' | 'success'>('idle')
 
 const refreshTexts = {
-  pulling: "Pull to refresh",
-  release: "Release to refresh",
-  refreshing: "Loading...",
-  success: "Refreshed",
-  no_more: "No more data"
+  pulling: 'Pull to refresh',
+  release: 'Release to refresh',
+  refreshing: 'Loading...',
+  success: 'Refreshed',
+  no_more: 'No more data',
 }
 
 const currentRefreshText = computed(() => {
@@ -52,25 +59,30 @@ useEventListener(containerRef, 'touchstart', (e: TouchEvent) => {
   }
 })
 
-useEventListener(containerRef, 'touchmove', (e: TouchEvent) => {
-  if (touchStartY.value > 0 && y.value <= 0) {
-    const currentY = e.touches[0].clientY
-    const diff = currentY - touchStartY.value
-    
-    // Only handle pull down
-    if (diff > 0) {
-      // Prevent default browser refresh/scroll behavior
-      if (e.cancelable) e.preventDefault()
-      
-      // Add resistance
-      pullDistance.value = Math.pow(diff, 0.8)
-      
-      if (!isRefreshing.value) {
-        refreshState.value = pullDistance.value > threshold ? 'release' : 'pulling'
+useEventListener(
+  containerRef,
+  'touchmove',
+  (e: TouchEvent) => {
+    if (touchStartY.value > 0 && y.value <= 0) {
+      const currentY = e.touches[0].clientY
+      const diff = currentY - touchStartY.value
+
+      // Only handle pull down
+      if (diff > 0) {
+        // Prevent default browser refresh/scroll behavior
+        if (e.cancelable) e.preventDefault()
+
+        // Add resistance
+        pullDistance.value = Math.pow(diff, 0.8)
+
+        if (!isRefreshing.value) {
+          refreshState.value = pullDistance.value > threshold ? 'release' : 'pulling'
+        }
       }
     }
-  }
-}, { passive: false })
+  },
+  { passive: false },
+)
 
 useEventListener(containerRef, 'touchend', () => {
   if (pullDistance.value > threshold && !isRefreshing.value) {
@@ -94,9 +106,20 @@ let expandTimer: ReturnType<typeof setTimeout> | null = null
 let collapseTimer: ReturnType<typeof setTimeout> | null = null
 
 const detailedCategories = [
-  'All', 'Phones', 'Laptops', 'Watches', 'Audio',
-  'Gaming', 'Smart Home', 'Accessories', 'Tablets', 'Cameras',
-  'Drones', 'Networking', 'Office', 'Monitors'
+  'All',
+  'Phones',
+  'Laptops',
+  'Watches',
+  'Audio',
+  'Gaming',
+  'Smart Home',
+  'Accessories',
+  'Tablets',
+  'Cameras',
+  'Drones',
+  'Networking',
+  'Office',
+  'Monitors',
 ]
 
 function clearSearch() {
@@ -124,42 +147,57 @@ function selectCategory(cat: string) {
 }
 
 function onCategoryAreaEnter() {
-  if (collapseTimer) { clearTimeout(collapseTimer); collapseTimer = null }
+  if (collapseTimer) {
+    clearTimeout(collapseTimer)
+    collapseTimer = null
+  }
   if (!isCategoryExpanded.value && !expandTimer) {
-    expandTimer = setTimeout(() => { isCategoryExpanded.value = true; expandTimer = null }, 180)
+    expandTimer = setTimeout(() => {
+      isCategoryExpanded.value = true
+      expandTimer = null
+    }, 180)
   }
 }
 
 function onCategoryAreaLeave() {
-  if (expandTimer) { clearTimeout(expandTimer); expandTimer = null }
+  if (expandTimer) {
+    clearTimeout(expandTimer)
+    expandTimer = null
+  }
   if (!collapseTimer) {
-    collapseTimer = setTimeout(() => { isCategoryExpanded.value = false; collapseTimer = null }, 350)
+    collapseTimer = setTimeout(() => {
+      isCategoryExpanded.value = false
+      collapseTimer = null
+    }, 350)
   }
 }
 
 // Mock Carousel Data
 const carouselItems = [
-  { 
-    id: 1, 
-    title: 'New iPhone 15 Pro', 
-    image: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=1000&auto=format&fit=crop', 
+  {
+    id: 1,
+    title: 'New iPhone 15 Pro',
+    image:
+      'https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=1000&auto=format&fit=crop',
     desc: 'Titanium. So strong. So light. So Pro.',
-    link: '/product/1'
+    link: '/product/1',
   },
-  { 
-    id: 2, 
-    title: 'MacBook Air 15"', 
-    image: 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=1000&auto=format&fit=crop', 
+  {
+    id: 2,
+    title: 'MacBook Air 15"',
+    image:
+      'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=1000&auto=format&fit=crop',
     desc: 'Impressively big. Impossibly thin.',
-    link: '/product/2'
+    link: '/product/2',
   },
-  { 
-    id: 3, 
-    title: 'Sony WH-1000XM5', 
-    image: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=1000&auto=format&fit=crop', 
+  {
+    id: 3,
+    title: 'Sony WH-1000XM5',
+    image:
+      'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?q=80&w=1000&auto=format&fit=crop',
     desc: 'Your world. Nothing else.',
-    link: '/product/3'
-  }
+    link: '/product/3',
+  },
 ]
 
 function goCarousel(index: number) {
@@ -184,50 +222,48 @@ const hasMore = ref(true)
 const isLoadMore = ref(false)
 
 async function fetchProducts(isRefresh = false): Promise<boolean> {
-  try {
-    if (isRefresh) {
-      page.value = 1
-      hasMore.value = true
-    } else {
-      if (!hasMore.value || isLoadMore.value || isRefreshing.value) return false
-      isLoadMore.value = true
-    }
-
-    if (page.value === 1 && !isRefresh && productsRef.value.length === 0) {
-      isLoadingRef.value = true
-    }
-
-    errorRef.value = ''
-    const params: ProductQuery = {
-      category: activeCategory.value === 'All' ? undefined : activeCategory.value,
-      q: searchQuery.value,
-      sort: sortBy.value,
-      page: page.value,
-      limit: limit
-    }
-    const list = await getProducts(params)
-
-    if (isRefresh || page.value === 1) {
-      productsRef.value = list
-    } else {
-      productsRef.value = [...productsRef.value, ...list]
-    }
-
-    if (list.length < limit) {
-      hasMore.value = false
-    } else {
-      page.value++
-    }
-    return true
-
-  } catch (e: any) {
-    errorRef.value = e?.message || 'Failed to load products'
-    toast({ title: 'Failed to load products', description: e?.message || 'Unknown error', variant: 'destructive' })
-    return false
-  } finally {
-    isLoadingRef.value = false
-    isLoadMore.value = false
+  if (isRefresh) {
+    page.value = 1
+    hasMore.value = true
+  } else {
+    if (!hasMore.value || isLoadMore.value || isRefreshing.value) return false
+    isLoadMore.value = true
   }
+
+  // 只有「首屏 + 列表还是空的」才让整块网格换成骨架屏。原代码就是条件式赋值，
+  // 无条件交给 useAsyncTask 的话，滚动加载下一页会把已经渲染出来的商品顶成 8 个骨架格。
+  const showSkeleton = page.value === 1 && !isRefresh && productsRef.value.length === 0
+
+  const params: ProductQuery = {
+    category: activeCategory.value === 'All' ? undefined : activeCategory.value,
+    q: searchQuery.value,
+    sort: sortBy.value,
+    page: page.value,
+    limit: limit,
+  }
+  const result = await run(() => getProducts(params), { silent: !showSkeleton })
+
+  isLoadMore.value = false
+
+  if (!result.ok) {
+    // 追加失败不该把整页换成 ErrorState，所以这里维持「toast 提示」的老做法
+    toast({ title: 'Failed to load products', description: result.error, variant: 'destructive' })
+    return false
+  }
+
+  const list = result.value
+  if (isRefresh || page.value === 1) {
+    productsRef.value = list
+  } else {
+    productsRef.value = [...productsRef.value, ...list]
+  }
+
+  if (list.length < limit) {
+    hasMore.value = false
+  } else {
+    page.value++
+  }
+  return true
 }
 
 async function handleRefresh() {
@@ -262,8 +298,14 @@ useEventListener(window, 'scroll', () => {
   const scrollTop = window.scrollY
   const clientHeight = window.innerHeight
   const scrollHeight = document.documentElement.scrollHeight
-  
-  if (scrollTop + clientHeight >= scrollHeight - 200 && !isLoadingRef.value && !isLoadMore.value && !isRefreshing.value && hasMore.value) {
+
+  if (
+    scrollTop + clientHeight >= scrollHeight - 200 &&
+    !isLoadingRef.value &&
+    !isLoadMore.value &&
+    !isRefreshing.value &&
+    hasMore.value
+  ) {
     fetchProducts()
   }
 })
@@ -274,9 +316,15 @@ onMounted(() => {
   fetchProducts(true)
   loadRecommended()
 })
-watch(activeCategory, () => { fetchProducts(true); loadRecommended() })
+watch(activeCategory, () => {
+  fetchProducts(true)
+  loadRecommended()
+})
 watch(sortBy, () => fetchProducts(true))
-watch(searchQuery, () => { debouncedFetch(); loadRecommended() })
+watch(searchQuery, () => {
+  debouncedFetch()
+  loadRecommended()
+})
 
 onBeforeUnmount(() => {
   if (expandTimer) clearTimeout(expandTimer)
@@ -307,20 +355,25 @@ async function loadRecommended() {
 </script>
 
 <template>
-  <div 
+  <div
     ref="containerRef"
     class="min-h-screen bg-background pb-20 transition-transform duration-300 ease-out"
     :style="{ transform: `translateY(${pullDistance}px)` }"
   >
     <!-- Refresh Indicator (Absolute top, negative position) -->
-    <div class="absolute top-0 left-0 w-full h-16 -mt-16 flex items-center justify-center text-primary pointer-events-none gap-2">
-       <Loader2 v-if="refreshState === 'refreshing'" class="w-5 h-5 animate-spin" />
-       <RefreshCw v-else-if="refreshState !== 'success'" class="w-5 h-5 transition-transform duration-300" :style="{ transform: `rotate(${pullDistance * 2}deg)` }" />
-       <span class="text-sm font-medium">{{ currentRefreshText }}</span>
+    <div
+      class="absolute top-0 left-0 w-full h-16 -mt-16 flex items-center justify-center text-primary pointer-events-none gap-2"
+    >
+      <Loader2 v-if="refreshState === 'refreshing'" class="w-5 h-5 animate-spin" />
+      <RefreshCw
+        v-else-if="refreshState !== 'success'"
+        class="w-5 h-5 transition-transform duration-300"
+        :style="{ transform: `rotate(${pullDistance * 2}deg)` }"
+      />
+      <span class="text-sm font-medium">{{ currentRefreshText }}</span>
     </div>
 
     <div class="container px-4 mx-auto pt-6">
-      
       <!-- Top Navigation Area (Sticky) -->
       <div
         class="sticky z-40 bg-background/80 backdrop-blur-md py-2.5 mb-8 -mx-4 px-4 border-b border-border/50"
@@ -340,11 +393,13 @@ async function loadRecommended() {
                   <button
                     v-for="cat in detailedCategories"
                     :key="cat"
-                    @click="selectCategory(cat)"
                     class="h-8 px-2.5 rounded-full text-xs font-medium transition-all border whitespace-nowrap"
-                    :class="activeCategory === cat
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'"
+                    :class="
+                      activeCategory === cat
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'
+                    "
+                    @click="selectCategory(cat)"
                   >
                     {{ cat }}
                   </button>
@@ -358,11 +413,13 @@ async function loadRecommended() {
                   <button
                     v-for="cat in detailedCategories"
                     :key="cat"
-                    @click="selectCategory(cat)"
                     class="h-8 px-2.5 rounded-full text-xs font-medium transition-all border whitespace-nowrap"
-                    :class="activeCategory === cat
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'"
+                    :class="
+                      activeCategory === cat
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'
+                    "
+                    @click="selectCategory(cat)"
                   >
                     {{ cat }}
                   </button>
@@ -372,8 +429,12 @@ async function loadRecommended() {
 
             <!-- Mobile / tablet: horizontal scroll -->
             <div class="lg:hidden relative">
-              <div class="pointer-events-none absolute left-0 top-0 h-full w-4 bg-gradient-to-r from-background/90 to-transparent z-10"></div>
-              <div class="pointer-events-none absolute right-0 top-0 h-full w-4 bg-gradient-to-l from-background/90 to-transparent z-10"></div>
+              <div
+                class="pointer-events-none absolute left-0 top-0 h-full w-4 bg-gradient-to-r from-background/90 to-transparent z-10"
+              ></div>
+              <div
+                class="pointer-events-none absolute right-0 top-0 h-full w-4 bg-gradient-to-l from-background/90 to-transparent z-10"
+              ></div>
               <div
                 ref="categoryScrollRef"
                 class="overflow-x-auto no-scrollbar snap-x snap-mandatory scroll-px-1 [-webkit-overflow-scrolling:touch] overscroll-x-contain"
@@ -384,11 +445,13 @@ async function loadRecommended() {
                     v-for="cat in detailedCategories"
                     :key="cat"
                     :data-cat="cat"
-                    @click="selectCategory(cat)"
                     class="h-8 px-2.5 rounded-full text-xs font-medium transition-all border whitespace-nowrap snap-start"
-                    :class="activeCategory === cat
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'"
+                    :class="
+                      activeCategory === cat
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-card border-border text-foreground/80 hover:border-primary/50 hover:text-foreground'
+                    "
+                    @click="selectCategory(cat)"
                   >
                     {{ cat }}
                   </button>
@@ -405,30 +468,54 @@ async function loadRecommended() {
                 type="text"
                 placeholder="Search..."
                 class="h-8 w-full rounded-full bg-secondary border border-transparent px-2.5 text-xs sm:text-sm outline-none focus:border-primary transition-all pl-8 pr-7"
-                @keyup.enter="searchQuery.trim() && router.push({ name: 'SearchResults', query: { q: searchQuery.trim() } })"
+                @keyup.enter="
+                  searchQuery.trim() &&
+                  router.push({ name: 'SearchResults', query: { q: searchQuery.trim() } })
+                "
               />
-              <Search class="absolute left-2.5 top-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+              <Search
+                class="absolute left-2.5 top-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground"
+              />
               <button
                 v-if="searchQuery"
-                @click="clearSearch"
                 class="absolute right-1.5 top-1 h-6 w-6 rounded-full hover:bg-background/70 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center"
                 aria-label="Clear search"
+                @click="clearSearch"
               >
                 <X class="h-3 w-3" />
               </button>
             </div>
-            <el-dropdown trigger="click" @command="(cmd: 'default' | 'price-asc' | 'price-desc') => sortBy = cmd">
-              <div class="flex items-center gap-1 bg-secondary rounded-full px-2.5 sm:px-3 h-8 border border-transparent focus-within:border-primary hover:border-primary transition-colors cursor-pointer outline-none">
+            <el-dropdown
+              trigger="click"
+              @command="(cmd: 'default' | 'price-asc' | 'price-desc') => (sortBy = cmd)"
+            >
+              <div
+                class="flex items-center gap-1 bg-secondary rounded-full px-2.5 sm:px-3 h-8 border border-transparent focus-within:border-primary hover:border-primary transition-colors cursor-pointer outline-none"
+              >
                 <ListFilter class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground shrink-0" />
-                <span class="text-xs sm:text-sm text-foreground whitespace-nowrap hidden min-[400px]:inline">
+                <span
+                  class="text-xs sm:text-sm text-foreground whitespace-nowrap hidden min-[400px]:inline"
+                >
                   {{ sortBy === 'price-asc' ? '↑' : sortBy === 'price-desc' ? '↓' : 'Sort' }}
                 </span>
               </div>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="default" :class="{ 'text-primary bg-primary/10': sortBy === 'default' }">Default</el-dropdown-item>
-                  <el-dropdown-item command="price-asc" :class="{ 'text-primary bg-primary/10': sortBy === 'price-asc' }">Price ↑</el-dropdown-item>
-                  <el-dropdown-item command="price-desc" :class="{ 'text-primary bg-primary/10': sortBy === 'price-desc' }">Price ↓</el-dropdown-item>
+                  <el-dropdown-item
+                    command="default"
+                    :class="{ 'text-primary bg-primary/10': sortBy === 'default' }"
+                    >Default</el-dropdown-item
+                  >
+                  <el-dropdown-item
+                    command="price-asc"
+                    :class="{ 'text-primary bg-primary/10': sortBy === 'price-asc' }"
+                    >Price ↑</el-dropdown-item
+                  >
+                  <el-dropdown-item
+                    command="price-desc"
+                    :class="{ 'text-primary bg-primary/10': sortBy === 'price-desc' }"
+                    >Price ↓</el-dropdown-item
+                  >
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -438,7 +525,6 @@ async function loadRecommended() {
 
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        
         <!-- Carousel (Integrated into Grid) -->
         <div
           v-if="!searchQuery"
@@ -457,23 +543,34 @@ async function loadRecommended() {
             arrow="hover"
             height="100%"
             class="h-full rounded-2xl overflow-hidden shadow-lg border border-border bg-card"
-            @change="(current: number) => activeCarouselIndex = current"
+            @change="(current: number) => (activeCarouselIndex = current)"
           >
             <el-carousel-item v-for="item in carouselItems" :key="item.id" class="h-full">
-              <div class="relative w-full h-full group cursor-pointer" @click="router.push(item.link)">
+              <div
+                class="relative w-full h-full group cursor-pointer"
+                @click="router.push(item.link)"
+              >
                 <img
                   :src="item.image"
                   :alt="item.title"
                   :loading="item.id === 1 ? 'eager' : 'lazy'"
                   class="w-full h-full object-cover object-center sm:object-[center_35%] transition-transform duration-700 group-hover:scale-105"
                 />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 flex flex-col justify-end p-8 text-white">
+                <div
+                  class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/10 flex flex-col justify-end p-8 text-white"
+                >
                   <div class="max-w-[85%] rounded-xl bg-black/25 backdrop-blur-[1px] px-3 py-2">
                     <h3 class="text-3xl font-bold mb-2 leading-tight">{{ item.title }}</h3>
                     <p class="text-base text-zinc-200 mb-1 line-clamp-2">{{ item.desc }}</p>
                   </div>
-                  <div class="mt-3 flex gap-2 opacity-100 sm:opacity-90 sm:group-hover:opacity-100 transition-opacity duration-300">
-                    <Button variant="secondary" size="sm" class="bg-white text-black hover:bg-zinc-200 border-none shadow-sm">
+                  <div
+                    class="mt-3 flex gap-2 opacity-100 sm:opacity-90 sm:group-hover:opacity-100 transition-opacity duration-300"
+                  >
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      class="bg-white text-black hover:bg-zinc-200 border-none shadow-sm"
+                    >
                       View Details
                     </Button>
                   </div>
@@ -500,40 +597,57 @@ async function loadRecommended() {
         </div>
 
         <!-- Empty State -->
-        <div v-else-if="filteredProducts.length === 0" class="col-span-full text-center py-20 bg-card rounded-2xl border border-border">
-          <p class="text-muted-foreground text-lg">No products found matching your criteria.</p>
-          <Button variant="outline" class="mt-4" @click="() => { searchQuery = ''; activeCategory = 'All'; }">
+        <EmptyState
+          v-else-if="filteredProducts.length === 0"
+          description="No products found matching your criteria."
+          class="col-span-full py-20"
+        >
+          <Button
+            variant="outline"
+            @click="
+              () => {
+                searchQuery = ''
+                activeCategory = 'All'
+              }
+            "
+          >
             Clear Filters
           </Button>
-        </div>
+        </EmptyState>
 
         <!-- Products -->
         <template v-else>
-          <ProductCard 
-            v-for="product in filteredProducts" 
-            :key="product.id" 
+          <ProductCard
+            v-for="product in filteredProducts"
+            :key="product.id"
             :product="product"
             class="h-full"
           />
-          
+
           <!-- Load More Skeleton -->
-          <div v-if="isLoadMore" v-for="i in 4" :key="`more-${i}`" class="col-span-1">
+          <div v-for="i in 4" v-if="isLoadMore" :key="`more-${i}`" class="col-span-1">
             <div class="space-y-3 p-3 border rounded-2xl bg-card h-full">
               <Skeleton class="aspect-video w-full rounded-lg" />
               <Skeleton class="h-4 w-3/4" />
               <Skeleton class="h-4 w-1/2" />
             </div>
           </div>
-          
+
           <!-- No More Data -->
-          <div v-if="!hasMore && filteredProducts.length > 0" class="col-span-full py-8 text-center text-muted-foreground text-sm">
+          <div
+            v-if="!hasMore && filteredProducts.length > 0"
+            class="col-span-full py-8 text-center text-muted-foreground text-sm"
+          >
             {{ refreshTexts.no_more }}
           </div>
         </template>
       </div>
 
       <!-- Recommended for You（阶段 1.1） -->
-      <div v-if="!searchQuery && activeCategory === 'All' && recommendedRef.length > 0" class="mt-12 pt-8 border-t border-border">
+      <div
+        v-if="!searchQuery && activeCategory === 'All' && recommendedRef.length > 0"
+        class="mt-12 pt-8 border-t border-border"
+      >
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold flex items-center gap-2">
             <Sparkles class="w-5 h-5 text-primary" />
@@ -542,24 +656,32 @@ async function loadRecommended() {
           <span class="text-xs text-muted-foreground" v-html="$t('home.recommendedHint')"></span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <div v-if="recommendedLoading" v-for="i in 6" :key="`rec-${i}`" class="col-span-1">
+          <div v-for="i in 6" v-if="recommendedLoading" :key="`rec-${i}`" class="col-span-1">
             <div class="space-y-3 p-3 border rounded-2xl bg-card h-full">
               <Skeleton class="aspect-video w-full rounded-lg" />
               <Skeleton class="h-4 w-3/4" />
               <Skeleton class="h-4 w-1/2" />
             </div>
           </div>
-          <ProductCard v-for="p in recommendedRef" :key="`rec-${p.id}`" :product="p" class="h-full" />
+          <ProductCard
+            v-for="p in recommendedRef"
+            :key="`rec-${p.id}`"
+            :product="p"
+            class="h-full"
+          />
         </div>
       </div>
 
       <!-- Recently Viewed -->
-      <div v-if="browsingHistory.recentItems.length > 0 && !searchQuery" class="mt-12 pt-8 border-t border-border">
+      <div
+        v-if="browsingHistory.recentItems.length > 0 && !searchQuery"
+        class="mt-12 pt-8 border-t border-border"
+      >
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold">{{ $t('home.recentlyViewed') }}</h2>
           <button
-            @click="browsingHistory.clearHistory()"
             class="text-xs text-muted-foreground hover:text-destructive transition-colors"
+            @click="browsingHistory.clearHistory()"
           >
             {{ $t('home.clearHistory') }}
           </button>
@@ -580,13 +702,18 @@ async function loadRecommended() {
               />
             </div>
             <div class="p-2.5">
-              <h4 class="text-xs font-semibold line-clamp-1 group-hover:text-primary transition-colors">{{ item.title }}</h4>
-              <p class="text-sm font-bold text-primary mt-0.5">${{ Number(item.price).toLocaleString('en-US') }}</p>
+              <h4
+                class="text-xs font-semibold line-clamp-1 group-hover:text-primary transition-colors"
+              >
+                {{ item.title }}
+              </h4>
+              <p class="text-sm font-bold text-primary mt-0.5">
+                ${{ Number(item.price).toLocaleString('en-US') }}
+              </p>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </template>

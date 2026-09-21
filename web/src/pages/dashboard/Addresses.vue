@@ -3,22 +3,31 @@ import { ref, reactive, onMounted } from 'vue'
 import { MapPin, Plus, Edit2, Trash2 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { 
-  getAddresses, 
-  createAddress, 
-  updateAddress, 
-  deleteAddress, 
-  setDefaultAddress, 
-  type Address 
+import {
+  getAddresses,
+  createAddress,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress,
+  type Address,
 } from '@/api/modules/address'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { ElMessageBox } from 'element-plus'
 import { useToast } from '@/composables/useToast'
+import { toErrorMessage } from '@/utils/error'
+import { useAsyncTask } from '@/composables/useAsyncTask'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const addresses = ref<Address[]>([])
-const isLoadingRef = ref<boolean>(true)
-const errorRef = ref<string>('')
+const {
+  isLoading: isLoadingRef,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load addresses',
+  initialLoading: true,
+})
 const { toast } = useToast()
 
 // Dialog State
@@ -37,7 +46,7 @@ const form = reactive({
   state: '',
   zip: '',
   country: 'United States',
-  isDefault: false
+  isDefault: false,
 })
 
 const rules = reactive<FormRules>({
@@ -48,19 +57,12 @@ const rules = reactive<FormRules>({
   city: [{ required: true, message: 'City is required', trigger: 'blur' }],
   state: [{ required: true, message: 'State/Province is required', trigger: 'blur' }],
   zip: [{ required: true, message: 'Zip/Postal code is required', trigger: 'blur' }],
-  country: [{ required: true, message: 'Country is required', trigger: 'blur' }]
+  country: [{ required: true, message: 'Country is required', trigger: 'blur' }],
 })
 
 async function fetchAddresses() {
-  try {
-    isLoadingRef.value = true
-    errorRef.value = ''
-    addresses.value = await getAddresses()
-  } catch (e: any) {
-    errorRef.value = e?.message || 'Failed to load addresses'
-  } finally {
-    isLoadingRef.value = false
-  }
+  const result = await run(() => getAddresses())
+  if (result.ok) addresses.value = result.value
 }
 
 onMounted(fetchAddresses)
@@ -102,7 +104,7 @@ function openEditDialog(addr: Address) {
 
 async function handleSubmit() {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid) => {
     if (valid) {
       isSubmitting.value = true
@@ -110,26 +112,40 @@ async function handleSubmit() {
         if (isEditMode.value) {
           const updated = await updateAddress(form.id, { ...form })
           // Update local list
-          const index = addresses.value.findIndex(a => a.id === form.id)
+          const index = addresses.value.findIndex((a) => a.id === form.id)
           if (index !== -1) addresses.value[index] = updated
           if (updated.isDefault) {
-            addresses.value.forEach(a => { if (a.id !== updated.id) a.isDefault = false })
+            addresses.value.forEach((a) => {
+              if (a.id !== updated.id) a.isDefault = false
+            })
           }
-          toast({ title: 'Address updated', description: 'Changes saved successfully.', variant: 'success' })
+          toast({
+            title: 'Address updated',
+            description: 'Changes saved successfully.',
+            variant: 'success',
+          })
         } else {
           // Create
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, ...payload } = form
           const created = await createAddress(payload)
           if (created.isDefault) {
-            addresses.value.forEach(a => a.isDefault = false)
+            addresses.value.forEach((a) => (a.isDefault = false))
           }
           addresses.value.push(created)
-          toast({ title: 'Address added', description: 'New address has been saved.', variant: 'success' })
+          toast({
+            title: 'Address added',
+            description: 'New address has been saved.',
+            variant: 'success',
+          })
         }
         dialogVisible.value = false
-      } catch (e: any) {
-        toast({ title: 'Error', description: e?.message || 'Operation failed', variant: 'destructive' })
+      } catch (e) {
+        toast({
+          title: 'Error',
+          description: toErrorMessage(e, 'Operation failed'),
+          variant: 'destructive',
+        })
       } finally {
         isSubmitting.value = false
       }
@@ -140,10 +156,18 @@ async function handleSubmit() {
 async function handleSetDefault(id: number) {
   try {
     await setDefaultAddress(id)
-    addresses.value.forEach(a => a.isDefault = (a.id === id))
-    toast({ title: 'Default updated', description: 'Primary shipping address changed.', variant: 'success' })
-  } catch (e: any) {
-    toast({ title: 'Error', description: e?.message || 'Failed to set default', variant: 'destructive' })
+    addresses.value.forEach((a) => (a.isDefault = a.id === id))
+    toast({
+      title: 'Default updated',
+      description: 'Primary shipping address changed.',
+      variant: 'success',
+    })
+  } catch (e) {
+    toast({
+      title: 'Error',
+      description: toErrorMessage(e, 'Failed to set default'),
+      variant: 'destructive',
+    })
   }
 }
 
@@ -152,11 +176,15 @@ async function confirmRemoveAddress(id: number) {
     await ElMessageBox.confirm(
       'This address will be permanently removed. Continue?',
       'Delete Address',
-      { type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' }
+      { type: 'warning', confirmButtonText: 'Delete', cancelButtonText: 'Cancel' },
     )
     await deleteAddress(id)
-    addresses.value = addresses.value.filter(a => a.id !== id)
-    toast({ title: 'Address removed', description: 'The address has been deleted.', variant: 'success' })
+    addresses.value = addresses.value.filter((a) => a.id !== id)
+    toast({
+      title: 'Address removed',
+      description: 'The address has been deleted.',
+      variant: 'success',
+    })
   } catch {
     // cancelled
   }
@@ -192,33 +220,52 @@ async function confirmRemoveAddress(id: number) {
     </div>
 
     <ErrorState v-if="!isLoadingRef && errorRef" :message="errorRef" @retry="fetchAddresses" />
-    
-    <div v-else-if="!isLoadingRef && addresses.length === 0" class="text-center py-12 border rounded-xl bg-card">
-      <MapPin class="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-      <h3 class="text-lg font-medium mb-2">No addresses found</h3>
-      <p class="text-muted-foreground mb-6">Add your shipping details for faster checkout.</p>
+
+    <EmptyState
+      v-else-if="!isLoadingRef && addresses.length === 0"
+      :icon="MapPin"
+      title="No addresses found"
+      description="Add your shipping details for faster checkout."
+    >
       <Button @click="openAddDialog">Add Address</Button>
-    </div>
+    </EmptyState>
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div 
-        v-for="addr in addresses" 
+      <div
+        v-for="addr in addresses"
         :key="addr.id"
         class="border rounded-xl p-6 relative transition-all hover:shadow-md group cursor-pointer"
-        :class="addr.isDefault ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/50'"
+        :class="
+          addr.isDefault
+            ? 'border-primary bg-primary/5'
+            : 'border-border bg-card hover:border-primary/50'
+        "
         @click="handleSetDefault(addr.id)"
       >
         <div class="flex justify-between items-start mb-4">
           <div class="flex items-center gap-2">
-            <MapPin class="w-4 h-4" :class="addr.isDefault ? 'text-primary' : 'text-muted-foreground'" />
+            <MapPin
+              class="w-4 h-4"
+              :class="addr.isDefault ? 'text-primary' : 'text-muted-foreground'"
+            />
             <span class="font-bold">{{ addr.type }}</span>
-            <span v-if="addr.isDefault" class="px-2 py-0.5 bg-primary text-primary-foreground text-[10px] rounded-full font-medium">Default</span>
+            <span
+              v-if="addr.isDefault"
+              class="px-2 py-0.5 bg-primary text-primary-foreground text-[10px] rounded-full font-medium"
+              >Default</span
+            >
           </div>
           <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button class="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground transition-colors" @click.stop="openEditDialog(addr)">
+            <button
+              class="p-1.5 hover:bg-secondary rounded-md text-muted-foreground hover:text-foreground transition-colors"
+              @click.stop="openEditDialog(addr)"
+            >
               <Edit2 class="w-4 h-4" />
             </button>
-            <button class="p-1.5 hover:bg-destructive/10 rounded-md text-muted-foreground hover:text-destructive transition-colors" @click.stop="confirmRemoveAddress(addr.id)">
+            <button
+              class="p-1.5 hover:bg-destructive/10 rounded-md text-muted-foreground hover:text-destructive transition-colors"
+              @click.stop="confirmRemoveAddress(addr.id)"
+            >
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
@@ -242,13 +289,7 @@ async function confirmRemoveAddress(id: number) {
       append-to-body
       destroy-on-close
     >
-      <el-form 
-        ref="formRef"
-        :model="form" 
-        :rules="rules" 
-        label-position="top"
-        class="mt-2"
-      >
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="mt-2">
         <div class="grid grid-cols-2 gap-4">
           <el-form-item label="Type" prop="type">
             <el-select v-model="form.type" placeholder="Select type" class="w-full">
@@ -297,7 +338,7 @@ async function confirmRemoveAddress(id: number) {
       <template #footer>
         <span class="dialog-footer flex gap-2 justify-end">
           <Button variant="outline" @click="dialogVisible = false">Cancel</Button>
-          <Button @click="handleSubmit" :disabled="isSubmitting">
+          <Button :disabled="isSubmitting" @click="handleSubmit">
             {{ isEditMode ? 'Save Changes' : 'Create Address' }}
           </Button>
         </span>

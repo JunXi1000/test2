@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useDark } from '@vueuse/core'
 import { useMerchantNotifications } from '@/composables/useMerchantNotifications'
 import MerchantNotificationPanel from '@/components/merchant/MerchantNotificationPanel.vue'
 import {
@@ -12,7 +13,7 @@ import {
   Store,
   Bell,
   Wallet,
-  MessageSquare
+  MessageSquare,
 } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -22,6 +23,14 @@ const router = useRouter()
 const route = useRoute()
 const { toast } = useToast()
 const authStore = useAuthStore()
+
+// 接线，不是新增功能：本布局的页面全都写成「亮色优先 + dark: 变体」（根节点即
+// bg-zinc-50 … dark:bg-zinc-950），但 useDark() 才是把 .dark 挂到 <html> 的那一步，
+// 而它此前只在 DefaultLayout 里被调用过 —— merchant 路由是顶层路由、不经过 DefaultLayout，
+// 于是这里 213 处 dark: 变体从未生效，merchant 无论选什么主题都恒为亮色。
+// 刻意不接返回值：本布局不放主题按钮（沿用用户在 storefront 的选择），而 useDark()
+// 内部的 watch 是 immediate 的，调用即生效，不需要消费 isDark。
+useDark()
 
 const isFullBleedRoute = computed(() => route.name === 'MerchantMessages')
 
@@ -33,7 +42,7 @@ const navItems = [
   { name: 'Orders', path: '/merchant/dashboard/orders', icon: ShoppingCart },
   { name: 'Messages', path: '/merchant/dashboard/messages', icon: MessageSquare },
   { name: 'Wallet', path: '/merchant/dashboard/wallet', icon: Wallet },
-  { name: 'Settings', path: '/merchant/dashboard/settings', icon: Settings }
+  { name: 'Settings', path: '/merchant/dashboard/settings', icon: Settings },
 ]
 
 function isNavActive(path: string) {
@@ -88,14 +97,14 @@ onMounted(() => {
             v-for="item in navItems"
             :key="item.path"
             :to="item.path"
-            @mouseenter="preloadRoute(item.path)"
-            @focus="preloadRoute(item.path)"
             class="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap"
             :class="[
               isNavActive(item.path)
                 ? 'bg-amber-500 text-white shadow-sm dark:bg-amber-600'
-                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200'
+                : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-zinc-200',
             ]"
+            @mouseenter="preloadRoute(item.path)"
+            @focus="preloadRoute(item.path)"
           >
             <component :is="item.icon" class="h-4 w-4 shrink-0" />
             {{ item.name }}
@@ -153,8 +162,8 @@ onMounted(() => {
           </div>
           <button
             type="button"
-            @click="handleLogout"
             class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            @click="handleLogout"
           >
             <LogOut class="h-4 w-4" />
             <span class="hidden sm:inline">Sign Out</span>
@@ -166,15 +175,10 @@ onMounted(() => {
     <main
       class="min-h-0 flex-1 overscroll-contain [-webkit-overflow-scrolling:touch]"
       :class="
-        isFullBleedRoute
-          ? 'flex flex-col overflow-hidden p-0'
-          : 'overflow-y-auto p-3 sm:p-4 lg:p-5'
+        isFullBleedRoute ? 'flex flex-col overflow-hidden p-0' : 'overflow-y-auto p-3 sm:p-4 lg:p-5'
       "
     >
-      <div
-        class="min-w-0"
-        :class="isFullBleedRoute ? 'flex min-h-0 flex-1 flex-col' : ''"
-      >
+      <div class="min-w-0" :class="isFullBleedRoute ? 'flex min-h-0 flex-1 flex-col' : ''">
         <router-view />
       </div>
     </main>

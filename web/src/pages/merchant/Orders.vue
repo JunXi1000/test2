@@ -1,6 +1,9 @@
 <template>
   <div class="merchant-page w-full max-w-full space-y-4">
-    <el-card shadow="never" class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm">
+    <el-card
+      shadow="never"
+      class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm"
+    >
       <div class="merchant-data-panel-toolbar border-b border-gray-100 bg-white">
         <div class="min-w-0 max-sm:overflow-x-auto max-sm:pb-0.5 filter-row-scroll">
           <div class="flex w-full min-w-0 flex-nowrap items-center gap-4">
@@ -72,7 +75,9 @@
         <el-table-column label="Customer" min-width="228">
           <template #default="{ row }">
             <div class="py-1">
-              <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">{{ row.customer.name }}</div>
+              <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">
+                {{ row.customer.name }}
+              </div>
               <div class="mt-0.5 text-sm text-gray-500">{{ row.customer.email }}</div>
             </div>
           </template>
@@ -86,7 +91,9 @@
 
         <el-table-column prop="total" label="Total" width="128" sortable align="left">
           <template #default="{ row }">
-            <span class="text-[15px] font-bold tabular-nums text-gray-900">${{ row.total.toFixed(2) }}</span>
+            <span class="text-[15px] font-bold tabular-nums text-gray-900"
+              >${{ row.total.toFixed(2) }}</span
+            >
           </template>
         </el-table-column>
 
@@ -122,15 +129,12 @@
     </el-card>
 
     <!-- Order Details Drawer -->
-    <el-drawer
-      v-model="drawerVisible"
-      title="Order Details"
-      size="50%"
-      destroy-on-close
-    >
+    <el-drawer v-model="drawerVisible" title="Order Details" size="50%" destroy-on-close>
       <div v-if="selectedOrder" class="space-y-6">
         <!-- Status Bar -->
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/90 p-4">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/90 p-4"
+        >
           <div>
             <div class="text-xs font-medium text-gray-500">Current status</div>
             <span
@@ -141,40 +145,48 @@
             </span>
           </div>
           <div class="space-x-2">
-             <el-button 
-               v-if="selectedOrder.status === 'pending'" 
-               type="primary" 
-               size="small"
-               @click="updateStatus('processing')"
-             >
-               Start Processing
-             </el-button>
-             <el-button 
-               v-if="selectedOrder.status === 'processing'" 
-               type="success" 
-               size="small"
-               @click="updateStatus('shipped')"
-             >
-               Mark as Shipped
-             </el-button>
-             <el-button 
-               v-if="['pending', 'processing'].includes(selectedOrder.status)" 
-               type="danger" 
-               size="small" 
-               plain
-               @click="updateStatus('cancelled')"
-             >
-               Cancel Order
-             </el-button>
+            <el-button
+              v-if="selectedOrder.status === 'pending'"
+              type="primary"
+              size="small"
+              @click="updateStatus('processing')"
+            >
+              Start Processing
+            </el-button>
+            <el-button
+              v-if="selectedOrder.status === 'processing'"
+              type="success"
+              size="small"
+              @click="updateStatus('shipped')"
+            >
+              Mark as Shipped
+            </el-button>
+            <el-button
+              v-if="['pending', 'processing'].includes(selectedOrder.status)"
+              type="danger"
+              size="small"
+              plain
+              @click="updateStatus('cancelled')"
+            >
+              Cancel Order
+            </el-button>
           </div>
         </div>
 
         <!-- Customer Info -->
         <el-descriptions title="Customer Information" :column="1" border>
-          <el-descriptions-item label="Name">{{ selectedOrder.customer.name }}</el-descriptions-item>
-          <el-descriptions-item label="Email">{{ selectedOrder.customer.email }}</el-descriptions-item>
-          <el-descriptions-item label="Shipping Address">{{ selectedOrder.shippingAddress }}</el-descriptions-item>
-          <el-descriptions-item label="Payment Method">{{ selectedOrder.paymentMethod }}</el-descriptions-item>
+          <el-descriptions-item label="Name">{{
+            selectedOrder.customer.name
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Email">{{
+            selectedOrder.customer.email
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Shipping Address">{{
+            selectedOrder.shippingAddress
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Payment Method">{{
+            selectedOrder.paymentMethod
+          }}</el-descriptions-item>
         </el-descriptions>
 
         <!-- Order Items -->
@@ -198,7 +210,7 @@
             </el-table-column>
           </el-table>
           <div class="flex justify-end mt-4">
-             <div class="text-xl font-bold">Total: ${{ selectedOrder.total.toFixed(2) }}</div>
+            <div class="text-xl font-bold">Total: ${{ selectedOrder.total.toFixed(2) }}</div>
           </div>
         </div>
       </div>
@@ -208,22 +220,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { 
-  Search as SearchIcon, 
-  RefreshCw as RefreshCwIcon 
-} from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
-import { 
-  getMerchantOrders, 
-  getMerchantOrderDetails, 
+import { Search as SearchIcon, RefreshCw as RefreshCwIcon } from 'lucide-vue-next'
+import {
+  getMerchantOrders,
+  getMerchantOrderDetails,
   updateMerchantOrderStatus,
   type MerchantOrder,
-  type MerchantOrderDetail
+  type MerchantOrderDetail,
 } from '@/api/modules/merchantOrders'
 import { debounce } from 'lodash-es'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
 // State
-const loading = ref(false)
+const { toast } = useToast()
+const { isLoading: loading, run } = useAsyncTask({ reportError: false })
 const orders = ref<MerchantOrder[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -232,30 +243,30 @@ const selectedOrder = ref<MerchantOrderDetail | null>(null)
 
 // Methods
 const loadData = async () => {
-  loading.value = true
-  try {
+  const result = await run(async () => {
     // Mock filtering logic
     const allOrders = await getMerchantOrders({ status: 'all' })
     let filtered = allOrders
 
     if (searchQuery.value) {
       const q = searchQuery.value.toLowerCase()
-      filtered = filtered.filter(o => 
-        o.id.toLowerCase().includes(q) || 
-        o.customer.name.toLowerCase().includes(q) ||
-        o.customer.email.toLowerCase().includes(q)
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(q) ||
+          o.customer.name.toLowerCase().includes(q) ||
+          o.customer.email.toLowerCase().includes(q),
       )
     }
 
     if (statusFilter.value !== 'all') {
-      filtered = filtered.filter(o => o.status === statusFilter.value)
+      filtered = filtered.filter((o) => o.status === statusFilter.value)
     }
 
     orders.value = filtered
-  } catch (error) {
-    ElMessage.error('Failed to load orders')
-  } finally {
-    loading.value = false
+  })
+
+  if (!result.ok) {
+    toast({ title: 'Failed to load orders', variant: 'destructive' })
   }
 }
 
@@ -298,8 +309,8 @@ const viewDetails = async (row: MerchantOrder) => {
     const details = await getMerchantOrderDetails(row.id)
     selectedOrder.value = details
     drawerVisible.value = true
-  } catch (error) {
-    ElMessage.error('Failed to load order details')
+  } catch {
+    toast({ title: 'Failed to load order details', variant: 'destructive' })
   }
 }
 
@@ -308,10 +319,10 @@ const updateStatus = async (newStatus: MerchantOrder['status']) => {
   try {
     await updateMerchantOrderStatus(selectedOrder.value.id, newStatus)
     selectedOrder.value.status = newStatus
-    ElMessage.success(`Order updated to ${newStatus}`)
+    toast({ title: `Order updated to ${newStatus}`, variant: 'success' })
     loadData() // Refresh list
-  } catch (error) {
-    ElMessage.error('Failed to update status')
+  } catch {
+    toast({ title: 'Failed to update status', variant: 'destructive' })
   }
 }
 

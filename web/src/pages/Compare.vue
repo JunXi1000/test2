@@ -3,8 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCompareStore } from '@/stores/compare'
 import { useCartStore } from '@/stores/cart'
+import { useAsyncTask } from '@/composables/useAsyncTask'
 import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { ShoppingCart, Star, X, ArrowLeft } from 'lucide-vue-next'
 import { getProductById } from '@/api/modules/product'
 import type { Product } from '@/types/product'
@@ -16,28 +19,36 @@ const cartStore = useCartStore()
 const { toast } = useToast()
 
 const products = ref<Product[]>([])
-const isLoading = ref(true)
+const {
+  isLoading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load products',
+  initialLoading: true,
+})
 
-onMounted(async () => {
+async function loadProducts() {
+  // 取数失败原先只弹个 toast，然后落到空态「Nothing to compare / Add products to
+  // compare them side by side」——用户明明加了商品，文案却让他们去加商品，且没有重试入口。
+  // 失败是失败，交给 ErrorState。
+  const result = await run(() =>
+    Promise.all(compareStore.items.map((item) => getProductById(item.id))),
+  )
+  if (result.ok) products.value = result.value
+}
+
+onMounted(() => {
   if (compareStore.items.length < 2) {
     router.replace('/')
     return
   }
-  try {
-    const results = await Promise.all(
-      compareStore.items.map(item => getProductById(item.id))
-    )
-    products.value = results
-  } catch {
-    toast({ title: 'Error', description: 'Failed to load some products', variant: 'destructive' })
-  } finally {
-    isLoading.value = false
-  }
+  loadProducts()
 })
 
 function removeProduct(id: number) {
   compareStore.removeItem(id)
-  products.value = products.value.filter(p => p.id !== id)
+  products.value = products.value.filter((p) => p.id !== id)
   if (compareStore.items.length < 2) {
     router.replace('/')
     toast({ title: 'Need at least 2 products', description: 'Add more products to compare.' })
@@ -50,32 +61,43 @@ function addToCart(product: Product) {
 }
 
 // Build a unified spec table from all products
-interface SpecRow { label: string; values: string[] }
+interface SpecRow {
+  label: string
+  values: string[]
+}
 const specTable = computed(() => {
   const rows: SpecRow[] = []
   if (products.value.length === 0) return rows
 
   // Price
-  rows.push({ label: 'Price', values: products.value.map(p => `$${Number(p.price).toLocaleString('en-US')}`) })
+  rows.push({
+    label: 'Price',
+    values: products.value.map((p) => `$${Number(p.price).toLocaleString('en-US')}`),
+  })
   // Category
-  rows.push({ label: 'Category', values: products.value.map(p => p.category || '-') })
+  rows.push({ label: 'Category', values: products.value.map((p) => p.category || '-') })
   // Rating
-  rows.push({ label: 'Rating', values: products.value.map(p => p.rating != null ? `${p.rating} ★ (${p.reviews ?? 0})` : '-') })
+  rows.push({
+    label: 'Rating',
+    values: products.value.map((p) =>
+      p.rating != null ? `${p.rating} ★ (${p.reviews ?? 0})` : '-',
+    ),
+  })
   // Features
-  if (products.value.some(p => p.features?.length)) {
+  if (products.value.some((p) => p.features?.length)) {
     const allFeatureKeys = new Set<string>()
     for (const p of products.value) {
-      p.features?.forEach(f => allFeatureKeys.add(f))
+      p.features?.forEach((f) => allFeatureKeys.add(f))
     }
     for (const key of allFeatureKeys) {
       rows.push({
         label: key,
-        values: products.value.map(p => (p.features?.includes(key) ? '✓' : '✗')),
+        values: products.value.map((p) => (p.features?.includes(key) ? '✓' : '✗')),
       })
     }
   }
   // Description
-  rows.push({ label: 'Description', values: products.value.map(p => p.description || '-') })
+  rows.push({ label: 'Description', values: products.value.map((p) => p.description || '-') })
 
   return rows
 })
@@ -88,23 +110,39 @@ const specTable = computed(() => {
       <div class="flex items-center justify-between mb-8">
         <div>
           <button
-            @click="$router.back()"
             class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-2 transition-colors"
+            @click="$router.back()"
           >
             <ArrowLeft class="w-4 h-4" /> Back
           </button>
           <h1 class="text-2xl font-bold">Compare Products</h1>
-          <p class="text-sm text-muted-foreground mt-1">{{ products.length }} products side by side</p>
+          <p class="text-sm text-muted-foreground mt-1">
+            {{ products.length }} products side by side
+          </p>
         </div>
-        <Button variant="outline" size="sm" @click="compareStore.clearAll(); router.replace('/')">
+        <Button
+          variant="outline"
+          size="sm"
+          @click="
+            compareStore.clearAll()
+            router.replace('/')
+          "
+        >
           Clear All
         </Button>
       </div>
 
+      <!-- Error -->
+      <ErrorState v-if="errorRef" :message="errorRef" @retry="loadProducts" />
+
       <!-- Loading -->
-      <div v-if="isLoading" class="space-y-6">
+      <div v-else-if="isLoading" class="space-y-6">
         <div class="flex gap-4 overflow-x-auto pb-4">
-          <div v-for="i in compareStore.items.length" :key="i" class="w-56 shrink-0 space-y-3 p-3 border rounded-xl bg-card">
+          <div
+            v-for="i in compareStore.items.length"
+            :key="i"
+            class="w-56 shrink-0 space-y-3 p-3 border rounded-xl bg-card"
+          >
             <Skeleton class="aspect-square w-full rounded-lg" />
             <Skeleton class="h-4 w-3/4" />
             <Skeleton class="h-4 w-1/2" />
@@ -119,7 +157,9 @@ const specTable = computed(() => {
             <!-- Product headers -->
             <thead>
               <tr>
-                <th class="w-40 p-3 text-left text-sm font-semibold text-muted-foreground sticky left-0 bg-background z-10"></th>
+                <th
+                  class="w-40 p-3 text-left text-sm font-semibold text-muted-foreground sticky left-0 bg-background z-10"
+                ></th>
                 <th
                   v-for="product in products"
                   :key="product.id"
@@ -132,15 +172,20 @@ const specTable = computed(() => {
                       class="w-32 h-32 object-cover rounded-lg mx-auto mb-2"
                     />
                     <button
-                      @click="removeProduct(product.id)"
                       class="absolute -top-1 -right-1 p-1 rounded-full bg-background border border-border text-muted-foreground hover:text-destructive transition-colors"
+                      @click="removeProduct(product.id)"
                     >
                       <X class="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <h3 class="font-bold text-sm line-clamp-2">{{ product.title }}</h3>
-                  <p class="text-lg font-black text-primary mt-1">${{ Number(product.price).toLocaleString('en-US') }}</p>
-                  <div v-if="product.rating" class="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                  <p class="text-lg font-black text-primary mt-1">
+                    ${{ Number(product.price).toLocaleString('en-US') }}
+                  </p>
+                  <div
+                    v-if="product.rating"
+                    class="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1"
+                  >
                     <Star class="w-3 h-3 fill-amber-400 text-amber-400" />
                     {{ product.rating }} ({{ product.reviews }})
                   </div>
@@ -154,12 +199,10 @@ const specTable = computed(() => {
 
             <!-- Spec rows -->
             <tbody>
-              <tr
-                v-for="row in specTable"
-                :key="row.label"
-                class="border-t border-border/50"
-              >
-                <td class="p-3 text-sm font-medium text-muted-foreground sticky left-0 bg-card/80 backdrop-blur z-10">
+              <tr v-for="row in specTable" :key="row.label" class="border-t border-border/50">
+                <td
+                  class="p-3 text-sm font-medium text-muted-foreground sticky left-0 bg-card/80 backdrop-blur z-10"
+                >
                   {{ row.label }}
                 </td>
                 <td
@@ -179,11 +222,14 @@ const specTable = computed(() => {
         </div>
 
         <!-- Empty comparison -->
-        <div v-if="products.length === 0" class="text-center py-20">
-          <h3 class="text-lg font-semibold mb-2">Nothing to compare</h3>
-          <p class="text-muted-foreground mb-4">Add products to compare them side by side</p>
+        <EmptyState
+          v-if="products.length === 0"
+          title="Nothing to compare"
+          description="Add products to compare them side by side"
+          class="py-20"
+        >
           <router-link to="/"><Button>Browse Products</Button></router-link>
-        </div>
+        </EmptyState>
       </template>
     </div>
   </div>

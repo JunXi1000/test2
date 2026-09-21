@@ -19,7 +19,12 @@
         </div>
 
         <div class="admin-toolbar-select">
-          <el-select v-model="statusFilter" placeholder="All Status" class="!w-full" @change="loadData">
+          <el-select
+            v-model="statusFilter"
+            placeholder="All Status"
+            class="!w-full"
+            @change="loadData"
+          >
             <el-option label="All Status" value="all" />
             <el-option label="Visible" value="visible" />
             <el-option label="Hidden" value="hidden" />
@@ -33,8 +38,15 @@
       </div>
     </div>
 
-    <div class="admin-table-shell">
-      <el-table v-loading="loading" :data="pagedReviews" stripe class="admin-data-table min-w-[960px]">
+    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
+
+    <div v-else class="admin-table-shell">
+      <el-table
+        v-loading="loading"
+        :data="pagedReviews"
+        stripe
+        class="admin-data-table min-w-[960px]"
+      >
         <el-table-column prop="id" label="ID" width="108">
           <template #default="{ row }">
             <span class="font-mono text-zinc-400 text-xs">{{ row.id }}</span>
@@ -73,7 +85,12 @@
         <el-table-column prop="content" label="Content" min-width="200">
           <template #default="{ row }">
             <p class="text-zinc-300 text-sm line-clamp-2 m-0">{{ row.content }}</p>
-            <el-button link type="primary" class="!p-0 !h-auto mt-1" @click="openDrawer(row as AdminReview)">
+            <el-button
+              link
+              type="primary"
+              class="!p-0 !h-auto mt-1"
+              @click="openDrawer(row as AdminReview)"
+            >
               View full
             </el-button>
           </template>
@@ -129,6 +146,17 @@
             </div>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="StarIcon"
+            title="No reviews found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
 
       <div
@@ -165,7 +193,9 @@
         <div>
           <span class="text-xs text-zinc-500 block mb-1">User</span>
           <div class="text-white font-medium">{{ selected.userName }}</div>
-          <div v-if="selected.userEmail" class="text-sm text-zinc-400">{{ selected.userEmail }}</div>
+          <div v-if="selected.userEmail" class="text-sm text-zinc-400">
+            {{ selected.userEmail }}
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs text-zinc-500">Rating</span>
@@ -176,7 +206,9 @@
         </div>
         <div>
           <span class="text-xs text-zinc-500 block mb-1">Content</span>
-          <p class="text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap">{{ selected.content }}</p>
+          <p class="text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap">
+            {{ selected.content }}
+          </p>
         </div>
         <div v-if="selected.images?.length" class="space-y-2">
           <span class="text-xs text-zinc-500">Images</span>
@@ -222,20 +254,30 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { RefreshCw, Search as SearchIcon, Star as StarIcon } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
 import {
   getAdminReviews,
   updateAdminReviewStatus,
   deleteAdminReview,
   type AdminReview,
-  type AdminReviewStatus
+  type AdminReviewStatus,
 } from '@/api/modules/adminReviews'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { debounce } from 'lodash-es'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
+const { toast } = useToast()
 const router = useRouter()
-const loading = ref(false)
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load reviews',
+})
 const reviews = ref<AdminReview[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -267,18 +309,17 @@ function formatDate(iso: string) {
 }
 
 const loadData = async () => {
-  loading.value = true
-  try {
-    const data = await getAdminReviews({
+  // 原先只弹一个瞬时 toast，表格照常渲染成空态 —— 用户看到的是「没有评价」而不是
+  // 「加载失败」，且无重试入口。改由 ErrorState 承担持久态；删除等操作类 catch 仍用 toast。
+  const result = await run(() =>
+    getAdminReviews({
       q: searchQuery.value,
-      status: statusFilter.value
-    })
-    reviews.value = data
+      status: statusFilter.value,
+    }),
+  )
+  if (result.ok) {
+    reviews.value = result.value
     currentPage.value = 1
-  } catch {
-    ElMessage.error('Failed to load reviews')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -289,9 +330,9 @@ async function setStatus(row: AdminReview, status: AdminReviewStatus) {
   try {
     await updateAdminReviewStatus(row.id, status)
     row.status = status
-    ElMessage.success(status === 'hidden' ? 'Review hidden' : 'Review visible')
+    toast({ title: status === 'hidden' ? 'Review hidden' : 'Review visible', variant: 'success' })
   } catch {
-    ElMessage.error('Update failed')
+    toast({ title: 'Update failed', variant: 'destructive' })
   }
 }
 
@@ -316,10 +357,10 @@ async function confirmDelete() {
   try {
     await deleteAdminReview(t.id)
     reviews.value = reviews.value.filter((r) => r.id !== t.id)
-    ElMessage.success('Review deleted')
+    toast({ title: 'Review deleted', variant: 'success' })
     if (selected.value?.id === t.id) drawerVisible.value = false
   } catch {
-    ElMessage.error('Delete failed')
+    toast({ title: 'Delete failed', variant: 'destructive' })
   } finally {
     closeDelete()
   }

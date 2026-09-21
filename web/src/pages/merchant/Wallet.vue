@@ -6,7 +6,9 @@
     >
       <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
-          <h2 class="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Wallet</h2>
+          <h2 class="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Wallet
+          </h2>
           <p class="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
             Available balance and funds still clearing.
           </p>
@@ -22,8 +24,12 @@
           class="flex items-center justify-between gap-4 rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50 to-green-50 px-4 py-4 dark:border-emerald-900/40 dark:from-emerald-950/45 dark:to-zinc-900"
         >
           <div class="min-w-0">
-            <div class="text-sm font-medium text-zinc-600 dark:text-zinc-400">Available Balance</div>
-            <div class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+            <div class="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              Available Balance
+            </div>
+            <div
+              class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+            >
               ${{ wallet.balance.toFixed(2) }}
             </div>
           </div>
@@ -36,8 +42,12 @@
           class="flex items-center justify-between gap-4 rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50 to-amber-100/80 px-4 py-4 dark:border-amber-900/35 dark:from-amber-950/40 dark:to-zinc-900"
         >
           <div class="min-w-0">
-            <div class="text-sm font-medium text-zinc-600 dark:text-zinc-400">Pending Clearance</div>
-            <div class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl">
+            <div class="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+              Pending Clearance
+            </div>
+            <div
+              class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
+            >
               ${{ wallet.pending.toFixed(2) }}
             </div>
           </div>
@@ -55,7 +65,9 @@
       <div
         class="flex flex-col gap-2 border-b border-zinc-100 px-4 py-3 dark:border-zinc-700/80 sm:flex-row sm:items-center sm:justify-between sm:px-5"
       >
-        <span class="text-base font-semibold text-zinc-900 dark:text-zinc-100">Transaction History</span>
+        <span class="text-base font-semibold text-zinc-900 dark:text-zinc-100"
+          >Transaction History</span
+        >
         <el-button
           link
           type="primary"
@@ -92,7 +104,11 @@
             <template #default="{ row }">
               <span
                 class="font-medium tabular-nums"
-                :class="row.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
+                :class="
+                  row.amount >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-red-600 dark:text-red-400'
+                "
               >
                 {{ row.amount >= 0 ? '+' : '' }}${{ Math.abs(row.amount).toFixed(2) }}
               </span>
@@ -101,10 +117,18 @@
           <el-table-column prop="status" label="Status" min-width="120" align="left">
             <template #default="{ row }">
               <div class="flex items-center justify-start gap-1.5">
-                <CheckCircleIcon v-if="row.status === 'completed'" class="h-4 w-4 shrink-0 text-emerald-500" />
-                <XCircleIcon v-else-if="row.status === 'failed'" class="h-4 w-4 shrink-0 text-red-500" />
+                <CheckCircleIcon
+                  v-if="row.status === 'completed'"
+                  class="h-4 w-4 shrink-0 text-emerald-500"
+                />
+                <XCircleIcon
+                  v-else-if="row.status === 'failed'"
+                  class="h-4 w-4 shrink-0 text-red-500"
+                />
                 <ClockIcon v-else class="h-4 w-4 shrink-0 text-amber-500" />
-                <span class="text-sm capitalize text-zinc-700 dark:text-zinc-300">{{ row.status }}</span>
+                <span class="text-sm capitalize text-zinc-700 dark:text-zinc-300">{{
+                  row.status
+                }}</span>
               </div>
             </template>
           </el-table-column>
@@ -138,7 +162,8 @@
         <div class="withdraw-dialog-heading">
           <h2 class="text-xl font-semibold tracking-tight text-zinc-900">Withdraw funds</h2>
           <p class="mt-1 text-sm leading-relaxed text-zinc-500">
-            Payouts use your saved destinations. Transfers usually complete within 2–5 business days.
+            Payouts use your saved destinations. Transfers usually complete within 2–5 business
+            days.
           </p>
         </div>
       </template>
@@ -152,10 +177,14 @@
           <div
             class="rounded-2xl border border-zinc-200/80 bg-gradient-to-b from-zinc-50 to-white px-4 py-3 shadow-sm dark:border-zinc-700 dark:from-zinc-900/80 dark:to-zinc-900"
           >
-            <div class="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Available balance</div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Available balance
+            </div>
             <div class="mt-0.5 flex items-baseline gap-1.5">
               <span class="text-xs font-medium text-zinc-400">{{ wallet.currency }}</span>
-              <span class="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50">
+              <span
+                class="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50"
+              >
                 {{ wallet.balance.toFixed(2) }}
               </span>
             </div>
@@ -166,7 +195,9 @@
           </div>
 
           <div>
-            <label class="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Amount</label>
+            <label class="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >Amount</label
+            >
             <div
               class="flex overflow-hidden rounded-xl border-2 border-zinc-200 bg-white transition-colors focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-500/15 dark:border-zinc-600 dark:bg-zinc-900"
             >
@@ -237,9 +268,7 @@
                 :aria-selected="selectedMethodId === m.id"
                 class="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-0.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-violet-500"
                 :class="
-                  selectedMethodId === m.id
-                    ? ''
-                    : 'hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50'
+                  selectedMethodId === m.id ? '' : 'hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50'
                 "
                 @click="selectedMethodId = m.id"
               >
@@ -250,9 +279,10 @@
                 </div>
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-1.5">
-                    <span class="text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100">{{
-                      m.label
-                    }}</span>
+                    <span
+                      class="text-sm font-medium leading-tight text-zinc-900 dark:text-zinc-100"
+                      >{{ m.label }}</span
+                    >
                     <span
                       v-if="recentMethodCount > 0 && index === 0"
                       class="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800 dark:bg-violet-900/60 dark:text-violet-200"
@@ -260,7 +290,9 @@
                       Last
                     </span>
                   </div>
-                  <p class="text-[11px] leading-tight text-zinc-500">{{ payoutMethodSubtitle(m) }}</p>
+                  <p class="text-[11px] leading-tight text-zinc-500">
+                    {{ payoutMethodSubtitle(m) }}
+                  </p>
                 </div>
                 <Check
                   v-if="selectedMethodId === m.id"
@@ -288,8 +320,9 @@
               <span class="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Add method</span>
             </div>
             <p class="mb-2 text-[10px] leading-snug text-zinc-500">
-              Choose a payout type, then enter only that channel’s account. Card numbers are Luhn-checked; only
-              last 4 digits are shown after save. Up to 3 recent methods on this device.
+              Choose a payout type, then enter only that channel’s account. Card numbers are
+              Luhn-checked; only last 4 digits are shown after save. Up to 3 recent methods on this
+              device.
             </p>
             <div class="flex flex-col gap-2">
               <el-select v-model="addPayoutKind" class="w-full" placeholder="Payout type">
@@ -306,17 +339,23 @@
                 clearable
                 :placeholder="addAccountPlaceholder"
                 class="min-w-0"
-                :input-style="{ fontVariantNumeric: addPayoutKind === 'bank' ? 'tabular-nums' : undefined }"
+                :input-style="{
+                  fontVariantNumeric: addPayoutKind === 'bank' ? 'tabular-nums' : undefined,
+                }"
                 @keyup.enter="addUserPayoutMethod"
               />
-              <el-button type="primary" plain class="w-full" @click="addUserPayoutMethod">Save and use</el-button>
+              <el-button type="primary" plain class="w-full" @click="addUserPayoutMethod"
+                >Save and use</el-button
+              >
             </div>
           </div>
         </div>
       </div>
 
       <template #footer>
-        <div class="withdraw-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+        <div
+          class="withdraw-dialog-footer flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3"
+        >
           <el-button class="w-full sm:w-auto" @click="dialogVisible = false">Cancel</el-button>
           <el-button
             type="primary"
@@ -347,16 +386,19 @@ import {
   Check,
   ShieldCheck,
   Plus,
-  Trash2
+  Trash2,
 } from 'lucide-vue-next'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  getWalletBalance, 
-  getTransactions, 
+import { ElMessageBox } from 'element-plus'
+import {
+  getWalletBalance,
+  getTransactions,
   withdrawFunds,
   type MerchantWallet,
-  type WalletTransaction
+  type WalletTransaction,
 } from '@/api/modules/merchantWallet'
+import { useToast } from '@/composables/useToast'
+
+const { toast } = useToast()
 
 /** Payout method; user-saved entries include `kind` and masked `label`. */
 type UserPayoutKind = 'bank' | 'paypal' | 'wise'
@@ -392,7 +434,7 @@ function writeHiddenPresetIds(ids: Set<string>) {
 const PRESET_METHODS: WithdrawMethod[] = [
   { id: 'preset-bank', label: 'Bank account (**** 1234)' },
   { id: 'preset-paypal', label: 'PayPal (merchant@store.com)' },
-  { id: 'preset-wise', label: 'Wise — multi-currency' }
+  { id: 'preset-wise', label: 'Wise — multi-currency' },
 ]
 
 function normalizeStoredEntry(x: unknown): WithdrawMethod | null {
@@ -474,7 +516,7 @@ function recordWithdrawMethodUsed(entry: WithdrawMethod) {
   next.unshift({
     id: entry.id,
     label: entry.label,
-    ...(entry.kind ? { kind: entry.kind } : {})
+    ...(entry.kind ? { kind: entry.kind } : {}),
   })
   writeWithdrawMru(next)
 }
@@ -524,7 +566,7 @@ function payoutMethodSubtitle(m: WithdrawMethod): string {
 const payoutTypeOptions = [
   { value: 'bank' as const, label: 'Bank card' },
   { value: 'paypal' as const, label: 'PayPal' },
-  { value: 'wise' as const, label: 'Wise' }
+  { value: 'wise' as const, label: 'Wise' },
 ]
 
 function emailValid(s: string): boolean {
@@ -541,7 +583,7 @@ function maskEmail(email: string): string {
 
 function buildUserPayoutMethod(
   kind: UserPayoutKind,
-  raw: string
+  raw: string,
 ): { entry: WithdrawMethod } | { error: string } {
   const id = `user-${kind}-${Date.now()}`
   switch (kind) {
@@ -646,14 +688,14 @@ async function confirmRemovePayoutMethod(m: WithdrawMethod) {
         type: 'warning',
         confirmButtonText: 'Remove',
         cancelButtonText: 'Cancel',
-        distinguishCancelAndClose: true
-      }
+        distinguishCancelAndClose: true,
+      },
     )
   } catch {
     return
   }
   removePayoutMethod(m)
-  ElMessage.success('Payout method removed')
+  toast({ title: 'Payout method removed', variant: 'success' })
 }
 
 watch(dialogVisible, (open) => {
@@ -673,34 +715,34 @@ watch([() => transactions.value.length, txPageSize], () => {
 function addUserPayoutMethod() {
   const raw = addAccountInput.value.trim()
   if (!raw) {
-    ElMessage.warning('Enter the account for this payout type')
+    toast({ title: 'Enter the account for this payout type', variant: 'warning' })
     return
   }
   const built = buildUserPayoutMethod(addPayoutKind.value, addAccountInput.value)
   if ('error' in built) {
-    ElMessage.warning(built.error)
+    toast({ title: built.error, variant: 'warning' })
     return
   }
   recordWithdrawMethodUsed(built.entry)
   addAccountInput.value = ''
   refreshWithdrawMethods()
   selectedMethodId.value = built.entry.id
-  ElMessage.success('Saved. It will stay at the top of the list after each use.')
+  toast({ title: 'Saved. It will stay at the top of the list after each use.', variant: 'success' })
 }
 
 // Methods
 const loadData = async (options?: { showRefreshing?: boolean }) => {
   if (options?.showRefreshing) walletRefreshing.value = true
   try {
-    const [balanceData, txData] = await Promise.all([
-      getWalletBalance(),
-      getTransactions()
-    ])
+    const [balanceData, txData] = await Promise.all([getWalletBalance(), getTransactions()])
     wallet.value = balanceData
     transactions.value = txData
     txPage.value = 1
-  } catch (error) {
-    ElMessage.error('Failed to load wallet data')
+  } catch {
+    // 本页没有 error ref / isLoading，只有刷新按钮的 walletRefreshing，
+    // 所以这一处**刻意不迁 useAsyncTask**（迁了要么多一个没人读的 loading，要么形状更绕）。
+    // 只统一提示通道。见 REFACTOR_PLAN 阶段 4a 的「有意排除」一节。
+    toast({ title: 'Failed to load wallet data', variant: 'destructive' })
   } finally {
     if (options?.showRefreshing) walletRefreshing.value = false
   }
@@ -712,23 +754,28 @@ const refreshData = () => {
 
 const getTypeTag = (type: string) => {
   switch (type) {
-    case 'sale': return 'success'
-    case 'withdrawal': return 'info'
-    case 'refund': return 'danger'
-    case 'fee': return 'warning'
-    default: return 'info'
+    case 'sale':
+      return 'success'
+    case 'withdrawal':
+      return 'info'
+    case 'refund':
+      return 'danger'
+    case 'fee':
+      return 'warning'
+    default:
+      return 'info'
   }
 }
 
 const handleWithdraw = async () => {
   if (withdrawAmount.value > wallet.value.balance) {
-    ElMessage.warning('Insufficient funds')
+    toast({ title: 'Insufficient funds', variant: 'warning' })
     return
   }
 
   const entry = methodOptions.value.find((m) => m.id === selectedMethodId.value)
   if (!entry) {
-    ElMessage.warning('Choose a payout method')
+    toast({ title: 'Choose a payout method', variant: 'warning' })
     return
   }
 
@@ -736,14 +783,14 @@ const handleWithdraw = async () => {
   try {
     await withdrawFunds(withdrawAmount.value, {
       destinationId: entry.id,
-      destinationLabel: entry.label
+      destinationLabel: entry.label,
     })
     recordWithdrawMethodUsed(entry)
-    ElMessage.success('Withdrawal request submitted')
+    toast({ title: 'Withdrawal request submitted', variant: 'success' })
     dialogVisible.value = false
     loadData()
   } catch (error) {
-    ElMessage.error('Withdrawal failed')
+    toast({ title: 'Withdrawal failed', variant: 'destructive' })
   } finally {
     submitting.value = false
   }

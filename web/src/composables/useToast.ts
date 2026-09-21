@@ -4,7 +4,11 @@ export interface Toast {
   id: string
   title?: string
   description?: string
-  variant?: 'default' | 'destructive' | 'success'
+  /**
+   * warning 是阶段 4c 补的：admin/merchant 页面原来用 ElMessage.warning，
+   * 统一过来时不能把「警告」压成「普通提示」或拔高成「错误」，两边都会误导。
+   */
+  variant?: 'default' | 'destructive' | 'success' | 'warning'
   duration?: number
 }
 
@@ -17,9 +21,9 @@ export function useToast() {
       id,
       duration: 3000,
       variant: 'default',
-      ...options
+      ...options,
     }
-    
+
     toasts.value.push(newToast)
 
     if (newToast.duration !== Infinity) {
@@ -41,6 +45,6 @@ export function useToast() {
   return {
     toasts,
     toast,
-    dismiss
+    dismiss,
   }
 }

@@ -19,7 +19,12 @@
         </div>
 
         <div class="admin-toolbar-select">
-          <el-select v-model="statusFilter" placeholder="All Status" class="!w-full" @change="loadData">
+          <el-select
+            v-model="statusFilter"
+            placeholder="All Status"
+            class="!w-full"
+            @change="loadData"
+          >
             <el-option label="All Status" value="all" />
             <el-option label="Pending" value="pending" />
             <el-option label="Processing" value="processing" />
@@ -36,7 +41,9 @@
       </div>
     </div>
 
-    <div class="admin-table-shell">
+    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
+
+    <div v-else class="admin-table-shell">
       <el-table v-loading="loading" :data="orders" stripe class="admin-data-table min-w-[900px]">
         <el-table-column prop="id" label="Order ID" width="150">
           <template #default="{ row }">
@@ -69,8 +76,9 @@
                 'bg-amber-500/15 text-amber-300 ring-amber-500/25': row.status === 'pending',
                 'bg-sky-500/15 text-sky-300 ring-sky-500/25': row.status === 'processing',
                 'bg-violet-500/15 text-violet-300 ring-violet-500/25': row.status === 'shipped',
-                'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25': row.status === 'delivered',
-                'bg-rose-500/15 text-rose-300 ring-rose-500/25': row.status === 'cancelled'
+                'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25':
+                  row.status === 'delivered',
+                'bg-rose-500/15 text-rose-300 ring-rose-500/25': row.status === 'cancelled',
               }"
             >
               {{ row.status }}
@@ -97,6 +105,17 @@
             <span v-else class="text-xs text-zinc-500">—</span>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="ShoppingCartIcon"
+            title="No orders found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </div>
 
@@ -116,9 +135,12 @@
 
       <p>
         Are you sure you want to force cancel
-        <span class="font-semibold">{{ cancelTarget?.id }}</span>?
+        <span class="font-semibold">{{ cancelTarget?.id }}</span
+        >?
       </p>
-      <div class="rounded-md border border-border/30 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-300">
+      <div
+        class="rounded-md border border-border/30 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-300"
+      >
         This is an admin action and should only be used when necessary.
       </div>
     </ConfirmDialog>
@@ -128,12 +150,22 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { RefreshCw, Search as SearchIcon, ShoppingCart as ShoppingCartIcon } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
 import { getAdminOrders, adminCancelOrder, type AdminOrder } from '@/api/modules/adminOrders'
 import { debounce } from 'lodash-es'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
-const loading = ref(false)
+const { toast } = useToast()
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load orders',
+})
 const orders = ref<AdminOrder[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -141,18 +173,15 @@ const cancelDialogVisible = ref(false)
 const cancelTarget = ref<AdminOrder | null>(null)
 
 const loadData = async () => {
-  loading.value = true
-  try {
-    const data = await getAdminOrders({ 
-      q: searchQuery.value, 
-      status: statusFilter.value 
-    })
-    orders.value = data
-  } catch (error) {
-    ElMessage.error('Failed to load orders')
-  } finally {
-    loading.value = false
-  }
+  // 原先只弹一个瞬时 toast，表格照常渲染成空态 —— 用户看到的是「没有订单」而不是
+  // 「加载失败」，且无重试入口。改由 ErrorState 承担持久态；取消订单等操作类 catch 仍用 toast。
+  const result = await run(() =>
+    getAdminOrders({
+      q: searchQuery.value,
+      status: statusFilter.value,
+    }),
+  )
+  if (result.ok) orders.value = result.value
 }
 
 // Debounce search
@@ -177,9 +206,9 @@ const confirmCancel = async () => {
   try {
     await adminCancelOrder(target.id)
     target.status = 'cancelled'
-    ElMessage.success('Order cancelled')
+    toast({ title: 'Order cancelled', variant: 'success' })
   } catch {
-    ElMessage.error('Failed to cancel order')
+    toast({ title: 'Failed to cancel order', variant: 'destructive' })
   } finally {
     closeCancel()
   }

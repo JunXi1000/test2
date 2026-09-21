@@ -4,6 +4,7 @@ import { MessageSquare, X, Send, Minus } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { toErrorMessage } from '@/utils/error'
 import { useRouter } from 'vue-router'
 import {
   getConversations,
@@ -11,7 +12,7 @@ import {
   sendMessage as sendChatMessage,
   markAsRead,
   type Conversation,
-  type Message
+  type Message,
 } from '@/api/modules/chat'
 
 const isOpen = ref(false)
@@ -55,7 +56,7 @@ async function loadMessages(conversationId: string) {
     messages.value = msgs.map((m: Message) => ({
       ...m,
       sender: m.senderType === 'SHOP' ? ('merchant' as const) : ('user' as const),
-      time: new Date(m.createTime)
+      time: new Date(m.createTime),
     })) as any
     scrollToBottom()
   } catch {
@@ -65,7 +66,11 @@ async function loadMessages(conversationId: string) {
 
 async function openChat() {
   if (!authStore.isAuthenticated) {
-    toast({ title: 'Login required', description: 'Please login to chat with support', variant: 'destructive' })
+    toast({
+      title: 'Login required',
+      description: 'Please login to chat with support',
+      variant: 'destructive',
+    })
     router.push('/login')
     return
   }
@@ -112,15 +117,19 @@ async function sendMessage() {
       conversationId: conv?.id,
       receiverId: conv?.participantId || '1',
       content,
-      isMerchant: isMerchant.value
+      isMerchant: isMerchant.value,
     })
     // Reload messages to get the new one with server timestamp
     if (conv) {
       await loadMessages(conv.id)
       await loadConversations()
     }
-  } catch (err: any) {
-    toast({ title: 'Send failed', description: err?.message || 'Could not send message', variant: 'destructive' })
+  } catch (e) {
+    toast({
+      title: 'Send failed',
+      description: toErrorMessage(e, 'Could not send message'),
+      variant: 'destructive',
+    })
   } finally {
     isSending.value = false
   }
@@ -135,7 +144,7 @@ async function pollMessages() {
       messages.value = msgs.map((m: Message) => ({
         ...m,
         sender: m.senderType === 'SHOP' ? ('merchant' as const) : ('user' as const),
-        time: new Date(m.createTime)
+        time: new Date(m.createTime),
       })) as any
       scrollToBottom()
     }
@@ -157,7 +166,11 @@ function stopPolling() {
 }
 
 function formatTime(date: Date) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(date)
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true,
+  }).format(date)
 }
 
 onBeforeUnmount(() => {
@@ -166,7 +179,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] md:bottom-6 right-3 md:right-6 z-[100] flex flex-col items-end pointer-events-none [&>*]:pointer-events-auto">
+  <div
+    class="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] md:bottom-6 right-3 md:right-6 z-[100] flex flex-col items-end pointer-events-none [&>*]:pointer-events-auto"
+  >
     <!-- Chat Window -->
     <Transition
       enter-active-class="transition duration-300 ease-out"
@@ -181,10 +196,14 @@ onBeforeUnmount(() => {
         class="w-[calc(100vw-1rem)] max-w-[350px] h-[70vh] max-h-[500px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-3 md:mb-4 relative"
       >
         <!-- Header -->
-        <div class="bg-primary text-primary-foreground p-4 flex items-center justify-between shadow-md z-10">
+        <div
+          class="bg-primary text-primary-foreground p-4 flex items-center justify-between shadow-md z-10"
+        >
           <div class="flex items-center gap-3">
             <div class="relative">
-              <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/10">
+              <div
+                class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/10"
+              >
                 <img
                   v-if="activeConversation?.participantAvatar"
                   :src="activeConversation.participantAvatar"
@@ -192,40 +211,68 @@ onBeforeUnmount(() => {
                 />
                 <MessageSquare v-else class="w-5 h-5 text-white/70" />
               </div>
-              <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-primary rounded-full"></span>
+              <span
+                class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-primary rounded-full"
+              ></span>
             </div>
             <div>
-              <h3 class="font-bold text-sm leading-tight">{{ activeConversation?.participantName || 'Customer Support' }}</h3>
+              <h3 class="font-bold text-sm leading-tight">
+                {{ activeConversation?.participantName || 'Customer Support' }}
+              </h3>
               <p class="text-[10px] opacity-90 font-medium">Online</p>
             </div>
           </div>
           <div class="flex items-center gap-1">
-            <button @click="isMinimized = true" class="p-1.5 hover:bg-white/10 rounded-lg transition-colors" title="Minimize">
+            <button
+              class="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              title="Minimize"
+              @click="isMinimized = true"
+            >
               <Minus class="w-4 h-4" />
             </button>
-            <button @click="closeChat" class="p-1.5 hover:bg-white/10 rounded-lg transition-colors" title="Close">
+            <button
+              class="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+              title="Close"
+              @click="closeChat"
+            >
               <X class="w-4 h-4" />
             </button>
           </div>
         </div>
 
         <!-- Messages -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/30 custom-scrollbar">
+        <div
+          ref="messagesContainer"
+          class="flex-1 overflow-y-auto p-4 space-y-4 bg-secondary/30 custom-scrollbar"
+        >
           <!-- Loading state -->
           <div v-if="isLoading" class="flex items-center justify-center h-full">
             <div class="flex gap-1 items-center text-muted-foreground text-sm">
               <span class="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce"></span>
-              <span class="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style="animation-delay:0.1s"></span>
-              <span class="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce" style="animation-delay:0.2s"></span>
+              <span
+                class="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce"
+                style="animation-delay: 0.1s"
+              ></span>
+              <span
+                class="w-1.5 h-1.5 bg-muted-foreground/50 rounded-full animate-bounce"
+                style="animation-delay: 0.2s"
+              ></span>
             </div>
           </div>
 
           <!-- Empty state: no conversations -->
-          <div v-else-if="!activeConversation" class="flex flex-col items-center justify-center h-full text-center px-4">
+          <div
+            v-else-if="!activeConversation"
+            class="flex flex-col items-center justify-center h-full text-center px-4"
+          >
             <MessageSquare class="w-10 h-10 text-muted-foreground/40 mb-3" />
             <p class="text-sm text-muted-foreground font-medium">No conversations yet</p>
-            <p class="text-xs text-muted-foreground/70 mt-1">Visit a store page to start chatting with a merchant.</p>
-            <router-link to="/" class="mt-3 text-xs text-primary hover:underline font-medium">Browse Stores →</router-link>
+            <p class="text-xs text-muted-foreground/70 mt-1">
+              Visit a store page to start chatting with a merchant.
+            </p>
+            <router-link to="/" class="mt-3 text-xs text-primary hover:underline font-medium"
+              >Browse Stores →</router-link
+            >
           </div>
 
           <!-- Messages list -->
@@ -237,8 +284,8 @@ onBeforeUnmount(() => {
               :class="(msg as any).sender === 'user' ? 'ml-auto flex-row-reverse' : ''"
             >
               <div
-                class="w-8 h-8 rounded-full bg-secondary border border-border flex-shrink-0 overflow-hidden mt-auto"
                 v-if="(msg as any).sender === 'merchant'"
+                class="w-8 h-8 rounded-full bg-secondary border border-border flex-shrink-0 overflow-hidden mt-auto"
               >
                 <img
                   v-if="activeConversation?.participantAvatar"
@@ -250,7 +297,11 @@ onBeforeUnmount(() => {
 
               <div
                 class="px-4 py-2.5 rounded-2xl text-sm shadow-sm relative group"
-                :class="(msg as any).sender === 'user' ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-card border border-border rounded-bl-sm'"
+                :class="
+                  (msg as any).sender === 'user'
+                    ? 'bg-primary text-primary-foreground rounded-br-sm'
+                    : 'bg-card border border-border rounded-bl-sm'
+                "
               >
                 <p class="leading-relaxed">{{ (msg as any).content }}</p>
                 <span
@@ -266,7 +317,9 @@ onBeforeUnmount(() => {
 
         <!-- Input -->
         <div v-if="activeConversation" class="p-3 bg-card border-t border-border shadow-inner">
-          <div class="flex items-end gap-2 bg-secondary/50 p-2 rounded-xl border border-transparent focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all focus-within:bg-background">
+          <div
+            class="flex items-end gap-2 bg-secondary/50 p-2 rounded-xl border border-transparent focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all focus-within:bg-background"
+          >
             <textarea
               v-model="newMessage"
               rows="1"
@@ -292,10 +345,13 @@ onBeforeUnmount(() => {
     <!-- Trigger Button -->
     <button
       v-if="!isOpen || isMinimized"
-      @click="toggleChat"
       class="h-12 w-12 md:h-14 md:w-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300 flex items-center justify-center group relative hover:scale-105 active:scale-95"
+      @click="toggleChat"
     >
-      <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-background" :class="conversations.length > 0 ? 'animate-pulse' : ''"></span>
+      <span
+        class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-background"
+        :class="conversations.length > 0 ? 'animate-pulse' : ''"
+      ></span>
       <MessageSquare class="w-6 h-6 md:w-7 md:h-7" />
     </button>
 
@@ -306,7 +362,9 @@ onBeforeUnmount(() => {
       @click="isMinimized = false"
     >
       <div class="relative">
-        <div class="w-10 h-10 rounded-full bg-secondary overflow-hidden border border-border group-hover:border-primary/50 transition-colors">
+        <div
+          class="w-10 h-10 rounded-full bg-secondary overflow-hidden border border-border group-hover:border-primary/50 transition-colors"
+        >
           <img
             v-if="activeConversation?.participantAvatar"
             :src="activeConversation.participantAvatar"
@@ -314,13 +372,20 @@ onBeforeUnmount(() => {
           />
           <MessageSquare v-else class="w-5 h-5 m-auto text-muted-foreground" />
         </div>
-        <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-card rounded-full"></span>
+        <span
+          class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-card rounded-full"
+        ></span>
       </div>
       <div class="text-left">
-        <h4 class="font-bold text-sm">{{ activeConversation?.participantName || 'Customer Support' }}</h4>
+        <h4 class="font-bold text-sm">
+          {{ activeConversation?.participantName || 'Customer Support' }}
+        </h4>
         <p class="text-xs text-muted-foreground truncate max-w-[120px]">Click to resume chat</p>
       </div>
-      <button class="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded-full ml-1 transition-colors" @click.stop="closeChat">
+      <button
+        class="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded-full ml-1 transition-colors"
+        @click.stop="closeChat"
+      >
         <X class="w-4 h-4" />
       </button>
     </div>

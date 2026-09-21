@@ -19,7 +19,12 @@
         </div>
 
         <div class="admin-toolbar-select">
-          <el-select v-model="roleFilter" placeholder="All Roles" class="!w-full" @change="loadData">
+          <el-select
+            v-model="roleFilter"
+            placeholder="All Roles"
+            class="!w-full"
+            @change="loadData"
+          >
             <el-option label="All Roles" value="all" />
             <el-option label="User" value="user" />
             <el-option label="Merchant" value="merchant" />
@@ -34,7 +39,9 @@
       </div>
     </div>
 
-    <div class="admin-table-shell">
+    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
+
+    <div v-else class="admin-table-shell">
       <el-table v-loading="loading" :data="users" stripe class="admin-data-table min-w-[680px]">
         <el-table-column prop="name" label="Name" min-width="140">
           <template #default="{ row }">
@@ -55,7 +62,7 @@
               :class="{
                 'bg-sky-500/15 text-sky-300 ring-sky-500/25': row.role === 'user',
                 'bg-amber-500/15 text-amber-300 ring-amber-500/25': row.role === 'merchant',
-                'bg-violet-500/15 text-violet-300 ring-violet-500/25': row.role === 'admin'
+                'bg-violet-500/15 text-violet-300 ring-violet-500/25': row.role === 'admin',
               }"
             >
               {{ row.role }}
@@ -124,6 +131,17 @@
             </div>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="UsersIcon"
+            title="No users found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </div>
 
@@ -131,15 +149,21 @@
     <DetailDrawer v-model="drawerVisible" title="User Details" size="400px">
       <div v-if="selectedUser" class="space-y-6">
         <div class="flex items-center gap-4">
-          <div class="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-2xl font-bold text-zinc-400">
+          <div
+            class="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-2xl font-bold text-zinc-400"
+          >
             {{ selectedUser.name.charAt(0) }}
           </div>
           <div class="flex-1">
             <h3 class="text-lg font-bold text-white mb-1">{{ selectedUser.name }}</h3>
             <p class="text-zinc-400 text-sm mb-2">{{ selectedUser.email }}</p>
             <div class="flex gap-2">
-              <el-button size="small" @click="handleResetPassword(selectedUser)">Reset Password</el-button>
-              <el-button size="small" type="primary" plain @click="handleEditUser(selectedUser)">Edit Info</el-button>
+              <el-button size="small" @click="handleResetPassword(selectedUser)"
+                >Reset Password</el-button
+              >
+              <el-button size="small" type="primary" plain @click="handleEditUser(selectedUser)"
+                >Edit Info</el-button
+              >
             </div>
           </div>
         </div>
@@ -154,7 +178,9 @@
               {{ selectedUser.status.toUpperCase() }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="Joined Date">{{ selectedUser.joinedAt }}</el-descriptions-item>
+          <el-descriptions-item label="Joined Date">{{
+            selectedUser.joinedAt
+          }}</el-descriptions-item>
           <el-descriptions-item label="Last Login">2023-11-15 14:30</el-descriptions-item>
           <el-descriptions-item label="IP Address">192.168.1.10</el-descriptions-item>
         </el-descriptions>
@@ -196,13 +222,30 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { Eye, Pencil, RefreshCw, Search as SearchIcon } from 'lucide-vue-next'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAdminUsers, toggleUserStatus, resetUserPassword, updateUser, type AdminUser } from '@/api/modules/adminUsers'
+import { Eye, Pencil, RefreshCw, Search as SearchIcon, Users as UsersIcon } from 'lucide-vue-next'
+import { ElMessageBox } from 'element-plus'
+import {
+  getAdminUsers,
+  toggleUserStatus,
+  resetUserPassword,
+  updateUser,
+  type AdminUser,
+} from '@/api/modules/adminUsers'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { debounce } from 'lodash-es'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
-const loading = ref(false)
+const { toast } = useToast()
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load users',
+})
 const users = ref<AdminUser[]>([])
 const searchQuery = ref('')
 const roleFilter = ref('all')
@@ -214,18 +257,17 @@ const editDialogVisible = ref(false)
 const editForm = ref({ name: '', email: '' })
 
 const loadData = async () => {
-  loading.value = true
-  try {
-    const data = await getAdminUsers({ 
-      q: searchQuery.value, 
-      role: roleFilter.value 
-    })
-    users.value = data
-  } catch (error) {
-    ElMessage.error('Failed to load users')
-  } finally {
-    loading.value = false
-  }
+  // 原先只弹一个瞬时 toast，然后表格照常渲染 —— 用户看到的是「没有用户」，
+  // 而不是「加载失败」，toast 消失后也没有任何重试入口。改由 ErrorState 承担持久态。
+  // 注意：下面几个「操作类」catch（改状态/重置密码/编辑）刻意保留 toast ——
+  // 一次操作失败不该把整张表换成错误页。
+  const result = await run(() =>
+    getAdminUsers({
+      q: searchQuery.value,
+      role: roleFilter.value,
+    }),
+  )
+  if (result.ok) users.value = result.value
 }
 
 // Debounce search input
@@ -242,23 +284,26 @@ const handleToggleStatus = async (user: AdminUser) => {
     if (selectedUser.value && selectedUser.value.id === user.id) {
       selectedUser.value.status = updated.status
     }
-    ElMessage.success(`User ${updated.status === 'active' ? 'activated' : 'suspended'}`)
-  } catch (error) {
-    ElMessage.error('Failed to update status')
+    toast({
+      title: `User ${updated.status === 'active' ? 'activated' : 'suspended'}`,
+      variant: 'success',
+    })
+  } catch {
+    toast({ title: 'Failed to update status', variant: 'destructive' })
   }
 }
 
 const handleResetPassword = (user: AdminUser) => {
-  ElMessageBox.confirm(
-    `Are you sure you want to reset password for ${user.name}?`,
-    'Warning',
-    { confirmButtonText: 'Reset', cancelButtonText: 'Cancel', type: 'warning' }
-  ).then(async () => {
+  ElMessageBox.confirm(`Are you sure you want to reset password for ${user.name}?`, 'Warning', {
+    confirmButtonText: 'Reset',
+    cancelButtonText: 'Cancel',
+    type: 'warning',
+  }).then(async () => {
     try {
       await resetUserPassword(user.id)
-      ElMessage.success('Password reset email sent')
-    } catch (error) {
-      ElMessage.error('Failed to reset password')
+      toast({ title: 'Password reset email sent', variant: 'success' })
+    } catch {
+      toast({ title: 'Failed to reset password', variant: 'destructive' })
     }
   })
 }
@@ -274,15 +319,15 @@ const saveUserEdit = async () => {
     const updated = await updateUser(selectedUser.value.id, editForm.value)
     selectedUser.value.name = updated.name
     selectedUser.value.email = updated.email
-    
+
     // Update list
-    const index = users.value.findIndex(u => u.id === updated.id)
+    const index = users.value.findIndex((u) => u.id === updated.id)
     if (index !== -1) users.value[index] = { ...users.value[index], ...updated }
-    
+
     editDialogVisible.value = false
-    ElMessage.success('User updated successfully')
-  } catch (error) {
-    ElMessage.error('Failed to update user')
+    toast({ title: 'User updated successfully', variant: 'success' })
+  } catch {
+    toast({ title: 'Failed to update user', variant: 'destructive' })
   }
 }
 
