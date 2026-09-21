@@ -2,7 +2,12 @@ import { USE_MOCK } from '@/config/env'
 import { get } from '@/api/http'
 import { getMergedMockOrders } from '@/api/modules/orders'
 
-export interface Stat { label: string; value: string; change?: string; icon?: string }
+export interface Stat {
+  label: string
+  value: string
+  change?: string
+  icon?: string
+}
 
 function computeStatsFromOrders(): Stat[] {
   const orders = getMergedMockOrders()
@@ -15,7 +20,7 @@ function computeStatsFromOrders(): Stat[] {
     { label: 'Total Orders', value: String(total) },
     { label: 'In Transit', value: String(inTransit) },
     { label: 'Pending', value: String(pending) },
-    { label: 'Completed', value: String(completed) }
+    { label: 'Completed', value: String(completed) },
   ]
 }
 

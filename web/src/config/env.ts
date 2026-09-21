@@ -13,7 +13,8 @@ const getRuntimeMockValue = () => {
 }
 
 const runtimeMock = getRuntimeMockValue()
-export const USE_MOCK: boolean = runtimeMock !== null ? runtimeMock : String(import.meta.env.VITE_USE_MOCK) === 'true'
+export const USE_MOCK: boolean =
+  runtimeMock !== null ? runtimeMock : String(import.meta.env.VITE_USE_MOCK) === 'true'
 
 // Reactive version for components/watchers if needed, though usually we reload page
 export const RUNTIME_USE_MOCK = ref(USE_MOCK)

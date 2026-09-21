@@ -46,7 +46,7 @@ export const useBrowsingHistory = defineStore('browsingHistory', () => {
     rating?: number
   }) {
     // Remove existing entry for this product
-    items.value = items.value.filter(i => i.id !== product.id)
+    items.value = items.value.filter((i) => i.id !== product.id)
     // Add to front
     items.value.unshift({
       ...product,

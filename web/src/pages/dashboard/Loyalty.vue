@@ -34,13 +34,20 @@ function handleRedeem(reward: LoyaltyReward) {
   if (loyaltyStore.state.points < reward.cost) {
     toast({
       title: t('loyalty.insufficient'),
-      description: t('loyalty.insufficientDesc', { need: reward.cost, have: loyaltyStore.state.points }),
+      description: t('loyalty.insufficientDesc', {
+        need: reward.cost,
+        have: loyaltyStore.state.points,
+      }),
       variant: 'destructive',
     })
     return
   }
   if (loyaltyStore.isRedeemed(reward.id)) {
-    toast({ title: t('loyalty.insufficient'), description: t('loyalty.redeemedAlready'), variant: 'destructive' })
+    toast({
+      title: t('loyalty.insufficient'),
+      description: t('loyalty.redeemedAlready'),
+      variant: 'destructive',
+    })
     return
   }
   const redeemed = loyaltyStore.redeem(reward.id)
@@ -75,7 +82,9 @@ function goCoupons() {
 
     <!-- 积分余额 + 等级 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="p-6 rounded-2xl bg-gradient-to-br from-primary/15 to-background border border-primary/20">
+      <div
+        class="p-6 rounded-2xl bg-gradient-to-br from-primary/15 to-background border border-primary/20"
+      >
         <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
           <Coins class="w-4 h-4 text-primary" />
           {{ $t('loyalty.balanceTitle') }}
@@ -97,7 +106,10 @@ function goCoupons() {
             <component :is="tierIcon" class="w-4 h-4 text-primary" />
             {{ $t('loyalty.tierTitle') }}
           </div>
-          <span class="text-xs px-2.5 py-1 rounded-full font-semibold" :class="tierBadgeClass[loyaltyStore.tier] || ''">
+          <span
+            class="text-xs px-2.5 py-1 rounded-full font-semibold"
+            :class="tierBadgeClass[loyaltyStore.tier] || ''"
+          >
             {{ tierLabel(loyaltyStore.tier) }}
           </span>
         </div>
@@ -122,10 +134,19 @@ function goCoupons() {
           </div>
           <p class="text-xs text-muted-foreground mt-1.5">
             <template v-if="loyaltyStore.nextTier">
-              {{ $t('loyalty.spendTo', { amount: (loyaltyStore.nextTier.minSpend - loyaltyStore.state.lifetimeSpend).toFixed(0), tier: tierLabel(loyaltyStore.nextTier.tier) }) }}
+              {{
+                $t('loyalty.spendTo', {
+                  amount: (
+                    loyaltyStore.nextTier.minSpend - loyaltyStore.state.lifetimeSpend
+                  ).toFixed(0),
+                  tier: tierLabel(loyaltyStore.nextTier.tier),
+                })
+              }}
             </template>
             <template v-else>
-              {{ $t('loyalty.lifetimeSpend', { amount: loyaltyStore.state.lifetimeSpend.toFixed(0) }) }}
+              {{
+                $t('loyalty.lifetimeSpend', { amount: loyaltyStore.state.lifetimeSpend.toFixed(0) })
+              }}
             </template>
           </p>
         </div>
@@ -133,9 +154,15 @@ function goCoupons() {
     </div>
 
     <!-- 如何赚取 -->
-    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 rounded-xl border border-border bg-secondary/10 text-sm text-muted-foreground">
-      <span class="flex items-center gap-2"><Coins class="w-4 h-4 text-primary" /> {{ $t('loyalty.earnRule') }}</span>
-      <span class="flex items-center gap-2"><Award class="w-4 h-4 text-primary" /> {{ $t('loyalty.tierRule') }}</span>
+    <div
+      class="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 rounded-xl border border-border bg-secondary/10 text-sm text-muted-foreground"
+    >
+      <span class="flex items-center gap-2"
+        ><Coins class="w-4 h-4 text-primary" /> {{ $t('loyalty.earnRule') }}</span
+      >
+      <span class="flex items-center gap-2"
+        ><Award class="w-4 h-4 text-primary" /> {{ $t('loyalty.tierRule') }}</span
+      >
       <Button size="sm" variant="ghost" class="ml-auto text-primary" @click="goCoupons">
         {{ $t('loyalty.goCoupons') }} <ArrowRight class="w-4 h-4 ml-1" />
       </Button>
@@ -155,7 +182,9 @@ function goCoupons() {
           class="flex flex-col p-5 rounded-2xl border border-border bg-card transition-colors"
           :class="loyaltyStore.isRedeemed(reward.id) ? 'opacity-60' : 'hover:border-primary/40'"
         >
-          <div class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+          <div
+            class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3"
+          >
             <Ticket class="w-5 h-5" />
           </div>
           <h3 class="font-semibold">{{ reward.title }}</h3>
@@ -164,10 +193,14 @@ function goCoupons() {
             <span class="text-sm font-bold text-primary">{{ reward.cost }} pts</span>
             <Button
               size="sm"
-              :disabled="loyaltyStore.state.points < reward.cost || loyaltyStore.isRedeemed(reward.id)"
+              :disabled="
+                loyaltyStore.state.points < reward.cost || loyaltyStore.isRedeemed(reward.id)
+              "
               @click="handleRedeem(reward)"
             >
-              {{ loyaltyStore.isRedeemed(reward.id) ? $t('loyalty.redeemed') : $t('loyalty.redeem') }}
+              {{
+                loyaltyStore.isRedeemed(reward.id) ? $t('loyalty.redeemed') : $t('loyalty.redeem')
+              }}
             </Button>
           </div>
         </div>

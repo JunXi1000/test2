@@ -13,10 +13,7 @@ defineProps<{
 
 <template>
   <nav aria-label="Breadcrumb" class="flex items-center gap-1 text-sm text-muted-foreground py-2">
-    <router-link
-      to="/"
-      class="flex items-center gap-1 hover:text-foreground transition-colors"
-    >
+    <router-link to="/" class="flex items-center gap-1 hover:text-foreground transition-colors">
       <Home class="w-3.5 h-3.5" />
       Home
     </router-link>

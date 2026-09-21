@@ -33,11 +33,17 @@ const listeners = new Set<Listener>()
 
 export function onUserScopeChange(fn: Listener): () => void {
   listeners.add(fn)
-  return () => { listeners.delete(fn) }
+  return () => {
+    listeners.delete(fn)
+  }
 }
 
 export function notifyUserScopeChange() {
-  listeners.forEach(fn => {
-    try { fn() } catch { /* 单个 store 重载失败不应阻断其余 store */ }
+  listeners.forEach((fn) => {
+    try {
+      fn()
+    } catch {
+      /* 单个 store 重载失败不应阻断其余 store */
+    }
   })
 }

@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @config "../../../tailwind.config.js";
 
 @layer base {
@@ -184,4 +184,3 @@
 .admin-data-table.el-table .caret-wrapper {
   height: 1.5rem;
 }
-

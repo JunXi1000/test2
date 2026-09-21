@@ -2,7 +2,12 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { onUserScopeChange, scopedKey } from './userScope'
 import { RUNTIME_USE_MOCK } from '@/config/env'
-import { getReturns, createReturn, type ReturnRequest, type SubmitReturnPayload } from '@/api/modules/returns'
+import {
+  getReturns,
+  createReturn,
+  type ReturnRequest,
+  type SubmitReturnPayload,
+} from '@/api/modules/returns'
 
 export type { ReturnRequest } from '@/api/modules/returns'
 
@@ -11,7 +16,9 @@ const STORAGE_KEY = 'nexus_return_requests'
 function loadFromStorage(): ReturnRequest[] {
   try {
     return JSON.parse(localStorage.getItem(scopedKey(STORAGE_KEY)) || '[]')
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 function saveToStorage(items: ReturnRequest[]) {
   localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(items))
@@ -37,8 +44,8 @@ export const useReturnStore = defineStore('returns', () => {
     load()
   })
 
-  const pending = computed(() => requests.value.filter(r => r.status === 'pending'))
-  const resolved = computed(() => requests.value.filter(r => r.status !== 'pending'))
+  const pending = computed(() => requests.value.filter((r) => r.status === 'pending'))
+  const resolved = computed(() => requests.value.filter((r) => r.status !== 'pending'))
 
   async function submitRequest(data: SubmitReturnPayload): Promise<ReturnRequest> {
     if (RUNTIME_USE_MOCK.value) {
@@ -60,7 +67,7 @@ export const useReturnStore = defineStore('returns', () => {
   }
 
   function getByOrderId(orderId: string): ReturnRequest | undefined {
-    return requests.value.find(r => r.orderId === orderId)
+    return requests.value.find((r) => r.orderId === orderId)
   }
 
   return { requests, pending, resolved, submitRequest, getByOrderId, load }

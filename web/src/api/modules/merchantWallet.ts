@@ -17,17 +17,52 @@ export interface WalletTransaction {
 }
 
 const MOCK_WALLET: MerchantWallet = {
-  balance: 12450.00,
-  pending: 340.00,
-  currency: 'USD'
+  balance: 12450.0,
+  pending: 340.0,
+  currency: 'USD',
 }
 
 const MOCK_TRANSACTIONS: WalletTransaction[] = [
-  { id: 'TX-001', type: 'sale', amount: 899.00, status: 'completed', date: '2023-10-25', description: 'Order #ORD-2023-001' },
-  { id: 'TX-002', type: 'withdrawal', amount: -5000.00, status: 'completed', date: '2023-10-24', description: 'Payout to Bank **** 1234' },
-  { id: 'TX-003', type: 'sale', amount: 299.00, status: 'completed', date: '2023-10-23', description: 'Order #ORD-2023-002' },
-  { id: 'TX-004', type: 'fee', amount: -25.00, status: 'completed', date: '2023-10-23', description: 'Monthly Subscription' },
-  { id: 'TX-005', type: 'sale', amount: 340.00, status: 'pending', date: '2023-10-26', description: 'Order #ORD-2023-006 (Escrow)' }
+  {
+    id: 'TX-001',
+    type: 'sale',
+    amount: 899.0,
+    status: 'completed',
+    date: '2023-10-25',
+    description: 'Order #ORD-2023-001',
+  },
+  {
+    id: 'TX-002',
+    type: 'withdrawal',
+    amount: -5000.0,
+    status: 'completed',
+    date: '2023-10-24',
+    description: 'Payout to Bank **** 1234',
+  },
+  {
+    id: 'TX-003',
+    type: 'sale',
+    amount: 299.0,
+    status: 'completed',
+    date: '2023-10-23',
+    description: 'Order #ORD-2023-002',
+  },
+  {
+    id: 'TX-004',
+    type: 'fee',
+    amount: -25.0,
+    status: 'completed',
+    date: '2023-10-23',
+    description: 'Monthly Subscription',
+  },
+  {
+    id: 'TX-005',
+    type: 'sale',
+    amount: 340.0,
+    status: 'pending',
+    date: '2023-10-26',
+    description: 'Order #ORD-2023-006 (Escrow)',
+  },
 ]
 
 export async function getWalletBalance(): Promise<MerchantWallet> {
@@ -42,7 +77,7 @@ export async function getTransactions(): Promise<WalletTransaction[]> {
 
 export async function withdrawFunds(
   amount: number,
-  meta?: { destinationId?: string; destinationLabel?: string }
+  meta?: { destinationId?: string; destinationLabel?: string },
 ): Promise<void> {
   const label = (meta?.destinationLabel || '').trim() || 'Saved payout method'
   if (RUNTIME_USE_MOCK.value) {
@@ -54,13 +89,13 @@ export async function withdrawFunds(
       amount: -amount,
       status: 'pending',
       date: new Date().toISOString().split('T')[0],
-      description: `Withdrawal — ${label}`
+      description: `Withdrawal — ${label}`,
     })
     return Promise.resolve()
   }
   return post('/merchant/wallet/withdraw', {
     amount,
     destinationId: meta?.destinationId,
-    destinationLabel: meta?.destinationLabel
+    destinationLabel: meta?.destinationLabel,
   })
 }

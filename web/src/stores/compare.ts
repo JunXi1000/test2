@@ -35,7 +35,7 @@ export const useCompareStore = defineStore('compare', () => {
   })
 
   const count = computed(() => items.value.length)
-  const ids = computed(() => new Set(items.value.map(i => i.id)))
+  const ids = computed(() => new Set(items.value.map((i) => i.id)))
   const canCompare = computed(() => items.value.length >= 2)
 
   function isInCompare(productId: number): boolean {
@@ -50,7 +50,7 @@ export const useCompareStore = defineStore('compare', () => {
   }
 
   function removeItem(productId: number) {
-    items.value = items.value.filter(i => i.id !== productId)
+    items.value = items.value.filter((i) => i.id !== productId)
     saveToStorage(items.value)
   }
 
@@ -67,5 +67,16 @@ export const useCompareStore = defineStore('compare', () => {
     localStorage.removeItem(scopedKey(STORAGE_KEY))
   }
 
-  return { items, count, ids, canCompare, isInCompare, addItem, removeItem, toggleItem, clearAll, MAX_COMPARE }
+  return {
+    items,
+    count,
+    ids,
+    canCompare,
+    isInCompare,
+    addItem,
+    removeItem,
+    toggleItem,
+    clearAll,
+    MAX_COMPARE,
+  }
 })

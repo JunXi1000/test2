@@ -49,7 +49,9 @@ function loadState(): LoyaltyState {
 function saveState(state: LoyaltyState) {
   try {
     localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(state))
-  } catch { /* storage unavailable */ }
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 export const useLoyaltyStore = defineStore('loyalty', () => {
@@ -94,7 +96,7 @@ export const useLoyaltyStore = defineStore('loyalty', () => {
 
   /** 积分商城兑换奖励；成功返回奖励并扣积分，否则返回 null */
   function redeem(rewardId: string): LoyaltyReward | null {
-    const reward = POINTS_MALL.find(r => r.id === rewardId)
+    const reward = POINTS_MALL.find((r) => r.id === rewardId)
     if (!reward || isRedeemed(rewardId) || state.value.points < reward.cost) return null
     state.value.points -= reward.cost
     state.value.redeemed.push(rewardId)

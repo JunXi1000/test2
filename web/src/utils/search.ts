@@ -4,4 +4,3 @@ export function normalizeForSearch(text: unknown) {
     .replace(/[\s\-_/.,:]+/g, '')
     .trim()
 }
-

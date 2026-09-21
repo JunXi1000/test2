@@ -13,7 +13,7 @@ export function useMessagesLayout(options: {
     preferencesKey,
     defaultSidebarWidth = 320,
     minSidebarWidth = 260,
-    maxSidebarWidth = 460
+    maxSidebarWidth = 460,
   } = options
 
   const sidebarWidth = ref(defaultSidebarWidth)
@@ -61,8 +61,10 @@ export function useMessagesLayout(options: {
         mobileViewMode?: MobileViewMode
         ultraWideMode?: UltraWideMode
       }
-      if (typeof prefs.sidebarWidth === 'number') sidebarWidth.value = clampSidebarWidth(prefs.sidebarWidth)
-      if (typeof prefs.isSidebarCollapsed === 'boolean') isSidebarCollapsed.value = prefs.isSidebarCollapsed
+      if (typeof prefs.sidebarWidth === 'number')
+        sidebarWidth.value = clampSidebarWidth(prefs.sidebarWidth)
+      if (typeof prefs.isSidebarCollapsed === 'boolean')
+        isSidebarCollapsed.value = prefs.isSidebarCollapsed
       if (prefs.mobileViewMode) mobileViewMode.value = prefs.mobileViewMode
       if (prefs.ultraWideMode) ultraWideMode.value = prefs.ultraWideMode
     } catch {
@@ -77,8 +79,8 @@ export function useMessagesLayout(options: {
         sidebarWidth: sidebarWidth.value,
         isSidebarCollapsed: isSidebarCollapsed.value,
         mobileViewMode: mobileViewMode.value,
-        ultraWideMode: ultraWideMode.value
-      })
+        ultraWideMode: ultraWideMode.value,
+      }),
     )
   }
 
@@ -130,7 +132,6 @@ export function useMessagesLayout(options: {
     showInspector,
     sidebarStyle,
     toggleSidebarCollapse,
-    startSidebarResize
+    startSidebarResize,
   }
 }
-

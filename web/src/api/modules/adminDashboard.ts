@@ -1,9 +1,21 @@
 import { USE_MOCK } from '@/config/env'
 import { get } from '@/api/http'
 
-export interface AdminStat { label: string; value: string; change: string; icon: 'DollarSign'|'Users'|'ShoppingBag'|'Activity' }
-export interface RecentUser { name: string; email: string; joinedAt: string }
-export interface RevenueData { date: string; value: number }
+export interface AdminStat {
+  label: string
+  value: string
+  change: string
+  icon: 'DollarSign' | 'Users' | 'ShoppingBag' | 'Activity'
+}
+export interface RecentUser {
+  name: string
+  email: string
+  joinedAt: string
+}
+export interface RevenueData {
+  date: string
+  value: number
+}
 
 const MOCK_ADMIN_STATS: AdminStat[] = [
   { label: 'Total Revenue', value: '$45,231.89', change: '+20.1%', icon: 'DollarSign' },

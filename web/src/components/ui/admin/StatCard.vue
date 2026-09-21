@@ -13,22 +13,33 @@ const props = defineProps<Props>()
 
 const iconComp = computed(() => {
   switch (props.icon) {
-    case 'DollarSign': return DollarSign
-    case 'Users': return Users
-    case 'ShoppingBag': return ShoppingBag
-    case 'Activity': return Activity
-    case 'Store': return Store
-    default: return Activity
+    case 'DollarSign':
+      return DollarSign
+    case 'Users':
+      return Users
+    case 'ShoppingBag':
+      return ShoppingBag
+    case 'Activity':
+      return Activity
+    case 'Store':
+      return Store
+    default:
+      return Activity
   }
 })
 
 const colorClass = computed(() => {
   switch (props.icon) {
-    case 'DollarSign': return 'text-emerald-500'
-    case 'Users': return 'text-blue-500'
-    case 'ShoppingBag': return 'text-purple-500'
-    case 'Store': return 'text-amber-500'
-    default: return 'text-rose-500'
+    case 'DollarSign':
+      return 'text-emerald-500'
+    case 'Users':
+      return 'text-blue-500'
+    case 'ShoppingBag':
+      return 'text-purple-500'
+    case 'Store':
+      return 'text-amber-500'
+    default:
+      return 'text-rose-500'
   }
 })
 </script>

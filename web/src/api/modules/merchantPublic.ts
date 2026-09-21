@@ -39,8 +39,10 @@ const MOCK_PROFILES: Record<string, MerchantPublicProfile> = {
   m1: {
     id: 'm1',
     storeName: 'Nike Official Store',
-    avatar: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=200&auto=format&fit=crop',
-    description: 'Official Nike store. Authentic sneakers, apparel and accessories with worldwide shipping.',
+    avatar:
+      'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=200&auto=format&fit=crop',
+    description:
+      'Official Nike store. Authentic sneakers, apparel and accessories with worldwide shipping.',
     verified: true,
     joinedDate: '2022-03',
     location: 'Portland, OR',
@@ -51,23 +53,56 @@ const MOCK_PROFILES: Record<string, MerchantPublicProfile> = {
       totalProducts: 286,
       totalSales: 58200,
       satisfactionRate: 98,
-      followers: 45600
+      followers: 45600,
     },
     policies: {
       shipping: 'Free shipping on orders over $100. Standard delivery 3-5 business days.',
-      returns: '30-day free returns. Items must be unworn with original tags.'
+      returns: '30-day free returns. Items must be unworn with original tags.',
     },
     featuredProducts: [
-      { id: 101, title: 'Air Max 90', price: 130, image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=300&auto=format&fit=crop', rating: 4.8, sales: 3200 },
-      { id: 102, title: 'React Infinity Run', price: 160, image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=300&auto=format&fit=crop', rating: 4.7, sales: 1800 },
-      { id: 103, title: 'Dunk Low Retro', price: 110, image: 'https://images.unsplash.com/photo-1597045566677-8cf032ed6634?q=80&w=300&auto=format&fit=crop', rating: 4.9, sales: 5100 },
-      { id: 104, title: 'Air Force 1 \'07', price: 90, image: 'https://images.unsplash.com/photo-1600269452121-4f2416e55c28?q=80&w=300&auto=format&fit=crop', rating: 4.8, sales: 8900 }
-    ]
+      {
+        id: 101,
+        title: 'Air Max 90',
+        price: 130,
+        image:
+          'https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=300&auto=format&fit=crop',
+        rating: 4.8,
+        sales: 3200,
+      },
+      {
+        id: 102,
+        title: 'React Infinity Run',
+        price: 160,
+        image:
+          'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?q=80&w=300&auto=format&fit=crop',
+        rating: 4.7,
+        sales: 1800,
+      },
+      {
+        id: 103,
+        title: 'Dunk Low Retro',
+        price: 110,
+        image:
+          'https://images.unsplash.com/photo-1597045566677-8cf032ed6634?q=80&w=300&auto=format&fit=crop',
+        rating: 4.9,
+        sales: 5100,
+      },
+      {
+        id: 104,
+        title: "Air Force 1 '07",
+        price: 90,
+        image:
+          'https://images.unsplash.com/photo-1600269452121-4f2416e55c28?q=80&w=300&auto=format&fit=crop',
+        rating: 4.8,
+        sales: 8900,
+      },
+    ],
   },
   m2: {
     id: 'm2',
     storeName: 'Adidas Originals',
-    avatar: 'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=200&auto=format&fit=crop',
+    avatar:
+      'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=200&auto=format&fit=crop',
     description: 'Adidas Originals — iconic streetwear and performance gear for every lifestyle.',
     verified: true,
     joinedDate: '2021-11',
@@ -79,18 +114,42 @@ const MOCK_PROFILES: Record<string, MerchantPublicProfile> = {
       totalProducts: 195,
       totalSales: 34500,
       satisfactionRate: 96,
-      followers: 32100
+      followers: 32100,
     },
     policies: {
       shipping: 'Free shipping on orders over $80. Express shipping available.',
-      returns: '60-day hassle-free returns on all orders.'
+      returns: '60-day hassle-free returns on all orders.',
     },
     featuredProducts: [
-      { id: 201, title: 'Ultraboost 23', price: 190, image: 'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=300&auto=format&fit=crop', rating: 4.9, sales: 4200 },
-      { id: 202, title: 'Stan Smith', price: 85, image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=300&auto=format&fit=crop', rating: 4.6, sales: 6700 },
-      { id: 203, title: 'NMD_R1', price: 140, image: 'https://images.unsplash.com/photo-1556906781-9a412961c28c?q=80&w=300&auto=format&fit=crop', rating: 4.5, sales: 2100 }
-    ]
-  }
+      {
+        id: 201,
+        title: 'Ultraboost 23',
+        price: 190,
+        image:
+          'https://images.unsplash.com/photo-1518002171953-a080ee802e12?q=80&w=300&auto=format&fit=crop',
+        rating: 4.9,
+        sales: 4200,
+      },
+      {
+        id: 202,
+        title: 'Stan Smith',
+        price: 85,
+        image:
+          'https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=300&auto=format&fit=crop',
+        rating: 4.6,
+        sales: 6700,
+      },
+      {
+        id: 203,
+        title: 'NMD_R1',
+        price: 140,
+        image:
+          'https://images.unsplash.com/photo-1556906781-9a412961c28c?q=80&w=300&auto=format&fit=crop',
+        rating: 4.5,
+        sales: 2100,
+      },
+    ],
+  },
 }
 
 export interface StoreProductQuery {
@@ -123,26 +182,26 @@ function buildStoreProducts(merchantId: string): MerchantFeaturedProduct[] {
       image: src.image,
       rating: +(3.5 + Math.random() * 1.5).toFixed(1),
       sales: Math.floor(Math.random() * 5000),
-      category: categories[i % categories.length]
+      category: categories[i % categories.length],
     })
   }
-  return [...base.map(p => ({ ...p, category: 'Footwear' })), ...extras]
+  return [...base.map((p) => ({ ...p, category: 'Footwear' })), ...extras]
 }
 
 export async function getMerchantStoreProducts(
   merchantId: string,
-  params?: StoreProductQuery
+  params?: StoreProductQuery,
 ): Promise<StoreProductsResult> {
   if (USE_MOCK) {
     let items = buildStoreProducts(merchantId)
-    const categories = [...new Set(items.map(p => p.category!))].filter(Boolean)
+    const categories = [...new Set(items.map((p) => p.category!))].filter(Boolean)
 
     if (params?.category && params.category !== 'All') {
-      items = items.filter(p => p.category === params.category)
+      items = items.filter((p) => p.category === params.category)
     }
     if (params?.q) {
       const q = params.q.toLowerCase()
-      items = items.filter(p => p.title.toLowerCase().includes(q))
+      items = items.filter((p) => p.title.toLowerCase().includes(q))
     }
     if (params?.sort === 'popular') items.sort((a, b) => b.sales - a.sales)
     else if (params?.sort === 'newest') items.sort((a, b) => b.id - a.id)
@@ -155,7 +214,7 @@ export async function getMerchantStoreProducts(
     const start = (page - 1) * limit
     items = items.slice(start, start + limit)
 
-    return new Promise(resolve => setTimeout(() => resolve({ items, total, categories }), 400))
+    return new Promise((resolve) => setTimeout(() => resolve({ items, total, categories }), 400))
   }
   return get<StoreProductsResult>(`/merchants/${merchantId}/products`, { params })
 }
@@ -173,12 +232,19 @@ export async function getMerchantPublicProfile(merchantId: string): Promise<Merc
         joinedDate: '2024-01',
         location: 'Unknown',
         responseTime: 'N/A',
-        stats: { rating: 0, totalReviews: 0, totalProducts: 0, totalSales: 0, satisfactionRate: 0, followers: 0 },
+        stats: {
+          rating: 0,
+          totalReviews: 0,
+          totalProducts: 0,
+          totalSales: 0,
+          satisfactionRate: 0,
+          followers: 0,
+        },
         policies: { shipping: 'Contact store for details.', returns: 'Contact store for details.' },
-        featuredProducts: []
+        featuredProducts: [],
       })
     }
-    return new Promise(resolve => setTimeout(() => resolve(profile), 300))
+    return new Promise((resolve) => setTimeout(() => resolve(profile), 300))
   }
   return get<MerchantPublicProfile>(`/merchants/${merchantId}/profile`)
 }

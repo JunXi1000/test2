@@ -31,14 +31,14 @@ const MOCK_SETTINGS: MerchantSettings = {
   responseTime: '< 1 hour',
   policies: {
     shipping: 'Free shipping on orders over $50. Standard delivery 3–7 business days.',
-    returns: '30-day returns. Items must be unopened or in original condition.'
+    returns: '30-day returns. Items must be unopened or in original condition.',
   },
   email: 'merchant@nexus.com',
   notifications: {
     email: true,
     push: false,
-    sms: true
-  }
+    sms: true,
+  },
 }
 
 export async function getMerchantSettings(): Promise<MerchantSettings> {
@@ -46,7 +46,9 @@ export async function getMerchantSettings(): Promise<MerchantSettings> {
   return get<MerchantSettings>('/merchant/settings')
 }
 
-export async function updateMerchantSettings(data: Partial<MerchantSettings>): Promise<MerchantSettings> {
+export async function updateMerchantSettings(
+  data: Partial<MerchantSettings>,
+): Promise<MerchantSettings> {
   if (RUNTIME_USE_MOCK.value) {
     Object.assign(MOCK_SETTINGS, data)
     return Promise.resolve(MOCK_SETTINGS)

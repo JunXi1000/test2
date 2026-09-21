@@ -21,9 +21,20 @@ export interface SearchResults {
 
 // ── Trending / hot searches ──────────────────────────────────────────
 const TRENDING_SEARCHES = [
-  'iPhone', 'MacBook', 'AirPods', 'Smart Watch', 'Gaming Mouse',
-  'Mechanical Keyboard', '4K Monitor', 'Bluetooth Speaker', 'Tablet',
-  'Drone', 'Camera', 'Noise Cancelling', 'Wireless Earbuds', 'USB-C Hub',
+  'iPhone',
+  'MacBook',
+  'AirPods',
+  'Smart Watch',
+  'Gaming Mouse',
+  'Mechanical Keyboard',
+  '4K Monitor',
+  'Bluetooth Speaker',
+  'Tablet',
+  'Drone',
+  'Camera',
+  'Noise Cancelling',
+  'Wireless Earbuds',
+  'USB-C Hub',
   'Portable Charger',
 ]
 
@@ -54,15 +65,13 @@ export async function getSearchSuggestions(query: string): Promise<SearchSuggest
     const q = query.toLowerCase().trim()
 
     // matching keywords from cache
-    const keywords = searchSuggestionsCache
-      .filter(w => w.startsWith(q) && w !== q)
-      .slice(0, 6)
+    const keywords = searchSuggestionsCache.filter((w) => w.startsWith(q) && w !== q).slice(0, 6)
 
     // matching product titles
     const matchedProducts = products
-      .filter(p => p.title.toLowerCase().includes(q))
+      .filter((p) => p.title.toLowerCase().includes(q))
       .slice(0, 4)
-      .map(p => ({ id: p.id, title: p.title, price: p.price, image: p.image }))
+      .map((p) => ({ id: p.id, title: p.title, price: p.price, image: p.image }))
 
     return { keywords, products: matchedProducts }
   }
@@ -96,22 +105,21 @@ export async function searchProducts(params: {
 
     if (q) {
       result = result.filter(
-        p =>
-          p.title.toLowerCase().includes(q) ||
-          (p.category && p.category.toLowerCase().includes(q))
+        (p) =>
+          p.title.toLowerCase().includes(q) || (p.category && p.category.toLowerCase().includes(q)),
       )
     }
     if (params.category) {
-      result = result.filter(p => p.category === params.category)
+      result = result.filter((p) => p.category === params.category)
     }
     if (params.priceMin != null) {
-      result = result.filter(p => p.price >= params.priceMin!)
+      result = result.filter((p) => p.price >= params.priceMin!)
     }
     if (params.priceMax != null) {
-      result = result.filter(p => p.price <= params.priceMax!)
+      result = result.filter((p) => p.price <= params.priceMax!)
     }
     if (params.rating != null) {
-      result = result.filter(p => (p.rating ?? 0) >= params.rating!)
+      result = result.filter((p) => (p.rating ?? 0) >= params.rating!)
     }
 
     // facets computed from filtered results
@@ -152,17 +160,22 @@ export async function searchProducts(params: {
 
     const facets = {
       categories: Array.from(catCounts.entries()).map(([name, count]) => ({ name, count })),
-      priceRanges: priceRanges.filter(r => r.count > 0),
-      ratings: ratingBuckets.filter(r => r.count > 0),
+      priceRanges: priceRanges.filter((r) => r.count > 0),
+      ratings: ratingBuckets.filter((r) => r.count > 0),
     }
 
     // related searches from titles of result set
     const titleWords = new Set<string>()
     for (const p of result.slice(0, 30)) {
-      p.title.toLowerCase().split(/\s+/).forEach(w => { if (w.length >= 3) titleWords.add(w) })
+      p.title
+        .toLowerCase()
+        .split(/\s+/)
+        .forEach((w) => {
+          if (w.length >= 3) titleWords.add(w)
+        })
     }
     const relatedSearches = Array.from(titleWords)
-      .filter(w => !q.includes(w))
+      .filter((w) => !q.includes(w))
       .sort(() => Math.random() - 0.5)
       .slice(0, 5)
 
@@ -202,7 +215,7 @@ export function addSearchHistory(query: string) {
   const trimmed = query.trim()
   if (!trimmed) return
   let history = getSearchHistory()
-  history = history.filter(h => h.toLowerCase() !== trimmed.toLowerCase())
+  history = history.filter((h) => h.toLowerCase() !== trimmed.toLowerCase())
   history.unshift(trimmed)
   if (history.length > MAX_HISTORY) history = history.slice(0, MAX_HISTORY)
   localStorage.setItem(scopedKey(HISTORY_KEY), JSON.stringify(history))
@@ -214,6 +227,6 @@ export function clearSearchHistory() {
 
 export function removeSearchHistory(query: string) {
   let history = getSearchHistory()
-  history = history.filter(h => h !== query)
+  history = history.filter((h) => h !== query)
   localStorage.setItem(scopedKey(HISTORY_KEY), JSON.stringify(history))
 }

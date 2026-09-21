@@ -66,11 +66,11 @@ export function getSavedPaymentMethods(userKey: string): SavedPaymentMethod[] {
 /** 保存支付方式（仅存品牌 + 末四位 + 有效期，不存明文卡号）；同卡去重后返回 */
 export function savePaymentMethod(
   userKey: string,
-  card: { brand: string; last4: string; expMonth: string; expYear: string }
+  card: { brand: string; last4: string; expMonth: string; expYear: string },
 ): SavedPaymentMethod {
   const methods = getSavedPaymentMethods(userKey)
   const exists = methods.find(
-    (m) => m.last4 === card.last4 && m.expMonth === card.expMonth && m.expYear === card.expYear
+    (m) => m.last4 === card.last4 && m.expMonth === card.expMonth && m.expYear === card.expYear,
   )
   if (exists) return exists
   const method: SavedPaymentMethod = {
@@ -129,20 +129,29 @@ function routeCardScenario(digits: string): MockScenario {
     return { status: 'succeeded', orderId: mockOrderId() }
   }
   if (d === CARD_3DS) {
-    return { status: 'requires_action', action: { type: '3ds', transactionId: `tds_${Date.now()}` } }
+    return {
+      status: 'requires_action',
+      action: { type: '3ds', transactionId: `tds_${Date.now()}` },
+    }
   }
   if (d === CARD_DECLINE_GENERIC) {
     return { status: 'failed', errorCode: 'card_declined', errorMessage: 'Your card was declined.' }
   }
   if (d === CARD_DECLINE_INSUFFICIENT) {
-    return { status: 'failed', errorCode: 'insufficient_funds', errorMessage: 'Your card has insufficient funds.' }
+    return {
+      status: 'failed',
+      errorCode: 'insufficient_funds',
+      errorMessage: 'Your card has insufficient funds.',
+    }
   }
   return { status: 'succeeded', orderId: mockOrderId() }
 }
 
 const networkDelay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
-export async function createPaymentIntent(payload: PaymentCreatePayload): Promise<PaymentCreateResult> {
+export async function createPaymentIntent(
+  payload: PaymentCreatePayload,
+): Promise<PaymentCreateResult> {
   if (USE_MOCK) {
     await networkDelay(600)
     const paymentId = `pi_${Date.now()}_${Math.floor(Math.random() * 10000)}`
@@ -152,7 +161,9 @@ export async function createPaymentIntent(payload: PaymentCreatePayload): Promis
   return post<PaymentCreateResult>('/payments/create', payload)
 }
 
-export async function confirmPayment(payload: PaymentConfirmPayload): Promise<PaymentConfirmResult> {
+export async function confirmPayment(
+  payload: PaymentConfirmPayload,
+): Promise<PaymentConfirmResult> {
   if (USE_MOCK) {
     await networkDelay(600)
     // 已保存支付方式（一键下单）：token 代表此前支付成功的卡，直接成功扣款
@@ -165,7 +176,11 @@ export async function confirmPayment(payload: PaymentConfirmPayload): Promise<Pa
       return { status: 'requires_action', action: scenario.action }
     }
     if (scenario.status === 'failed') {
-      return { status: 'failed', errorCode: scenario.errorCode, errorMessage: scenario.errorMessage }
+      return {
+        status: 'failed',
+        errorCode: scenario.errorCode,
+        errorMessage: scenario.errorMessage,
+      }
     }
     return { status: 'succeeded', orderId: scenario.orderId }
   }
@@ -173,7 +188,9 @@ export async function confirmPayment(payload: PaymentConfirmPayload): Promise<Pa
 }
 
 /** 3DS 认证完成后，银行回调确认支付 */
-export async function completePaymentAction(payload: PaymentActionPayload): Promise<PaymentActionResult> {
+export async function completePaymentAction(
+  payload: PaymentActionPayload,
+): Promise<PaymentActionResult> {
   if (USE_MOCK) {
     await networkDelay(600)
     return { status: 'succeeded', orderId: mockOrderId() }

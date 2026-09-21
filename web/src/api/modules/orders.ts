@@ -77,7 +77,7 @@ export interface StorefrontOrderDTO {
 const FALLBACK_IMG =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-size="10" text-anchor="middle" dominant-baseline="middle">Nexus</text></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#f1f5f9"/><text x="50%" y="50%" fill="#94a3b8" font-size="10" text-anchor="middle" dominant-baseline="middle">Nexus</text></svg>',
   )
 
 function formatOrderDate(iso?: string | null): string {
@@ -143,35 +143,115 @@ function mapStorefrontOrder(raw: StorefrontOrderDTO): Order {
 
 const MOCK_ORDERS: Order[] = [
   {
-    id: 'ORD-7782', date: 'Oct 24, 2026', status: 'In Transit',
-    subtotal: 1248.00, shippingFee: 0, tax: 99.84, discount: 48.84, total: 1299.00,
-    trackingNumber: 'SF1234567890', estimatedDelivery: 'Oct 30, 2026',
-    shipping: { name: 'John Doe', phone: '+1 (555) 123-4567', address: '123 Main St, Apt 4B', city: 'New York', country: 'United States', zip: '10001' },
+    id: 'ORD-7782',
+    date: 'Oct 24, 2026',
+    status: 'In Transit',
+    subtotal: 1248.0,
+    shippingFee: 0,
+    tax: 99.84,
+    discount: 48.84,
+    total: 1299.0,
+    trackingNumber: 'SF1234567890',
+    estimatedDelivery: 'Oct 30, 2026',
+    shipping: {
+      name: 'John Doe',
+      phone: '+1 (555) 123-4567',
+      address: '123 Main St, Apt 4B',
+      city: 'New York',
+      country: 'United States',
+      zip: '10001',
+    },
     payment: { method: 'card', cardBrand: 'Visa', cardLast4: '4242', paidAt: 'Oct 24, 2026 14:32' },
     items: [
-      { productId: 1, name: 'Nexus VR Pro', image: 'https://images.unsplash.com/photo-1622979135228-d0a136e145c6?q=80&w=200&auto=format&fit=crop', price: 999.00, quantity: 1, color: 'Obsidian Black', size: 'Pro' },
-      { productId: 3, name: 'Smart Ring', image: 'https://images.unsplash.com/photo-1623998021446-45cd9b269056?q=80&w=200&auto=format&fit=crop', price: 249.00, quantity: 1, color: 'Silver', size: 'M' }
-    ]
+      {
+        productId: 1,
+        name: 'Nexus VR Pro',
+        image:
+          'https://images.unsplash.com/photo-1622979135228-d0a136e145c6?q=80&w=200&auto=format&fit=crop',
+        price: 999.0,
+        quantity: 1,
+        color: 'Obsidian Black',
+        size: 'Pro',
+      },
+      {
+        productId: 3,
+        name: 'Smart Ring',
+        image:
+          'https://images.unsplash.com/photo-1623998021446-45cd9b269056?q=80&w=200&auto=format&fit=crop',
+        price: 249.0,
+        quantity: 1,
+        color: 'Silver',
+        size: 'M',
+      },
+    ],
   },
   {
-    id: 'ORD-7781', date: 'Oct 12, 2026', status: 'Delivered',
-    subtotal: 179.00, shippingFee: 12.00, tax: 14.32, discount: 6.32, total: 199.00,
-    shipping: { name: 'John Doe', phone: '+1 (555) 123-4567', address: '123 Main St, Apt 4B', city: 'New York', country: 'United States', zip: '10001' },
-    payment: { method: 'card', cardBrand: 'Mastercard', cardLast4: '8888', paidAt: 'Oct 12, 2026 09:15' },
+    id: 'ORD-7781',
+    date: 'Oct 12, 2026',
+    status: 'Delivered',
+    subtotal: 179.0,
+    shippingFee: 12.0,
+    tax: 14.32,
+    discount: 6.32,
+    total: 199.0,
+    shipping: {
+      name: 'John Doe',
+      phone: '+1 (555) 123-4567',
+      address: '123 Main St, Apt 4B',
+      city: 'New York',
+      country: 'United States',
+      zip: '10001',
+    },
+    payment: {
+      method: 'card',
+      cardBrand: 'Mastercard',
+      cardLast4: '8888',
+      paidAt: 'Oct 12, 2026 09:15',
+    },
     items: [
-      { productId: 5, name: 'Audio Pods X', image: 'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?q=80&w=200&auto=format&fit=crop', price: 179.00, quantity: 1, color: 'Midnight Black' }
-    ]
+      {
+        productId: 5,
+        name: 'Audio Pods X',
+        image:
+          'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?q=80&w=200&auto=format&fit=crop',
+        price: 179.0,
+        quantity: 1,
+        color: 'Midnight Black',
+      },
+    ],
   },
   {
-    id: 'ORD-7540', date: 'Sep 28, 2026', status: 'Delivered',
-    subtotal: 849.00, shippingFee: 0, tax: 67.92, discount: 17.92, total: 899.00,
+    id: 'ORD-7540',
+    date: 'Sep 28, 2026',
+    status: 'Delivered',
+    subtotal: 849.0,
+    shippingFee: 0,
+    tax: 67.92,
+    discount: 17.92,
+    total: 899.0,
     note: 'Gift packaging requested',
-    shipping: { name: 'John Doe', phone: '+1 (555) 123-4567', address: '456 Park Ave', city: 'Los Angeles', country: 'United States', zip: '90001' },
+    shipping: {
+      name: 'John Doe',
+      phone: '+1 (555) 123-4567',
+      address: '456 Park Ave',
+      city: 'Los Angeles',
+      country: 'United States',
+      zip: '90001',
+    },
     payment: { method: 'apple_pay', paidAt: 'Sep 28, 2026 18:44' },
     items: [
-      { productId: 1, name: 'Nexus VR Pro', image: 'https://images.unsplash.com/photo-1622979135228-d0a136e145c6?q=80&w=200&auto=format&fit=crop', price: 849.00, quantity: 1, color: 'Lunar White', size: 'Standard' }
-    ]
-  }
+      {
+        productId: 1,
+        name: 'Nexus VR Pro',
+        image:
+          'https://images.unsplash.com/photo-1622979135228-d0a136e145c6?q=80&w=200&auto=format&fit=crop',
+        price: 849.0,
+        quantity: 1,
+        color: 'Lunar White',
+        size: 'Standard',
+      },
+    ],
+  },
 ]
 
 /** User-placed orders from checkout (prepended before seed mock data). */

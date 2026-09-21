@@ -19,8 +19,8 @@ const props = withDefaults(
     cancelText: 'Cancel',
     width: 460,
     danger: false,
-    showClose: false
-  }
+    showClose: false,
+  },
 )
 
 const emit = defineEmits<{
@@ -31,7 +31,7 @@ const emit = defineEmits<{
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (v: boolean) => emit('update:modelValue', v)
+  set: (v: boolean) => emit('update:modelValue', v),
 })
 
 function onCancel() {
@@ -81,4 +81,3 @@ function onConfirm() {
     </template>
   </el-dialog>
 </template>
-

@@ -73,7 +73,7 @@ http.interceptors.response.use(
       if (msg) error.message = msg
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 export function get<T = any>(url: string, config?: AxiosRequestConfig) {

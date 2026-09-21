@@ -27,7 +27,7 @@ function persistSessionBudget() {
   try {
     sessionStorage.setItem(
       PRELOAD_BUDGET_KEY,
-      JSON.stringify({ sessionCount: sessionPreloadCount, idleCount: idlePreloadCount })
+      JSON.stringify({ sessionCount: sessionPreloadCount, idleCount: idlePreloadCount }),
     )
   } catch {
     // Ignore storage failures
@@ -113,13 +113,15 @@ function runPreload(key: string, loader: PreloadLoader | undefined, trigger: Pre
   if (!canPreload(trigger)) return
   if (!loader || preloadedKeys.has(key)) return
   preloadedKeys.add(key)
-  loader().catch(() => {
-    preloadedKeys.delete(key)
-  }).finally(() => {
-    sessionPreloadCount += 1
-    if (trigger === 'idle') idlePreloadCount += 1
-    persistSessionBudget()
-  })
+  loader()
+    .catch(() => {
+      preloadedKeys.delete(key)
+    })
+    .finally(() => {
+      sessionPreloadCount += 1
+      if (trigger === 'idle') idlePreloadCount += 1
+      persistSessionBudget()
+    })
 }
 
 export function preloadByRouteNames(routeNames: string[]) {
@@ -146,7 +148,11 @@ export function getDefaultPreloadTargets(role?: UserRole, isAuthed?: boolean) {
       ? [...common, 'Login', 'AdminLogin', 'MerchantLogin']
       : [...common, 'Login', 'AdminLogin', 'MerchantLogin', 'Signup']
   }
-  if (role === 'admin') return constrained ? [...common, 'AdminHome'] : [...common, 'AdminHome', 'AdminOrders']
-  if (role === 'merchant') return constrained ? [...common, 'MerchantHome'] : [...common, 'MerchantHome', 'MerchantOrders']
-  return constrained ? [...common, 'DashboardHome'] : [...common, 'DashboardHome', 'DashboardOrders', 'Addresses']
+  if (role === 'admin')
+    return constrained ? [...common, 'AdminHome'] : [...common, 'AdminHome', 'AdminOrders']
+  if (role === 'merchant')
+    return constrained ? [...common, 'MerchantHome'] : [...common, 'MerchantHome', 'MerchantOrders']
+  return constrained
+    ? [...common, 'DashboardHome']
+    : [...common, 'DashboardHome', 'DashboardOrders', 'Addresses']
 }
