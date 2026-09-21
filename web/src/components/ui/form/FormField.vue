@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   label: '',
   error: '',
   valid: false,
-  type: 'text'
+  type: 'text',
 })
 
 const { t } = useI18n()
@@ -33,7 +33,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const showPassword = ref(false)
 
 const resolvedType = computed(() =>
-  props.type === 'password' && showPassword.value ? 'text' : props.type
+  props.type === 'password' && showPassword.value ? 'text' : props.type,
 )
 
 const inputClasses = computed(() =>
@@ -44,8 +44,8 @@ const inputClasses = computed(() =>
       ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/30'
       : props.valid
         ? 'border-emerald-500/70 focus:border-emerald-500'
-        : 'border-transparent focus:border-primary/50 focus:bg-secondary'
-  )
+        : 'border-transparent focus:border-primary/50 focus:bg-secondary',
+  ),
 )
 
 function togglePassword() {
@@ -77,9 +77,9 @@ defineExpose({ focus })
     <div class="relative group">
       <slot name="icon" />
       <input
-        ref="inputRef"
         v-bind="$attrs"
         :id="inputId"
+        ref="inputRef"
         v-model="model"
         :type="resolvedType"
         :class="inputClasses"

@@ -1,7 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { User, Package, MapPin, Settings, LogOut, LayoutDashboard, MessageSquare, Heart, Ticket, RotateCcw, Store, Gem } from 'lucide-vue-next'
+import {
+  User,
+  Package,
+  MapPin,
+  Settings,
+  LogOut,
+  LayoutDashboard,
+  MessageSquare,
+  Heart,
+  Ticket,
+  RotateCcw,
+  Store,
+  Gem,
+} from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useLoyaltyStore } from '@/stores/loyalty'
@@ -14,7 +27,9 @@ const { toast } = useToast()
 const authStore = useAuthStore()
 const loyaltyStore = useLoyaltyStore()
 
-const memberLabel = computed(() => (authStore.isAuthenticated ? `${loyaltyStore.tier} Member` : 'Guest'))
+const memberLabel = computed(() =>
+  authStore.isAuthenticated ? `${loyaltyStore.tier} Member` : 'Guest',
+)
 
 const sidebarItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -34,7 +49,7 @@ const handleLogout = () => {
   toast({
     title: 'Logged out',
     description: 'You have been successfully logged out.',
-    variant: 'default'
+    variant: 'default',
   })
   router.push('/')
 }
@@ -62,12 +77,20 @@ const preloadRoute = (path: string) => {
             class="rounded-xl border border-border bg-card p-6 shadow-sm lg:flex lg:h-full lg:min-h-0 lg:max-h-full lg:flex-col lg:overflow-y-auto lg:overscroll-contain"
           >
             <div class="mb-8 flex items-center gap-4">
-              <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">
-                <img v-if="authStore.user?.avatar" :src="authStore.user.avatar" class="h-full w-full object-cover" />
+              <div
+                class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary"
+              >
+                <img
+                  v-if="authStore.user?.avatar"
+                  :src="authStore.user.avatar"
+                  class="h-full w-full object-cover"
+                />
                 <User v-else class="h-6 w-6" />
               </div>
               <div>
-                <h3 class="text-lg font-bold leading-tight">{{ authStore.user?.name || 'Guest' }}</h3>
+                <h3 class="text-lg font-bold leading-tight">
+                  {{ authStore.user?.name || 'Guest' }}
+                </h3>
                 <p class="text-xs text-muted-foreground">{{ memberLabel }}</p>
               </div>
             </div>
@@ -77,10 +100,14 @@ const preloadRoute = (path: string) => {
                 v-for="item in sidebarItems"
                 :key="item.name"
                 :to="item.path"
+                class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors"
+                :class="
+                  route.path === item.path
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                "
                 @mouseenter="preloadRoute(item.path)"
                 @focus="preloadRoute(item.path)"
-                class="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors"
-                :class="route.path === item.path ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'"
               >
                 <component :is="item.icon" class="h-4 w-4" />
                 {{ item.name }}
@@ -90,8 +117,8 @@ const preloadRoute = (path: string) => {
 
               <button
                 type="button"
-                @click="handleLogout"
                 class="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                @click="handleLogout"
               >
                 <LogOut class="h-4 w-4" />
                 Sign Out

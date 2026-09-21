@@ -34,12 +34,13 @@ function targetValue(e: Event): string {
 }
 
 const rules = computed<Rules>(() => ({
-  email: (v) => (!v.trim() ? t('auth.emailRequired') : isValidEmail(v) ? '' : t('auth.emailInvalid'))
+  email: (v) =>
+    !v.trim() ? t('auth.emailRequired') : isValidEmail(v) ? '' : t('auth.emailInvalid'),
 }))
 
 const { errors, validateField, onInput, validateAll, isFieldValid } = useFormValidation(
   rules,
-  (n) => ({ email: email.value })[n] ?? ''
+  (n) => ({ email: email.value })[n] ?? '',
 )
 
 const handleReset = async () => {
@@ -56,7 +57,7 @@ const handleReset = async () => {
     toast({
       title: t('auth.codeSent'),
       description: t('auth.codeSentDesc'),
-      variant: 'success'
+      variant: 'success',
     })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : t('auth.resetFailedDesc')
@@ -71,13 +72,15 @@ const goReset = () => {
   // 不回显时(生产/EXPOSE_RESET_CODE=false)跳到下一步由用户手动输入收到的验证码。
   router.push({
     name: 'ResetPassword',
-    query: { ...(isRealCode.value ? { token: resetCode.value } : {}), email: email.value.trim() }
+    query: { ...(isRealCode.value ? { token: resetCode.value } : {}), email: email.value.trim() },
   })
 }
 </script>
 
 <template>
-  <div class="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-background">
+  <div
+    class="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-background"
+  >
     <!-- Dynamic Background -->
     <div class="absolute inset-0 z-0">
       <div
@@ -87,7 +90,9 @@ const goReset = () => {
 
     <!-- Card -->
     <div class="relative z-10 w-full max-w-md p-4 animate-in fade-in zoom-in-95 duration-500">
-      <div class="bg-card/30 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl p-8 md:p-10">
+      <div
+        class="bg-card/30 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl p-8 md:p-10"
+      >
         <!-- Header -->
         <div class="text-center mb-8">
           <router-link to="/" class="inline-flex items-center gap-2 mb-6 group">
@@ -105,27 +110,31 @@ const goReset = () => {
         </div>
 
         <div v-if="isSent" class="text-center space-y-6">
-          <div class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl text-sm border border-emerald-500/20 text-left space-y-2">
+          <div
+            class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl text-sm border border-emerald-500/20 text-left space-y-2"
+          >
             <p v-html="$t('auth.forgotSentTo', { email })"></p>
             <p
               v-if="isRealCode"
               class="text-2xl font-mono font-bold tracking-[0.3em] text-center py-2 text-foreground"
-            >{{ resetCode }}</p>
-            <p
-              v-else
-              class="text-center py-2 text-sm text-muted-foreground"
-            >{{ resetCode }}</p>
+            >
+              {{ resetCode }}
+            </p>
+            <p v-else class="text-center py-2 text-sm text-muted-foreground">{{ resetCode }}</p>
             <p class="text-xs text-muted-foreground border-t border-emerald-500/20 pt-2 mt-2">
               {{ $t('auth.forgotCodeHint') }}
             </p>
           </div>
           <Button class="w-full" @click="goReset">{{ $t('auth.continueReset') }}</Button>
-          <Button variant="ghost" class="w-full" @click="router.push('/login')">{{ $t('auth.backToLogin') }}</Button>
+          <Button variant="ghost" class="w-full" @click="router.push('/login')">{{
+            $t('auth.backToLogin')
+          }}</Button>
         </div>
 
         <!-- Form -->
-        <form v-else @submit.prevent="handleReset" class="space-y-4" novalidate>
+        <form v-else class="space-y-4" novalidate @submit.prevent="handleReset">
           <FormField
+            :ref="setFieldRef('email')"
             v-model="email"
             type="email"
             autocomplete="email"
@@ -133,12 +142,13 @@ const goReset = () => {
             placeholder="name@example.com"
             :error="errors.email"
             :valid="isFieldValid('email', email)"
-            :ref="setFieldRef('email')"
             @blur="validateField('email', targetValue($event))"
             @input="onInput('email', targetValue($event))"
           >
             <template #icon>
-              <Mail class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <Mail
+                class="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary"
+              />
             </template>
           </FormField>
 
@@ -148,7 +158,9 @@ const goReset = () => {
             :disabled="isLoading"
           >
             <span v-if="isLoading" class="flex items-center gap-2">
-              <span class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span
+                class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+              />
               {{ $t('common.loading') }}
             </span>
             <span v-else class="flex items-center justify-center gap-2">
@@ -160,7 +172,9 @@ const goReset = () => {
         <!-- Footer -->
         <div v-if="!isSent" class="text-center mt-8 text-sm text-muted-foreground">
           {{ $t('auth.rememberPassword') }}
-          <router-link to="/login" class="text-primary hover:underline font-medium">{{ $t('auth.goLogin') }}</router-link>
+          <router-link to="/login" class="text-primary hover:underline font-medium">{{
+            $t('auth.goLogin')
+          }}</router-link>
         </div>
       </div>
     </div>
