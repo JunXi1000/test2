@@ -271,8 +271,12 @@
               type="button"
               class="h-10 flex-1 rounded-full border border-emerald-500/40 bg-emerald-950/55 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-900/45"
               @click="
-                handleApprove(selectedMerchant)
-                drawerVisible = false
+                () => {
+                  // 包成箭头函数后 TS 收窄不再跨进闭包（selectedMerchant 是 ref 取值），
+                  // 显式守一次；原先的内联语句由外层 v-if 保证非空。行为不变。
+                  if (selectedMerchant) handleApprove(selectedMerchant)
+                  drawerVisible = false
+                }
               "
             >
               Approve
@@ -281,8 +285,11 @@
               type="button"
               class="h-10 flex-1 rounded-full border border-rose-500/35 bg-rose-950/50 text-sm font-medium text-rose-300 transition-colors hover:bg-rose-900/40"
               @click="
-                handleReject(selectedMerchant)
-                drawerVisible = false
+                () => {
+                  // 同上：闭包里拿不到外层收窄，显式守一次。
+                  if (selectedMerchant) handleReject(selectedMerchant)
+                  drawerVisible = false
+                }
               "
             >
               Reject

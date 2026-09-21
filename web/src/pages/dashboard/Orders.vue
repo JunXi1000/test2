@@ -683,8 +683,13 @@ function contactSupport() {
               size="sm"
               class="col-span-2 gap-1.5 text-xs text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-500/10"
               @click="
-                detailsDialogVisible = false
-                requestCancelOrder(activeOrder)
+                () => {
+                  detailsDialogVisible = false
+                  // 外面这层的 v-if 是 canCancelOrder(activeOrder)，不是 activeOrder 本身；
+                  // 包成箭头函数后 TS 的收窄不再跨进闭包（activeOrder 是 ref 取值，属可变属性），
+                  // 所以要在这里显式守一次。行为与原先的内联语句一致。
+                  if (activeOrder) requestCancelOrder(activeOrder)
+                }
               "
             >
               Cancel Order

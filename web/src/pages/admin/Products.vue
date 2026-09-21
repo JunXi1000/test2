@@ -170,8 +170,12 @@
             type="danger"
             class="w-full"
             @click="
-              handleBan(selectedProduct)
-              drawerVisible = false
+              () => {
+                // 包成箭头函数后 TS 收窄不再跨进闭包（selectedProduct 是 ref 取值），
+                // 显式守一次；原先的内联语句由外层 v-if 保证非空。行为不变。
+                if (selectedProduct) handleBan(selectedProduct)
+                drawerVisible = false
+              }
             "
           >
             Ban Product (Violation of Terms)

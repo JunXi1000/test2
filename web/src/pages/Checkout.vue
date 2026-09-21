@@ -1632,8 +1632,10 @@ const inputClass = (field: string) =>
                   :key="c.id"
                   class="text-xs px-2 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
                   @click="
-                    promoCodeRef = c.code
-                    onApplyPromo()
+                    () => {
+                      promoCodeRef = c.code
+                      onApplyPromo()
+                    }
                   "
                 >
                   {{ c.code }}

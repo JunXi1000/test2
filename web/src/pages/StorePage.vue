@@ -598,9 +598,11 @@ watch(searchQuery, () => debouncedSearch())
               <Button
                 variant="outline"
                 @click="
-                  searchQuery = ''
-                  selectedCategory = 'All'
-                  resetAndLoad()
+                  () => {
+                    searchQuery = ''
+                    selectedCategory = 'All'
+                    resetAndLoad()
+                  }
                 "
                 >{{ $t('store.clearFilters') }}</Button
               >

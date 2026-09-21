@@ -286,8 +286,10 @@ onMounted(loadAll)
               type="button"
               class="rounded-lg p-1.5 text-zinc-600 md:hidden dark:text-zinc-300"
               @click="
-                mobileViewMode = 'list'
-                activeConversationId = null
+                () => {
+                  mobileViewMode = 'list'
+                  activeConversationId = null
+                }
               "
             >
               <svg

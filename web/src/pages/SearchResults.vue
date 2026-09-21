@@ -260,10 +260,12 @@ watch(
                 v-if="searchInput"
                 class="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center text-muted-foreground"
                 @click="
-                  searchInput = ''
-                  query = ''
-                  showSuggestions = false
-                  showTrendingFallback = true
+                  () => {
+                    searchInput = ''
+                    query = ''
+                    showSuggestions = false
+                    showTrendingFallback = true
+                  }
                 "
               >
                 <X class="h-4 w-4" />
@@ -291,8 +293,10 @@ watch(
                   <button
                     class="text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
                     @click="
-                      clearSearchHistory()
-                      searchHistory = []
+                      () => {
+                        clearSearchHistory()
+                        searchHistory = []
+                      }
                     "
                   >
                     <Trash2 class="h-3 w-3" /> Clear
@@ -310,8 +314,10 @@ watch(
                     <X
                       class="h-3 w-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                       @click.stop="
-                        removeSearchHistory(h)
-                        searchHistory = getSearchHistory()
+                        () => {
+                          removeSearchHistory(h)
+                          searchHistory = getSearchHistory()
+                        }
                       "
                     />
                   </button>
@@ -492,9 +498,11 @@ watch(
               <Button
                 variant="outline"
                 @click="
-                  clearAllFilters()
-                  searchInput = ''
-                  query = ''
+                  () => {
+                    clearAllFilters()
+                    searchInput = ''
+                    query = ''
+                  }
                 "
               >
                 Clear All Filters

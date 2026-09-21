@@ -124,8 +124,10 @@ const specTable = computed(() => {
           variant="outline"
           size="sm"
           @click="
-            compareStore.clearAll()
-            router.replace('/')
+            () => {
+              compareStore.clearAll()
+              router.replace('/')
+            }
           "
         >
           Clear All
