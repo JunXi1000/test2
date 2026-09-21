@@ -1,0 +1,45 @@
+{
+  "@typescript-eslint/no-empty-object-type": ["src/vite-env.d.ts"],
+  "@typescript-eslint/no-explicit-any": [
+    "src/api/http.ts",
+    "src/api/modules/auth.ts",
+    "src/api/modules/product.ts",
+    "src/api/types.ts",
+    "src/components/ui/chat/ChatWidget.vue",
+    "src/pages/Cart.vue",
+    "src/pages/Checkout.vue",
+    "src/pages/Home.vue",
+    "src/pages/Login.vue",
+    "src/pages/ProductDetail.vue",
+    "src/pages/SearchResults.vue",
+    "src/pages/Signup.vue",
+    "src/pages/StorePage.vue",
+    "src/pages/admin/AdminHome.vue",
+    "src/pages/dashboard/Addresses.vue",
+    "src/pages/dashboard/DashboardHome.vue",
+    "src/pages/dashboard/Loyalty.vue",
+    "src/pages/dashboard/Messages.vue",
+    "src/pages/dashboard/Orders.vue",
+    "src/pages/dashboard/Settings.vue",
+    "src/pages/merchant/MerchantHome.vue",
+    "src/pages/merchant/Messages.vue",
+    "src/stores/cart.ts",
+    "src/vite-env.d.ts",
+    "tests/e2e-functional.spec.ts",
+    "tests/features.spec.ts"
+  ],
+  "@typescript-eslint/no-unused-vars": [
+    "src/components/ui/ProductQA.vue",
+    "src/components/ui/admin/DetailDrawer.vue",
+    "src/components/ui/payment/PaymentGatewayModal.vue"
+  ],
+  "no-empty": [
+    "src/api/http.ts",
+    "src/pages/Checkout.vue",
+    "src/pages/ProductDetail.vue",
+    "src/router/index.ts"
+  ],
+  "no-useless-escape": ["src/pages/Checkout.vue"],
+  "vue/no-use-v-if-with-v-for": ["src/pages/Home.vue"],
+  "vue/return-in-computed-property": ["src/pages/merchant/Wallet.vue"]
+}

@@ -15,6 +15,25 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
     actionTimeout: 10000,
     ignoreHTTPSErrors: true,
+    // E2E 一律跑在 mock 模式下：localStorage 必须在应用启动前写好，
+    // storageState 是 Playwright 唯一能在页面脚本执行前注入 localStorage 的官方入口。
+    // 不这么做的话，请求会打到 VITE_APP_API_URL(:1000) 的真实后端上。
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: 'http://localhost:5173',
+          localStorage: [{ name: 'RUNTIME_USE_MOCK', value: 'true' }],
+        },
+      ],
+    },
+  },
+  // 自带 dev server：忘启动时不再是一屏看不懂的失败，而是自动拉起
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
   projects: [
     {
