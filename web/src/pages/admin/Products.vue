@@ -3,14 +3,16 @@
     <div class="admin-toolbar-shell">
       <div class="admin-toolbar-inner">
         <div class="admin-toolbar-search">
+          <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
+               @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
+               —— 清空搜索实打实发两个请求）。回车改走 reloadNow：它先取消挂起的
+               debounce，所以「刚打完字就回车」也只发一次。 -->
           <el-input
             v-model="searchQuery"
             placeholder="Search by name or merchant..."
             clearable
             class="!w-full"
-            @input="debouncedLoadData"
-            @clear="loadData()"
-            @keyup.enter="loadData()"
+            @keyup.enter="reloadNow"
           >
             <template #prefix>
               <el-icon><SearchIcon /></el-icon>
@@ -249,7 +251,18 @@ const loadData = async (options?: { bumpMediaKey?: boolean; minSpinnerMs?: numbe
   })
 }
 
+/**
+ * 立即刷新（回车）。与 refreshList 的区别只有「不 bump 媒体 key、不强制转够 spinner」，
+ * 但同样要先 cancel 挂起的 debounce，否则「刚打完字就回车」会重复发一次。
+ */
+const reloadNow = () => {
+  debouncedLoadData.cancel()
+  void loadData()
+}
+
 function refreshList() {
+  // 先 cancel 挂起的 debounce，避免紧接在输入之后点刷新时多发一次搜索请求
+  debouncedLoadData.cancel()
   // Mock 接口可能瞬间返回，保证至少短暂显示 loading，避免「点了没反应」
   loadData({ bumpMediaKey: true, minSpinnerMs: 280 })
 }

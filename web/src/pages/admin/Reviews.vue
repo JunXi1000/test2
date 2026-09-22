@@ -3,14 +3,16 @@
     <div class="admin-toolbar-shell">
       <div class="admin-toolbar-inner">
         <div class="admin-toolbar-search">
+          <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
+               @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
+               —— 清空搜索实打实发两个请求）。回车改走 reloadNow：它先取消挂起的
+               debounce，所以「刚打完字就回车」也只发一次。 -->
           <el-input
             v-model="searchQuery"
             placeholder="Search reviews, users, or products..."
             clearable
             class="!w-full"
-            @input="debouncedLoad"
-            @clear="loadData"
-            @keyup.enter="loadData"
+            @keyup.enter="reloadNow"
           >
             <template #prefix>
               <el-icon><SearchIcon /></el-icon>
@@ -32,7 +34,7 @@
           </el-select>
         </div>
 
-        <el-button class="admin-toolbar-refresh-btn" @click="loadData">
+        <el-button class="admin-toolbar-refresh-btn" @click="reloadNow">
           <RefreshCw class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
@@ -326,6 +328,15 @@ const loadData = async () => {
 
 const debouncedLoad = debounce(loadData, 300)
 watch(searchQuery, () => debouncedLoad())
+
+/**
+ * 立即刷新（回车 / Refresh 按钮）。必须先 cancel 掉挂起的 debounce：
+ * 「刚打完字就回车」时那次 debounce 还在排队，不取消就会和这次立即请求重复发一遍。
+ */
+const reloadNow = () => {
+  debouncedLoad.cancel()
+  void loadData()
+}
 
 async function setStatus(row: AdminReview, status: AdminReviewStatus) {
   try {
