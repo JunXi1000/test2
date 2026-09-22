@@ -21,6 +21,7 @@
         <div class="admin-toolbar-select">
           <el-select
             v-model="statusFilter"
+            data-testid="list-status-filter"
             placeholder="All Status"
             class="!w-full"
             @change="loadData"

@@ -21,6 +21,7 @@
         <div class="admin-toolbar-select">
           <el-select
             v-model="roleFilter"
+            data-testid="list-status-filter"
             placeholder="All Roles"
             class="!w-full"
             @change="loadData"
