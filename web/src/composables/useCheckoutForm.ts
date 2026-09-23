@@ -4,6 +4,7 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { getAddresses, type Address } from '@/api/modules/address'
 import { getProfile } from '@/api/modules/account'
+import { isValidEmail } from '@/utils/validators'
 
 /** 国家下拉的静态列表。放模块作用域：它不随实例变化，没必要每次调用重建 */
 const COUNTRIES = [
@@ -69,8 +70,7 @@ export function useCheckoutForm() {
     switch (field) {
       case 'email':
         if (!v) fieldErrors.email = t('checkout.errEmailRequired')
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
-          fieldErrors.email = t('checkout.errEmailInvalid')
+        else if (!isValidEmail(v)) fieldErrors.email = t('checkout.errEmailInvalid')
         break
       case 'firstName':
         if (!v) fieldErrors.firstName = t('checkout.errFirstNameRequired')

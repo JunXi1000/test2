@@ -397,6 +397,7 @@ import {
   type WalletTransaction,
 } from '@/api/modules/merchantWallet'
 import { useToast } from '@/composables/useToast'
+import { isValidEmail } from '@/utils/validators'
 
 const { toast } = useToast()
 
@@ -569,10 +570,6 @@ const payoutTypeOptions = [
   { value: 'wise' as const, label: 'Wise' },
 ]
 
-function emailValid(s: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
-}
-
 function maskEmail(email: string): string {
   const [local, domain] = email.split('@')
   if (!domain || local === undefined) return email
@@ -600,7 +597,7 @@ function buildUserPayoutMethod(
     }
     case 'paypal': {
       const e = raw.trim().toLowerCase()
-      if (!emailValid(e)) {
+      if (!isValidEmail(e)) {
         return { error: 'Enter a valid PayPal email.' }
       }
       return { entry: { id, kind, label: `PayPal · ${maskEmail(e)}` } }
@@ -611,7 +608,7 @@ function buildUserPayoutMethod(
         return { error: 'Enter a Wise email or account reference.' }
       }
       const lower = t.toLowerCase()
-      if (emailValid(lower)) {
+      if (isValidEmail(lower)) {
         return { entry: { id, kind, label: `Wise · ${maskEmail(lower)}` } }
       }
       if (!/^[a-zA-Z0-9._-]{3,80}$/.test(t)) {
