@@ -5,6 +5,7 @@ import { useToast } from '@/composables/useToast'
 import Button from '@/components/ui/button/Button.vue'
 import Card from '@/components/ui/card/Card.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { Ticket, Tag, Gift, Clock, Check, Zap } from 'lucide-vue-next'
 
@@ -127,6 +128,14 @@ function getCouponColor(type: string): string {
     </div>
 
     <!-- Available tab -->
+    <!-- 加载失败先于两个 tab 的列表：store 原先在 catch 里把 catalog / myCoupons 都清空，
+         于是接口挂了两个 tab 都显示「没有券」—— 与真的没有券无法区分 -->
+    <ErrorState
+      v-else-if="couponStore.error"
+      :message="couponStore.error"
+      @retry="couponStore.load()"
+    />
+
     <div v-else-if="activeTab === 'available'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card
         v-for="coupon in couponStore.catalog"

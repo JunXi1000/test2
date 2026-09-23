@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { onUserScopeChange, scopedKey } from './userScope'
 import { RUNTIME_USE_MOCK } from '@/config/env'
+import { toErrorMessage } from '@/utils/error'
 import {
   AVAILABLE_COUPONS,
   getCoupons,
@@ -32,8 +33,15 @@ export const useCouponStore = defineStore('coupons', () => {
   const myCoupons = ref<Coupon[]>([])
   const catalog = ref<ClaimableCoupon[]>([])
 
+  /**
+   * 取数失败的原因（空串 = 没出错）。与 stores/returns.ts、stockAlerts.ts 同一处置：
+   * 原先 catch 里清空两个列表，于是**接口挂了**与**一张券都没有**在界面上没有区别。
+   */
+  const error = ref('')
+
   /** Hydrate from backend (non-mock) or local storage / mock constants. */
   async function load() {
+    error.value = ''
     if (RUNTIME_USE_MOCK.value) {
       catalog.value = AVAILABLE_COUPONS
       myCoupons.value = loadClaimedFromStorage()
@@ -43,9 +51,9 @@ export const useCouponStore = defineStore('coupons', () => {
       const [cat, mine] = await Promise.all([getCoupons(), getMyCoupons()])
       catalog.value = cat
       myCoupons.value = mine
-    } catch {
-      catalog.value = []
-      myCoupons.value = []
+    } catch (e) {
+      error.value = toErrorMessage(e, 'Failed to load coupons')
+      // 不清空两个列表 —— 见 error 的说明
     }
   }
 
@@ -113,35 +121,10 @@ export const useCouponStore = defineStore('coupons', () => {
     return true
   }
 
-  /** Calculate discount for a given order subtotal and optional category */
-  function calculateDiscount(
-    couponId: string,
-    subtotal: number,
-    categories?: string[],
-  ): { discount: number; type: string } | null {
-    const coupon = myCoupons.value.find(
-      (c) => c.id === couponId && !c.isUsed && new Date(c.expiresAt) > new Date(),
-    )
-    if (!coupon) return null
-    if (subtotal < coupon.minOrder) return null
-    // Category restriction
-    if (coupon.category && categories && categories.length > 0) {
-      if (!categories.includes(coupon.category)) return null
-    }
-
-    if (coupon.type === 'percent') {
-      let discount = subtotal * (coupon.value / 100)
-      if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-        discount = coupon.maxDiscount
-      }
-      return { discount: Math.round(discount * 100) / 100, type: 'percent' }
-    }
-    if (coupon.type === 'fixed') {
-      return { discount: Math.min(coupon.value, subtotal), type: 'fixed' }
-    }
-    // shipping — handled separately
-    return { discount: 0, type: 'shipping' }
-  }
+  // 已删：`calculateDiscount(couponId, subtotal, categories)` —— 零引用的死代码，
+  // 而且是**券码数学的第四处实现**（另三处：券包目录、积分商城、结算页的 mock 折扣表）。
+  // 它的算法与 `api/modules/coupons.ts` 的 `computeCouponDiscount` 重复且会分叉
+  // （比如它不认识 `shipping`，直接返回 0）。真要用券码折扣，用后者。
 
   function hasClaimed(couponId: string): boolean {
     return myCoupons.value.some((c) => c.id === couponId)
@@ -150,12 +133,12 @@ export const useCouponStore = defineStore('coupons', () => {
   return {
     myCoupons,
     catalog,
+    error,
     available,
     used,
     expired,
     claimCoupon,
     addRedeemedCoupon,
-    calculateDiscount,
     hasClaimed,
     load,
   }

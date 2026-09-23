@@ -7,6 +7,7 @@ import Card from '@/components/ui/card/Card.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import StatusBadge from '@/components/ui/badge/StatusBadge.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { RotateCcw, Package } from 'lucide-vue-next'
 
 const returnStore = useReturnStore()
@@ -168,14 +169,21 @@ function submitReturn() {
 
     <!-- Requests list -->
     <template v-else>
+      <!-- 加载失败与「没有记录」必须分开：store 原先在 catch 里把列表清空，于是接口挂了
+           显示的是「No return requests」—— 用户会以为自己的申请丢了 -->
+      <ErrorState
+        v-if="returnStore.error"
+        :message="returnStore.error"
+        @retry="returnStore.load()"
+      />
       <EmptyState
-        v-if="returnStore.requests.length === 0"
+        v-else-if="returnStore.requests.length === 0"
         :icon="RotateCcw"
         title="No return requests"
         description="Need to return something? Submit a request above."
       />
 
-      <div class="space-y-3">
+      <div v-else class="space-y-3">
         <Card v-for="req in returnStore.requests" :key="req.id" class="p-4">
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">

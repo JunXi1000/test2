@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { onUserScopeChange, scopedKey } from './userScope'
 import { RUNTIME_USE_MOCK } from '@/config/env'
+import { toErrorMessage } from '@/utils/error'
 import {
   getReturns,
   createReturn,
@@ -27,16 +28,28 @@ function saveToStorage(items: ReturnRequest[]) {
 export const useReturnStore = defineStore('returns', () => {
   const requests = ref<ReturnRequest[]>([])
 
+  /**
+   * 取数失败的原因（空串 = 没出错）。
+   *
+   * 为什么要有它：原先 catch 里是 `requests.value = []`，于是**加载失败**与**一条退换记录
+   * 都没有**在界面上长得一模一样 —— 接口挂了，用户看到的是「没有退换申请」。
+   * 这类缺陷阶段 3/5 在页面上修过几处，这里是 store 侧的同一问题。
+   */
+  const error = ref('')
+
   /** Hydrate from backend (non-mock) or local storage (mock). */
   async function load() {
+    error.value = ''
     if (RUNTIME_USE_MOCK.value) {
       requests.value = loadFromStorage()
       return
     }
     try {
       requests.value = await getReturns()
-    } catch {
-      requests.value = []
+    } catch (e) {
+      error.value = toErrorMessage(e, 'Failed to load return requests')
+      // **刻意不清空** requests：清空正是让失败看起来像空态的原因。
+      // 保留上一次的数据，页面按 error 决定显示错误态还是列表。
     }
   }
 
@@ -70,5 +83,5 @@ export const useReturnStore = defineStore('returns', () => {
     return requests.value.find((r) => r.orderId === orderId)
   }
 
-  return { requests, pending, resolved, submitRequest, getByOrderId, load }
+  return { requests, error, pending, resolved, submitRequest, getByOrderId, load }
 })
