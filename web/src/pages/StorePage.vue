@@ -38,6 +38,7 @@ import {
   type StoreProductQuery,
 } from '@/api/modules/merchantPublic'
 import { debounce } from 'lodash-es'
+import { formatPricePlain } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -191,10 +192,6 @@ function formatNumber(n: number): string {
   if (n >= 10000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   return n.toString()
-}
-
-function formatPrice(n: number) {
-  return n.toLocaleString('en-US')
 }
 
 onMounted(() => {
@@ -553,7 +550,7 @@ watch(searchQuery, () => debouncedSearch())
                     class="flex items-center justify-between mt-auto pt-2 border-t border-border/50"
                   >
                     <span class="text-xl sm:text-2xl font-black text-primary tracking-tight"
-                      >${{ formatPrice(product.price) }}</span
+                      >${{ formatPricePlain(product.price) }}</span
                     >
                     <Button
                       variant="default"

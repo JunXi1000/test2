@@ -1,13 +1,16 @@
 /**
- * 金额显示：千分位 + 固定两位小数。
+ * 金额显示。**这里有两个变体，不要合并** —— 它们显示结果不同，合并是用户可见的改变。
  *
- * 为什么单独成一个 util：结算页把「Complete the Look」抽成子组件后，父子两边的金额格式
- * 必须一致，而子组件够不着父组件的局部函数。
+ * - `formatPrice`      —— 两位小数（`$899.00`）
+ * - `formatPricePlain` —— 不带小数位（`$899`）
  *
- * **刻意没有一并统一仓里别的写法**（`ProductCard` / `Home` / `Compare` / `ProductDetail`
- * 用的是不带小数位的 `toLocaleString('en-US')`，`Cart.vue` 与 `dashboard/Orders.vue`
- * 则各自复制了一份本函数）。统一会把 `$50` 变成 `$50.00` —— 那是用户可见的改变，
- * 不该混在一次结构重构里。要统一请单独提，并先确认小数位是设计意图。
+ * 为什么是两个而不是一个：这不是"新旧写法"，是**两处排版需求**。结算/购物车/订单那种
+ * 表格要对齐，用两位小数；商品卡/店铺页那种紧凑排版用整数更干净。
+ *
+ * 为什么当初要抽出来：结算页把「Complete the Look」抽成子组件后，父子两边的金额格式必须
+ * 一致，而子组件够不着父组件的局部函数。阶段 9 又把它推广成全仓唯一来源 ——
+ * 原先 `ProductCard` / `Cart` / `dashboard/Orders` / `StorePage` 各有一份**逐字复制**的
+ * 本地函数（两份是这个、两份是 Plain），现已全部换成本模块的对应导出，**显示零变化**。
  */
 export function formatPrice(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

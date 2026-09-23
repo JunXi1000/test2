@@ -13,6 +13,7 @@ import { applyPromoCode, getTieredDiscount, getNextTier } from '@/api/modules/ch
 import type { Product } from '@/types/product'
 import { useToast } from '@/composables/useToast'
 import { toErrorMessage } from '@/utils/error'
+import { formatPrice } from '@/utils/format'
 import { useRouter } from 'vue-router'
 
 const MAX_QUANTITY = 99
@@ -183,10 +184,6 @@ function handleCheckout() {
     return
   }
   router.push('/checkout')
-}
-
-function formatPrice(price: number) {
-  return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 async function openEditDialog(item: CartItem) {

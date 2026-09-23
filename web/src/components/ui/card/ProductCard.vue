@@ -9,6 +9,7 @@ import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCompareStore } from '@/stores/compare'
 import { useToast } from '@/composables/useToast'
+import { formatPricePlain } from '@/utils/format'
 
 const props = defineProps<{
   product: Product
@@ -35,10 +36,6 @@ function quickAddToCart(e: Event) {
     description: t('product.addedToCartDesc', { title: props.product.title }),
     variant: 'success',
   })
-}
-
-function formatPrice(price: number) {
-  return Number(price).toLocaleString('en-US')
 }
 
 function formatReviews(reviews?: number) {
@@ -217,7 +214,7 @@ function toggleCompare(e: Event) {
       <div class="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
         <!-- 商品价格 -->
         <span class="text-3xl leading-none font-black text-primary tracking-tight"
-          >${{ formatPrice(product.price) }}</span
+          >${{ formatPricePlain(product.price) }}</span
         >
         <Button variant="default" size="sm" class="rounded-full shadow-sm" @click="quickAddToCart">
           <ShoppingCart class="w-4 h-4 mr-1.5" />

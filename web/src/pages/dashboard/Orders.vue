@@ -26,6 +26,7 @@ import { normalizeForSearch } from '@/utils/search'
 import StatusBadge from '@/components/ui/badge/StatusBadge.vue'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
 import { useCartStore } from '@/stores/cart'
+import { formatPrice } from '@/utils/format'
 
 const {
   isLoading: isLoadingRef,
@@ -254,10 +255,6 @@ function downloadInvoice(order: Order) {
     description: `${order.id} invoice has been downloaded.`,
     variant: 'success',
   })
-}
-
-function formatPrice(n: number) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function paymentLabel(order: Order) {
