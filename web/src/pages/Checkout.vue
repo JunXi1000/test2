@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { toErrorMessage } from '@/utils/error'
 import { useAsyncTask } from '@/composables/useAsyncTask'
+import { usePaymentFlow } from '@/composables/usePaymentFlow'
 import Button from '@/components/ui/button/Button.vue'
 import {
   CheckCircle2,
@@ -30,9 +31,6 @@ import ErrorState from '@/components/ui/state/ErrorState.vue'
 import PaymentGatewayModal from '@/components/ui/payment/PaymentGatewayModal.vue'
 import { calculateOrderSummary, applyPromoCode, type OrderSummary } from '@/api/modules/checkout'
 import {
-  createPaymentIntent,
-  confirmPayment,
-  completePaymentAction,
   getSavedPaymentMethods,
   savePaymentMethod,
   deleteSavedPaymentMethod,
@@ -78,15 +76,6 @@ onMounted(() => {
   loadSavedCards()
 })
 
-// 注意：支付完成时清空购物车会触发本 watcher。isProcessing 在 finally 里同步复位，
-// 而 watcher 回调要等微任务队列才执行，届时 isProcessing 已是 false，会把"支付成功跳转
-// ThankYou"覆盖成回到 /cart。故用独立的 isCompletingOrder 标记，保持到路由跳转完成。
-watch(checkoutItems, (items) => {
-  if (items.length === 0 && !isProcessing.value && !isCompletingOrder.value) {
-    router.replace('/cart')
-  }
-})
-
 // ── Steps ──
 const steps = computed(() => [
   t('checkout.stepShipping'),
@@ -94,8 +83,10 @@ const steps = computed(() => [
   t('checkout.stepReview'),
 ])
 const currentStep = ref(0)
-const isProcessing = ref(false)
-/** 支付成功 → 清空购物车 → 跳转 ThankYou 期间置位，防止 checkoutItems 变空时 watcher 把页面重定向回购物车 */
+/**
+ * 支付成功 → 清空购物车 → 跳转 ThankYou 期间置位，防止 checkoutItems 变空时 watcher 把页面重定向回购物车。
+ * 与 isProcessing 是一对，但只有它由本页持有 —— 置位它的 finalizeOrder 在下面，是页面级编排。
+ */
 const isCompletingOrder = ref(false)
 
 // ── Complete the Look（阶段 1.1）：结算页追加购买推荐 ──
@@ -425,25 +416,6 @@ const {
   fallbackMessage: t('checkout.calcFailedDesc'),
   initialLoading: true,
 })
-const paymentErrorRef = ref<string>('')
-
-// ── 支付网关状态（阶段 2.1）──
-const show3ds = ref(false)
-const pendingIntent = ref<{ paymentId: string; orderId: string } | null>(null)
-const last3dsTxn = ref('')
-
-/** 拒付错误码 → 本地化提示 */
-function paymentErrorMessage(code: string | undefined, fallback?: string) {
-  switch (code) {
-    case 'card_declined':
-      return t('checkout.declinedCard')
-    case 'insufficient_funds':
-      return t('checkout.declinedInsufficient')
-    default:
-      return fallback || t('checkout.paymentNotCompleted')
-  }
-}
-
 async function fetchSummary() {
   const result = await run(() => calculateOrderSummary(checkoutItems.value, formData.zip))
   if (result.ok) {
@@ -593,119 +565,8 @@ const prevStep = () => {
 }
 
 // ── Payment（阶段 2.1：网关化：成功 / 拒付重试 / 3DS 认证） ──
-const handlePayment = async () => {
-  if (isProcessing.value) return
-  try {
-    paymentErrorRef.value = ''
-    isProcessing.value = true
-    const payload = {
-      // 只传商品 id + 数量;金额由服务端按 DB 价格重算(/checkout/summary 已同源)
-      items: checkoutItems.value.map((it) => ({ productId: it.id, quantity: it.quantity })),
-      amount: total.value,
-      currency: 'USD',
-      // 模拟银行卡网关;cartItemIds 让后端下单成功后清除对应购物车行(仅登录态有 serverId)
-      channel: 'card',
-      cartItemIds: checkoutItems.value.map((it) => it.serverId).filter((id): id is number => !!id),
-      shipping: {
-        name: `${formData.firstName} ${formData.lastName}`.trim(),
-        address: formData.address,
-        city: formData.city,
-        zip: formData.zip,
-        country: formData.country,
-      },
-    }
-    const intent = await createPaymentIntent(payload)
-    // 已选保存卡（阶段 2.2 一键下单）：以 token 扣款；否则走完整卡号网关路由
-    const used = selectedSavedCard.value
-    const digits = used ? '' : formData.cardNumber.replace(/\s/g, '')
-    const result = await confirmPayment({
-      paymentId: intent.paymentId,
-      method: 'card',
-      ...(used
-        ? { savedMethodId: used.id, cardLast4: used.last4 }
-        : { cardNumber: digits, cardLast4: digits.slice(-4) }),
-    })
-
-    if (result.status === 'requires_action') {
-      // 3DS：打开银行验证弹窗，等待用户完成认证（流程在 on3dsComplete 继续）
-      pendingIntent.value = { paymentId: intent.paymentId, orderId: intent.orderId }
-      last3dsTxn.value = result.action?.transactionId || ''
-      show3ds.value = true
-      return
-    }
-
-    if (result.status === 'failed') {
-      // 拒付：回到支付表单展示错误，允许改卡重试
-      const msg = paymentErrorMessage(result.errorCode, result.errorMessage)
-      paymentErrorRef.value = msg
-      toast({ title: t('checkout.paymentFailed'), description: msg, variant: 'destructive' })
-      currentStep.value = 1
-      return
-    }
-
-    await finalizeOrder(result.orderId || intent.orderId)
-  } catch (e) {
-    paymentErrorRef.value = toErrorMessage(e, t('checkout.paymentFailedDesc'))
-    toast({
-      title: t('checkout.paymentFailed'),
-      description: paymentErrorRef.value,
-      variant: 'destructive',
-    })
-  } finally {
-    isCompletingOrder.value = false
-    isProcessing.value = false
-  }
-}
-
-/** 3DS 认证成功：银行回调确认后完成下单 */
-const on3dsComplete = async () => {
-  const intent = pendingIntent.value
-  const txn = last3dsTxn.value
-  pendingIntent.value = null
-  show3ds.value = false
-  if (!intent) return
-  isProcessing.value = true
-  try {
-    const res = await completePaymentAction({ paymentId: intent.paymentId, transactionId: txn })
-    if (res.status === 'failed') {
-      const msg = paymentErrorMessage(res.errorCode, res.errorMessage)
-      paymentErrorRef.value = msg
-      toast({ title: t('checkout.paymentFailed'), description: msg, variant: 'destructive' })
-      currentStep.value = 1
-      return
-    }
-    await finalizeOrder(res.orderId || intent.orderId)
-  } catch (e) {
-    paymentErrorRef.value = toErrorMessage(e, t('checkout.paymentFailedDesc'))
-    toast({
-      title: t('checkout.paymentFailed'),
-      description: paymentErrorRef.value,
-      variant: 'destructive',
-    })
-  } finally {
-    isCompletingOrder.value = false
-    isProcessing.value = false
-  }
-}
-
-/** 3DS 认证失败（银行拒绝） */
-const on3dsReject = () => {
-  pendingIntent.value = null
-  show3ds.value = false
-  paymentErrorRef.value = t('checkout.authFailed')
-  toast({
-    title: t('checkout.paymentFailed'),
-    description: paymentErrorRef.value,
-    variant: 'destructive',
-  })
-  currentStep.value = 1
-}
-
-/** 用户主动关闭 3DS 弹窗：放弃认证，留在当前步骤，可重新发起支付 */
-const on3dsCancel = () => {
-  pendingIntent.value = null
-  show3ds.value = false
-}
+// 网关状态机在 usePaymentFlow 里；**落单与收尾留在本页** —— 建单 → 积分 → 清购物车 →
+// 跳转是页面级编排，不是网关的事。组合式通过 finalize 回调下面这个 finalizeOrder。
 
 /** 支付成功 → 落单 → 积分入账 → 清空购物车 → 跳转 ThankYou */
 const finalizeOrder = async (finalOrderId: string) => {
@@ -831,6 +692,38 @@ const finalizeOrder = async (finalOrderId: string) => {
     },
   })
 }
+
+// pendingIntent / last3dsTxn 是状态机内部状态，页面不读（原先只在 handlePayment 与
+// on3dsComplete 之间传递，那两个函数已经搬进组合式），故不解构。
+const {
+  isProcessing,
+  paymentErrorRef,
+  show3ds,
+  handlePayment,
+  on3dsComplete,
+  on3dsReject,
+  on3dsCancel,
+} = usePaymentFlow({
+  items: checkoutItems,
+  formData,
+  total,
+  savedCard: selectedSavedCard,
+  currentStep,
+  isCompletingOrder,
+  finalize: finalizeOrder,
+})
+
+// 注意：支付完成时清空购物车会触发本 watcher。isProcessing 在 finally 里同步复位，
+// 而 watcher 回调要等微任务队列才执行，届时 isProcessing 已是 false，会把"支付成功跳转
+// ThankYou"覆盖成回到 /cart。故用独立的 isCompletingOrder 标记，保持到路由跳转完成。
+//
+// 它放在这里而不是 checkoutItems 旁边：读的 isProcessing 来自上面组合式的解构，
+// 而组合式要等 total / selectedSavedCard / finalizeOrder 都定义好才能调用。
+watch(checkoutItems, (items) => {
+  if (items.length === 0 && !isProcessing.value && !isCompletingOrder.value) {
+    router.replace('/cart')
+  }
+})
 
 function formatPrice(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
