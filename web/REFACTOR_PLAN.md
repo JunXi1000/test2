@@ -634,14 +634,34 @@ merchant 侧两个列表页**不迁到 `useListQuery`** —— 它们的取数�
 `@input` 走 300ms 防抖，而 `@keyup.enter` 立即调 `loadData()` 且**不 cancel** 挂起的那次，
 「刚打完字就回车」会重复发一次。与 5b 是同一类缺陷，但不在本轮确认的范围内，**只记录不改**。
 
-### 阶段 6 — 类型地基（拆巨页的前提）
+### 阶段 6 — 类型地基 ✅ **已完成（2026-09-23），范围经核对后收窄为一条**
 
-- 同一"商品"结构被定义 **4 次**：`types/product.ts` `Product`、`merchantProducts.ts` `MerchantProduct`、`adminProducts.ts` `AdminProduct`、`merchantPublic.ts` `MerchantFeaturedProduct`
-- `MerchantStat` 2 份**同名不同定义**（`adminDashboard.ts` vs `merchantDashboard.ts`），`dashboard.ts` 的 `Stat` 是第三份
-- 约 60 个领域类型散落在 `api/modules/*`（`Order`/`Address`/`Coupon`/`CartItem` 全在模块文件里），`src/types/` 只剩 1 个文件
-- **31 处 API 调用未传泛型**（命中 `http.ts` 的 `<T = any>` 兜底）——模式一致：查询传泛型、变更不传
+> **立项前提在开工前被逐条核对，两条不成立。原文保留在下面，不要照它重做。**
+>
+> - 同一"商品"结构被定义 **4 次**：`types/product.ts` `Product`、`merchantProducts.ts` `MerchantProduct`、`adminProducts.ts` `AdminProduct`、`merchantPublic.ts` `MerchantFeaturedProduct`
+> - `MerchantStat` 2 份**同名不同定义**（`adminDashboard.ts` vs `merchantDashboard.ts`），`dashboard.ts` 的 `Stat` 是第三份
+> - 约 60 个领域类型散落在 `api/modules/*`（`Order`/`Address`/`Coupon`/`CartItem` 全在模块文件里），`src/types/` 只剩 1 个文件
+> - **31 处 API 调用未传泛型**（命中 `http.ts` 的 `<T = any>` 兜底）——模式一致：查询传泛型、变更不传
+> - 放在阶段 7 之前是有意的：否则拆出来的子组件仍绑着 4 份互相打架的商品类型。
 
-放在阶段 7 之前是有意的：否则拆出来的子组件仍绑着 4 份互相打架的商品类型。
+**核对结论**：后两条基本成立（实测 64 个领域类型、29 处未传泛型），**前两条不成立**：
+
+- 三个非 storefront 类型是**页面自己的视图模型，不是重复定义**：`AdminProduct` 只被 `admin/Products.vue` 连同它自己的模块 import，`MerchantProduct` 只被 `merchant/Products.vue`，`MerchantFeaturedProduct` 只被 `StorePage.vue`。**没有任何文件同时 import 其中两个**；四者字段交集只有 `id/title/price/image`，status 枚举还不一样（admin 有 `banned`，merchant 没有）。真正共享的只有 storefront 的 `Product`（10 个 importer）。
+- `adminDashboard.ts` 定义的是 **`AdminStat`**，不存在第二份 `MerchantStat`。三份 Stat 类型都在，但**不同名**。
+- 合并成一个 `Product` 是**净损失**：合并体要开 18 个字段且大多可选（storefront 的 `Product` 本就如此），三个页面今天非空的字段会集体退化成可选 —— 正是「止损线」里警告过的那类。
+- 同理，**阶段 6 也不是阶段 7 的硬前提**：那 29 处未传泛型的调用点没有一处把 `any` 喂进组件 prop，不改它拆巨页照样安全。上面"否则子组件仍绑着 4 份互相打架的商品类型"这句是错的。
+
+**实际执行（与用户确认后收窄）**：只做 `http.ts` 的 `<T = any>` → `<T = unknown>`（违反 CLAUDE.md「接口数据不默认 `any`」）。合并商品类型、把 64 个类型搬进 `src/types/` **两条不做** —— 前者是净损失，后者是牵动几十个文件 import 的纯 churn。
+
+**成本估算被实测推翻，方向是变便宜**：原估「13 处 `Promise<void>` 里的 `return verb(...)` + `auth.ts:83` 会红，需补 `verb<void>` / `post<string>`」，实测 **0 处需要改** —— TypeScript 会用**上下文类型反推泛型**（`const t: string = await post(...)` 推成 `string`；`Promise<void>` 里的 `return del(...)` 推成 `void`）。用 vue-tsc 探针 + LSP hover 双重验证，hover 显示 `get<string>(url, config): Promise<string>`。收益因此精确落在**新写的、忘了声明的**调用点上 —— 那才是 `any` 原来真正伤人的地方。
+
+| 子项                                                          | 提交      |
+| ------------------------------------------------------------- | --------- |
+| 6a `http.ts` 四个动词默认泛型 `any` → `unknown`，零调用点改动 | `cec023f` |
+
+**已核对、无需修**：29 处未传泛型的调用点里 28 处丢弃响应体；唯一消费响应的 `auth.ts:83` 自己写了 `: string`。**没有现存 bug**，6a 堵的是未来的口子。
+
+**未做、且建议不再做**：合并三个 `*Product` 视图模型；把 64 个领域类型搬进 `src/types/`。要动类型组织，先回答"这能让今天哪一处会漏的类型被抓住"，答不上来就不做。
 
 ### 阶段 7 — 拆巨页
 
