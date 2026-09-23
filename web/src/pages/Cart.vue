@@ -9,10 +9,10 @@ import { useAuthStore } from '@/stores/auth'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { getProductById } from '@/api/modules/product'
-import { applyPromoCode, getTieredDiscount, getNextTier } from '@/api/modules/checkout'
+import { getTieredDiscount, getNextTier } from '@/api/modules/checkout'
 import type { Product } from '@/types/product'
 import { useToast } from '@/composables/useToast'
-import { toErrorMessage } from '@/utils/error'
+import { usePromoCode } from '@/composables/usePromoCode'
 import { formatPrice } from '@/utils/format'
 import { useRouter } from 'vue-router'
 
@@ -44,9 +44,21 @@ const tierProgress = computed(() => {
   return Math.min(100, Math.round((subtotal.value / nextTier.value.tier.threshold) * 100))
 })
 
-const discount = ref(0)
-const promoCode = ref('')
-const promoApplied = ref(false)
+// 优惠码整块交给 usePromoCode（与结算页共用同一套分支）。`discount` 这个别名沿用页面
+// 原有的叫法，模板与 total 都不必改。
+const {
+  promoCode,
+  promoApplied,
+  promoDiscount: discount,
+  applyPromo: handleApplyPromo,
+  removePromo,
+  reset: resetPromo,
+} = usePromoCode({
+  getSubtotal: () => subtotal.value,
+  // 购物车这句文案与结算页的**不一样**，所以由调用方传进来（见 usePromoCode 的注释）
+  alreadyAppliedDesc: t('cart.alreadyAppliedDesc'),
+})
+
 const total = computed(
   () =>
     +(subtotal.value + shipping.value + tax.value - discount.value - tieredDiscount.value).toFixed(
@@ -116,61 +128,9 @@ function confirmClearCart() {
 function executeClearCart() {
   cartStore.clearCart()
   clearConfirmVisible.value = false
-  discount.value = 0
-  promoApplied.value = false
-  promoCode.value = ''
+  // 清空购物车顺带复位优惠码；这里不提示（提示语由下面那句「购物车已清空」承担）
+  resetPromo()
   toast({ title: t('cart.cartCleared'), description: t('cart.cartClearedDesc') })
-}
-
-async function handleApplyPromo() {
-  const code = promoCode.value.trim()
-  if (!code) {
-    toast({
-      title: t('cart.enterCode'),
-      description: t('cart.enterCodeDesc'),
-      variant: 'destructive',
-    })
-    return
-  }
-  if (promoApplied.value) {
-    toast({
-      title: t('cart.alreadyApplied'),
-      description: t('cart.alreadyAppliedDesc'),
-      variant: 'destructive',
-    })
-    return
-  }
-  try {
-    const result = await applyPromoCode(code, subtotal.value)
-    if (result.discount <= 0) {
-      toast({
-        title: t('cart.invalidCode'),
-        description: t('cart.invalidCodeDesc'),
-        variant: 'destructive',
-      })
-      return
-    }
-    discount.value = result.discount
-    promoApplied.value = true
-    toast({
-      title: t('cart.promoApplied'),
-      description: t('cart.promoAppliedDesc', { discount: result.discount.toFixed(2) }),
-      variant: 'success',
-    })
-  } catch (e) {
-    toast({
-      title: t('cart.invalidCode'),
-      description: toErrorMessage(e, t('cart.tryAnotherCode')),
-      variant: 'destructive',
-    })
-  }
-}
-
-function removePromo() {
-  discount.value = 0
-  promoApplied.value = false
-  promoCode.value = ''
-  toast({ title: t('cart.promoRemoved'), description: t('cart.promoRemovedDesc') })
 }
 
 function handleCheckout() {

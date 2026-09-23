@@ -2,10 +2,10 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import { useAsyncTask } from '@/composables/useAsyncTask'
-import { toErrorMessage } from '@/utils/error'
 import { useAuthStore } from '@/stores/auth'
+import { usePromoCode } from '@/composables/usePromoCode'
 import { useLoyaltyStore } from '@/stores/loyalty'
-import { calculateOrderSummary, applyPromoCode, type OrderSummary } from '@/api/modules/checkout'
+import { calculateOrderSummary, type OrderSummary } from '@/api/modules/checkout'
 import { POINTS_PER_DOLLAR } from '@/api/modules/loyalty'
 import type { CartItem } from '@/stores/cart'
 
@@ -39,9 +39,12 @@ export function useOrderSummary(options: UseOrderSummaryOptions) {
 
   // ── 摘要与优惠码 ──
   const summary = ref<OrderSummary>({ subtotal: 0, shipping: 0, tax: 0, discount: 0, total: 0 })
-  const promoCode = ref('')
-  const promoApplied = ref(false)
-  const promoDiscount = ref(0)
+  // 优惠码的输入/校验/应用整块交给 usePromoCode（与购物车页共用）。这里只喂两个参数：
+  // 小计从摘要取，「已应用」那句用结算页自己的文案（与购物车的不同，见那里的注释）
+  const { promoCode, promoApplied, promoDiscount, applyPromo, removePromo } = usePromoCode({
+    getSubtotal: () => summary.value.subtotal,
+    alreadyAppliedDesc: t('checkout.alreadyAppliedDesc'),
+  })
   const tieredDiscount = computed(() => summary.value.discount)
 
   // ── 积分抵扣 ──
@@ -99,57 +102,6 @@ export function useOrderSummary(options: UseOrderSummaryOptions) {
       // 右栏那个 ErrorState（带「重试」）由此渲染 —— 两者是配套的，不是二选一。
       toast({ title: t('checkout.calcFailed'), description: result.error, variant: 'destructive' })
     }
-  }
-
-  async function applyPromo() {
-    const code = promoCode.value.trim()
-    if (!code) {
-      toast({
-        title: t('cart.enterCode'),
-        description: t('cart.enterCodeDesc'),
-        variant: 'destructive',
-      })
-      return
-    }
-    if (promoApplied.value) {
-      toast({
-        title: t('cart.alreadyApplied'),
-        description: t('checkout.alreadyAppliedDesc'),
-        variant: 'destructive',
-      })
-      return
-    }
-    try {
-      const { discount } = await applyPromoCode(code, summary.value.subtotal)
-      if (discount <= 0) {
-        toast({
-          title: t('cart.invalidCode'),
-          description: t('cart.invalidCodeDesc'),
-          variant: 'destructive',
-        })
-        return
-      }
-      promoApplied.value = true
-      promoDiscount.value = discount
-      toast({
-        title: t('cart.promoApplied'),
-        description: t('cart.promoAppliedDesc', { discount: discount.toFixed(2) }),
-        variant: 'success',
-      })
-    } catch (e) {
-      toast({
-        title: t('cart.invalidCode'),
-        description: toErrorMessage(e, t('cart.tryAnotherCode')),
-        variant: 'destructive',
-      })
-    }
-  }
-
-  function removePromo() {
-    promoApplied.value = false
-    promoDiscount.value = 0
-    promoCode.value = ''
-    toast({ title: t('cart.promoRemoved'), description: t('cart.promoRemovedDesc') })
   }
 
   return {
