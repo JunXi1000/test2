@@ -9,6 +9,9 @@ import { useToast } from '@/composables/useToast'
 import { usePaymentFlow } from '@/composables/usePaymentFlow'
 import { useCheckoutForm } from '@/composables/useCheckoutForm'
 import { useOrderSummary } from '@/composables/useOrderSummary'
+import { useCompleteTheLook } from '@/composables/useCompleteTheLook'
+import { useSavedCards } from '@/composables/useSavedCards'
+import { formatPrice } from '@/utils/format'
 import Button from '@/components/ui/button/Button.vue'
 import {
   CheckCircle2,
@@ -29,14 +32,9 @@ import {
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import PaymentGatewayModal from '@/components/ui/payment/PaymentGatewayModal.vue'
-import {
-  getSavedPaymentMethods,
-  savePaymentMethod,
-  deleteSavedPaymentMethod,
-  type SavedPaymentMethod,
-} from '@/api/modules/payment'
-import { getCompleteTheLook } from '@/api/modules/product'
-import type { Product } from '@/types/product'
+import CompleteTheLook from '@/components/ui/checkout/CompleteTheLook.vue'
+// 只剩 savePaymentMethod：读/删已保存卡在 useSavedCards，推荐位取数在 useCompleteTheLook
+import { savePaymentMethod } from '@/api/modules/payment'
 import { appendCheckoutOrder, type Order, type OrderItem } from '@/api/modules/orders'
 import { USE_MOCK } from '@/config/env'
 import { useLoyaltyStore } from '@/stores/loyalty'
@@ -87,97 +85,30 @@ const currentStep = ref(0)
 const isCompletingOrder = ref(false)
 
 // ── Complete the Look（阶段 1.1）：结算页追加购买推荐 ──
-const ctlProducts = ref<Product[]>([])
-const ctlSelected = ref<Set<number>>(new Set())
-const ctlLoading = ref(false)
-const ctlAdding = ref(false)
-
-async function loadCompleteTheLook() {
-  const first = checkoutItems.value[0]
-  if (!first) return
-  ctlLoading.value = true
-  try {
-    const items = await getCompleteTheLook(Number(first.id), 3)
-    ctlProducts.value = items
-    ctlSelected.value = new Set(items.map((p) => p.id))
-  } catch {
-    ctlProducts.value = []
-  } finally {
-    ctlLoading.value = false
-  }
-}
-
-function toggleCtl(id: number) {
-  const next = new Set(ctlSelected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  ctlSelected.value = next
-}
-
-function ctlSelectedCount() {
-  return ctlProducts.value.filter((p) => ctlSelected.value.has(p.id)).length
-}
-
-async function addCompleteTheLook() {
-  if (ctlAdding.value) return
-  const toAdd = ctlProducts.value.filter((p) => ctlSelected.value.has(p.id))
-  if (!toAdd.length) return
-  ctlAdding.value = true
-  try {
-    toAdd.forEach((p) => {
-      cartStore.addItem(p, {
-        color: p.colors?.[0]?.name ?? 'Default',
-        size: p.sizes?.[0] ?? 'Standard',
-        quantity: 1,
-      })
-    })
-    toast({
-      title: t('checkout.addedToOrder'),
-      description: `${toAdd.length} ${t('checkout.itemsCount', { count: toAdd.length })}`,
-      variant: 'success',
-    })
-    ctlSelected.value = new Set()
-  } finally {
-    ctlAdding.value = false
-  }
-}
+// 状态在 useCompleteTheLook，视图在 <CompleteTheLook>（见模板复核步）。
+// 别名保留 ctl* 前缀，与模板里的绑定名一致；计数在组件内算，不在页面。
+const {
+  products: ctlProducts,
+  selected: ctlSelected,
+  adding: ctlAdding,
+  load: loadCompleteTheLook,
+  toggle: toggleCtl,
+  addSelected: addCompleteTheLook,
+} = useCompleteTheLook({ items: checkoutItems })
 
 // ── 已保存支付方式（阶段 2.2）：token 化保存 → 一键下单 ──
-const savedCards = ref<SavedPaymentMethod[]>([])
-const selectedSavedCardId = ref('')
-const saveCardForNextTime = ref(false)
-
-/** 已保存卡按用户作用域隔离（guest 不展示，仅登录用户可保存/一键下单） */
-function savedCardsScope() {
-  return authStore.user?.id ?? ''
-}
-
-function loadSavedCards() {
-  const scope = savedCardsScope()
-  savedCards.value = scope ? getSavedPaymentMethods(scope) : []
-}
-
-function isUsingSavedCard() {
-  return !!selectedSavedCardId.value
-}
-
-/** 当前选中的已保存卡（用于展示与一键下单） */
-const selectedSavedCard = computed(
-  () => savedCards.value.find((c) => c.id === selectedSavedCardId.value) ?? null,
-)
-
-function selectSavedCard(id: string) {
-  selectedSavedCardId.value = selectedSavedCardId.value === id ? '' : id
-}
-
-function removeSavedCard(id: string) {
-  const scope = savedCardsScope()
-  if (!scope) return
-  deleteSavedPaymentMethod(scope, id)
-  savedCards.value = savedCards.value.filter((m) => m.id !== id)
-  if (selectedSavedCardId.value === id) selectedSavedCardId.value = ''
-  toast({ title: t('checkout.savedCardRemoved'), variant: 'success' })
-}
+// 读 / 选 / 删整块在 useSavedCards。**保存不在这儿** —— 它发生在支付成功后的
+// finalizeOrder 收尾流程里，仍是本页的事。
+const {
+  savedCards,
+  selectedSavedCardId,
+  saveCardForNextTime,
+  loadSavedCards,
+  isUsingSavedCard,
+  selectedSavedCard,
+  selectSavedCard,
+  removeSavedCard,
+} = useSavedCards()
 
 // ── 收货 / 支付表单（字段、逐字段校验、卡号掩码、已存地址、首屏预填）──
 // 整块在 useCheckoutForm 里。本页只消费 formData（支付 payload 与 finalizeOrder 要读）
@@ -429,10 +360,6 @@ watch(checkoutItems, (items) => {
     router.replace('/cart')
   }
 })
-
-function formatPrice(n: number) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 
 const inputClass = (field: string) =>
   `w-full h-10 rounded-lg bg-background border px-3 text-sm outline-none transition-colors focus:ring-2 focus:ring-primary ${
@@ -895,73 +822,14 @@ const inputClass = (field: string) =>
               </div>
 
               <!-- Complete the Look（阶段 1.1）：追加购买推荐 -->
-              <div
-                v-if="ctlProducts.length > 0"
-                class="rounded-2xl border border-border bg-card/60 p-4 space-y-3"
-                data-testid="complete-the-look"
-              >
-                <div class="flex items-center justify-between gap-2 flex-wrap">
-                  <div>
-                    <h3 class="text-sm font-bold flex items-center gap-2">
-                      <Sparkles class="w-4 h-4 text-primary" />
-                      {{ $t('checkout.completeTheLook') }}
-                    </h3>
-                    <p class="text-xs text-muted-foreground mt-0.5">
-                      {{ $t('checkout.completeTheLookDesc') }}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    :disabled="ctlSelectedCount() === 0 || ctlAdding"
-                    class="shrink-0"
-                    @click="addCompleteTheLook"
-                  >
-                    <Plus class="w-3.5 h-3.5" />
-                    {{ $t('checkout.addToOrder') }} ({{ ctlSelectedCount() }})
-                  </Button>
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <button
-                    v-for="p in ctlProducts"
-                    :key="p.id"
-                    :data-ctl-id="p.id"
-                    class="flex items-center gap-2.5 p-2 rounded-xl border text-left transition-colors"
-                    :class="
-                      ctlSelected.has(p.id)
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-foreground/30 bg-background'
-                    "
-                    @click="toggleCtl(p.id)"
-                  >
-                    <div
-                      class="relative w-12 h-12 rounded-lg bg-secondary overflow-hidden flex-shrink-0"
-                    >
-                      <img
-                        :src="p.image"
-                        :alt="p.title"
-                        class="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      <span
-                        class="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center"
-                        :class="
-                          ctlSelected.has(p.id)
-                            ? 'bg-primary border-primary text-primary-foreground'
-                            : 'bg-background border-border'
-                        "
-                      >
-                        <Check v-if="ctlSelected.has(p.id)" class="w-3 h-3" />
-                      </span>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-xs font-semibold truncate">{{ p.title }}</p>
-                      <p class="text-[11px] text-muted-foreground mt-0.5">
-                        ${{ formatPrice(p.price) }}
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              </div>
+              <!-- 唯一真正自包含的一块，整块在 <CompleteTheLook> 里；products 为空时它自己不渲染 -->
+              <CompleteTheLook
+                :products="ctlProducts"
+                :selected="ctlSelected"
+                :adding="ctlAdding"
+                @toggle="toggleCtl"
+                @add="addCompleteTheLook"
+              />
 
               <div class="bg-secondary/20 rounded-xl p-6 space-y-4">
                 <div class="flex justify-between items-start">
