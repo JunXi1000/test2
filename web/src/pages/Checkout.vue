@@ -6,10 +6,9 @@ import { useCartStore } from '@/stores/cart'
 import { useCouponStore } from '@/stores/coupons'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
-import { toErrorMessage } from '@/utils/error'
-import { useAsyncTask } from '@/composables/useAsyncTask'
 import { usePaymentFlow } from '@/composables/usePaymentFlow'
 import { useCheckoutForm } from '@/composables/useCheckoutForm'
+import { useOrderSummary } from '@/composables/useOrderSummary'
 import Button from '@/components/ui/button/Button.vue'
 import {
   CheckCircle2,
@@ -30,7 +29,6 @@ import {
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import PaymentGatewayModal from '@/components/ui/payment/PaymentGatewayModal.vue'
-import { calculateOrderSummary, applyPromoCode, type OrderSummary } from '@/api/modules/checkout'
 import {
   getSavedPaymentMethods,
   savePaymentMethod,
@@ -204,119 +202,29 @@ const {
   loadInitialData,
 } = useCheckoutForm()
 
-// ── Order summary & promo ──
-// summaryRef.discount 为后端/mock 计算的满减自动折扣；promoDiscount 为手动优惠码（可叠加）
-const summaryRef = ref<OrderSummary>({ subtotal: 0, shipping: 0, tax: 0, discount: 0, total: 0 })
-const promoCodeRef = ref('')
-const promoApplied = ref(false)
-const promoDiscount = ref(0)
-const tieredDiscount = computed(() => summaryRef.value.discount)
-
-// ── 积分抵扣（阶段 5.1） ─────────────────────────────────────────────
-// 未使用积分前的应付金额（subtotal + shipping + tax - 满减 - 优惠码）
-const prePointsTotal = computed(
-  () =>
-    +(
-      summaryRef.value.subtotal +
-      summaryRef.value.shipping +
-      summaryRef.value.tax -
-      summaryRef.value.discount -
-      promoDiscount.value
-    ).toFixed(2),
-)
-const pointsToUse = ref(0)
-/** 100 积分 = $1，向下取整 */
-const pointsDiscount = computed(() => Math.floor(pointsToUse.value / POINTS_PER_DOLLAR))
-/** 最大可用积分：不超过余额，且抵扣额不超过应付金额 */
-const maxPointsToUse = computed(() => {
-  if (!authStore.isAuthenticated) return 0
-  const byOrder = Math.floor(Math.max(0, prePointsTotal.value) * POINTS_PER_DOLLAR)
-  return Math.min(loyaltyStore.state.points, byOrder)
-})
-const pointsUsable = computed(
-  () => authStore.isAuthenticated && loyaltyStore.state.points >= POINTS_PER_DOLLAR,
-)
-
-watch(pointsToUse, (v) => {
-  if (!v) {
-    pointsToUse.value = 0
-    return
-  }
-  let next = v
-  if (next > maxPointsToUse.value) next = maxPointsToUse.value
-  next = Math.floor(next / POINTS_PER_DOLLAR) * POINTS_PER_DOLLAR
-  if (next !== v) pointsToUse.value = next
-})
-
-const total = computed(() => +(prePointsTotal.value - pointsDiscount.value).toFixed(2))
-
+// ── Order summary & promo（含积分抵扣）──
+// 三块状态（服务端摘要 / 手动优惠码 / 积分抵扣）整块在 useOrderSummary 里。
+// 下面几个别名是为了**不动模板**：组合式那边用干净的名字，页面沿用原先的 XXRef 叫法。
 const {
+  summary: summaryRef,
   isLoading: isLoadingRef,
   error: errorRef,
-  run,
-} = useAsyncTask({
-  fallbackMessage: t('checkout.calcFailedDesc'),
-  initialLoading: true,
+  fetchSummary,
+  promoCode: promoCodeRef,
+  promoApplied,
+  promoDiscount,
+  tieredDiscount,
+  pointsToUse,
+  pointsUsable,
+  maxPointsToUse,
+  pointsDiscount,
+  total,
+  applyPromo: onApplyPromo,
+  removePromo,
+} = useOrderSummary({
+  items: checkoutItems,
+  getZip: () => formData.zip,
 })
-async function fetchSummary() {
-  const result = await run(() => calculateOrderSummary(checkoutItems.value, formData.zip))
-  if (result.ok) {
-    summaryRef.value = result.value
-  } else {
-    toast({ title: t('checkout.calcFailed'), description: result.error, variant: 'destructive' })
-  }
-}
-
-async function onApplyPromo() {
-  const code = promoCodeRef.value.trim()
-  if (!code) {
-    toast({
-      title: t('cart.enterCode'),
-      description: t('cart.enterCodeDesc'),
-      variant: 'destructive',
-    })
-    return
-  }
-  if (promoApplied.value) {
-    toast({
-      title: t('cart.alreadyApplied'),
-      description: t('checkout.alreadyAppliedDesc'),
-      variant: 'destructive',
-    })
-    return
-  }
-  try {
-    const { discount } = await applyPromoCode(code, summaryRef.value.subtotal)
-    if (discount <= 0) {
-      toast({
-        title: t('cart.invalidCode'),
-        description: t('cart.invalidCodeDesc'),
-        variant: 'destructive',
-      })
-      return
-    }
-    promoApplied.value = true
-    promoDiscount.value = discount
-    toast({
-      title: t('cart.promoApplied'),
-      description: t('cart.promoAppliedDesc', { discount: discount.toFixed(2) }),
-      variant: 'success',
-    })
-  } catch (e) {
-    toast({
-      title: t('cart.invalidCode'),
-      description: toErrorMessage(e, t('cart.tryAnotherCode')),
-      variant: 'destructive',
-    })
-  }
-}
-
-function removePromo() {
-  promoApplied.value = false
-  promoDiscount.value = 0
-  promoCodeRef.value = ''
-  toast({ title: t('cart.promoRemoved'), description: t('cart.promoRemovedDesc') })
-}
 
 // ── Init ──
 // 表单预填（调试钩子 / 登录态资料与默认地址）在 useCheckoutForm 里；
