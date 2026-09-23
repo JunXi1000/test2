@@ -16,8 +16,16 @@ export default defineConfig({
     }),
   ],
   server: {
-    // 默认仅绑 IPv6 回环 ::1，IPv4(127.0.0.1)与局域网 IP 都连不上 → 监听所有网卡
-    host: true,
+    // 绑 IPv4 回环，而不是 host: true。
+    //
+    // 起因：Vite 默认只绑 IPv6 回环 ::1，于是 http://127.0.0.1:5173 连不上。
+    // 早先这里写的是 `host: true`（监听所有网卡），能解决该问题，但代价是 Vite 会把
+    // 本机每块网卡的地址都印进启动横幅 —— 本机除了 WLAN，还挂着 Radmin VPN 与 Meta
+    // 两个虚拟网卡，于是横幅里冒出三个「Network」链接，其中一个还是 VPN 隧道地址。
+    // 显式绑 127.0.0.1 精确解决原问题，且不对外暴露、横幅只剩一条 Local。
+    //
+    // 若要在手机/别的机器上访问开发服务器，把它改回 `true`（或填具体网卡 IP）。
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: 'http://localhost:1000',
