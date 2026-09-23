@@ -27,15 +27,16 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { getProductById, getRelatedProducts, getBoughtTogether } from '@/api/modules/product'
+// 推荐位的 getRelatedProducts / getBoughtTogether 已随块搬进 <ProductRecommendations>
+import { getProductById } from '@/api/modules/product'
 import type { Product } from '@/types/product'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import ReviewSection from '@/components/ui/product/ReviewSection.vue'
 import ProductGallery from '@/components/ui/product/ProductGallery.vue'
-import { IMAGE_FALLBACK } from '@/utils/imagePlaceholder'
+import ProductRecommendations from '@/components/ui/product/ProductRecommendations.vue'
+import { formatPricePlain } from '@/utils/format'
 import Breadcrumb from '@/components/ui/Breadcrumb.vue'
 import ProductQA from '@/components/ui/ProductQA.vue'
-import ProductCard from '@/components/ui/card/ProductCard.vue'
 import { getMerchantPublicProfile, type MerchantPublicProfile } from '@/api/modules/merchantPublic'
 
 const route = useRoute()
@@ -104,11 +105,6 @@ const hasHiddenSpecs = computed(
 const safeRating = computed(() => Number(productRef.value?.rating ?? 0))
 const safeReviews = computed(() => Number(productRef.value?.reviews ?? 0))
 const comparePrice = computed(() => Number((productRef.value?.price ?? 0) * 1.2))
-
-/** 注意：这里刻意**不带**两位小数（与 Checkout 的 formatPrice 不同），改它会让全站价格显示变化 */
-function formatPrice(price: number | undefined) {
-  return Number(price ?? 0).toLocaleString('en-US')
-}
 
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -376,69 +372,6 @@ async function fetchDetail() {
 
   // 商品加载完成后(此时才有真实 shopId)再加载商家信息,避免 onMounted 竞态取到假 id
   loadMerchant()
-  // 并行加载推荐板块
-  loadRecommendations()
-}
-
-// ── Recommendations (阶段 1.1) ──
-const relatedProducts = ref<Product[]>([])
-const boughtTogether = ref<Product[]>([])
-const boughtTogetherSelected = ref<Set<number>>(new Set())
-const recLoading = ref(false)
-
-async function loadRecommendations() {
-  recLoading.value = true
-  try {
-    const [related, together] = await Promise.all([
-      getRelatedProducts(productId, 6),
-      getBoughtTogether(productId, 3),
-    ])
-    relatedProducts.value = related
-    boughtTogether.value = together
-    // 默认全部选中搭配购买
-    boughtTogetherSelected.value = new Set(together.map((p) => p.id))
-  } catch {
-    relatedProducts.value = []
-    boughtTogether.value = []
-  } finally {
-    recLoading.value = false
-  }
-}
-
-const boughtTogetherTotal = computed(() => {
-  const ids = boughtTogetherSelected.value
-  return boughtTogether.value
-    .filter((p) => ids.has(p.id))
-    .reduce((sum, p) => sum + Number(p.price), Number(productRef.value?.price ?? 0))
-})
-
-function toggleBoughtTogether(id: number) {
-  const next = new Set(boughtTogetherSelected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  boughtTogetherSelected.value = next
-}
-
-function addBoughtTogetherToCart() {
-  if (!productRef.value) return
-  const ids = boughtTogetherSelected.value
-  // 主商品
-  cartStore.addItem(productRef.value, {
-    color: selectedColor.value?.name ?? 'Default',
-    size: selectedSize.value || 'Standard',
-    quantity: quantity.value,
-  })
-  // 搭配商品
-  boughtTogether.value.forEach((p) => {
-    if (ids.has(p.id)) {
-      cartStore.addItem(p, { color: 'Default', size: 'Standard', quantity: 1 })
-    }
-  })
-  toast({
-    title: 'Bundle Added to Cart',
-    description: `${ids.size + 1} items added`,
-    variant: 'success',
-  })
 }
 
 // ── Merchant info ──
@@ -595,10 +528,10 @@ watch(
             </div>
             <div class="product-price-row flex items-baseline gap-2 md:gap-3">
               <span class="text-3xl md:text-4xl font-black text-primary"
-                >${{ formatPrice(productRef?.price) }}</span
+                >${{ formatPricePlain(productRef?.price) }}</span
               >
               <span class="text-lg md:text-xl text-muted-foreground line-through opacity-50"
-                >${{ formatPrice(comparePrice) }}</span
+                >${{ formatPricePlain(comparePrice) }}</span
               >
             </div>
           </div>
@@ -1116,115 +1049,19 @@ watch(
           </div>
         </div>
       </div>
-
-      <!-- ══════════ 商品推荐（阶段 1.1）══════════ -->
-      <div v-if="productRef" class="mt-16 border-t border-border pt-10">
-        <div class="container px-4 mx-auto">
-          <!-- Frequently Bought Together -->
-          <section v-if="!recLoading && boughtTogether.length > 0" class="mb-12">
-            <h2 class="text-xl sm:text-2xl font-black mb-6 flex items-center gap-2">
-              <ShoppingBag class="w-5 h-5 text-primary" />
-              Frequently Bought Together
-            </h2>
-            <div class="rounded-2xl border border-border bg-card p-4 sm:p-6">
-              <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-                <!-- 主商品 -->
-                <div class="w-28 sm:w-32">
-                  <div
-                    class="aspect-square rounded-xl overflow-hidden border border-border bg-secondary/30"
-                  >
-                    <img
-                      :src="productRef.image ?? productRef.images?.[0]"
-                      :alt="productRef.title"
-                      class="w-full h-full object-cover"
-                      loading="lazy"
-                      @error="(e) => ((e.target as HTMLImageElement).src = IMAGE_FALLBACK)"
-                    />
-                  </div>
-                  <p class="text-[11px] font-semibold line-clamp-1 mt-1.5 text-center">
-                    {{ productRef.title }}
-                  </p>
-                  <p class="text-xs font-bold text-primary text-center mt-0.5">
-                    ${{ formatPrice(productRef.price) }}
-                  </p>
-                </div>
-
-                <template v-for="(p, i) in boughtTogether" :key="p.id">
-                  <Plus
-                    v-if="i > 0 || boughtTogether.length > 1"
-                    class="w-5 h-5 text-muted-foreground shrink-0"
-                  />
-                  <div
-                    class="w-28 sm:w-32 cursor-pointer select-none"
-                    @click="toggleBoughtTogether(p.id)"
-                  >
-                    <div
-                      class="relative aspect-square rounded-xl overflow-hidden border bg-secondary/30"
-                      :class="
-                        boughtTogetherSelected.has(p.id)
-                          ? 'border-primary ring-2 ring-primary/30'
-                          : 'border-border opacity-60'
-                      "
-                    >
-                      <img
-                        :src="p.image"
-                        :alt="p.title"
-                        class="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      <span
-                        class="absolute top-1.5 left-1.5 w-5 h-5 rounded-full border-2 flex items-center justify-center text-white"
-                        :class="
-                          boughtTogetherSelected.has(p.id)
-                            ? 'bg-primary border-primary'
-                            : 'bg-background/80 border-border'
-                        "
-                      >
-                        <Check v-if="boughtTogetherSelected.has(p.id)" class="w-3 h-3" />
-                      </span>
-                    </div>
-                    <p class="text-[11px] font-semibold line-clamp-1 mt-1.5 text-center">
-                      {{ p.title }}
-                    </p>
-                    <p class="text-xs font-bold text-primary text-center mt-0.5">
-                      ${{ formatPrice(p.price) }}
-                    </p>
-                  </div>
-                </template>
-              </div>
-
-              <div
-                class="flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t border-border/60"
-              >
-                <div class="text-sm">
-                  <span class="text-muted-foreground">Total for selected:</span>
-                  <span class="ml-2 text-2xl font-black text-primary"
-                    >${{ formatPrice(boughtTogetherTotal) }}</span
-                  >
-                </div>
-                <Button size="sm" class="rounded-full px-6 h-10" @click="addBoughtTogetherToCart">
-                  <ShoppingBag class="w-4 h-4 mr-1.5" />
-                  Add Bundle to Cart
-                </Button>
-              </div>
-            </div>
-          </section>
-
-          <!-- You May Also Like -->
-          <section v-if="!recLoading && relatedProducts.length > 0" class="mb-4">
-            <h2 class="text-xl sm:text-2xl font-black mb-6 flex items-center gap-2">
-              <Zap class="w-5 h-5 text-primary" />
-              You May Also Like
-            </h2>
-            <div
-              class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4"
-            >
-              <ProductCard v-for="p in relatedProducts" :key="p.id" :product="p" class="h-full" />
-            </div>
-          </section>
-        </div>
-      </div>
     </div>
+
+    <!-- 商品推荐（阶段 1.1）：凑单 + 猜你喜欢，整块在 <ProductRecommendations> 里。
+         它自己加载数据（本块模板本来就在 v-if="productRef" 内，商品没出来时不挂载）；
+         接规格 prop 是因为「加入购物车」要按用户当前选的颜色/尺码/数量加主商品。 -->
+    <ProductRecommendations
+      v-if="productRef"
+      :product-id="productId"
+      :product="productRef"
+      :selected-color="selectedColor"
+      :selected-size="selectedSize"
+      :quantity="quantity"
+    />
 
     <!-- Mobile Sticky Purchase Bar -->
     <div
@@ -1240,7 +1077,7 @@ watch(
               {{ quantity }}
             </div>
             <div class="text-[31px] sm:text-[33px] font-black text-primary leading-none mt-0.5">
-              ${{ formatPrice(productRef?.price) }}
+              ${{ formatPricePlain(productRef?.price) }}
             </div>
           </div>
           <button

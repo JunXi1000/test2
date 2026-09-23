@@ -12,3 +12,17 @@
 export function formatPrice(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
+
+/**
+ * 不带小数位的价格（`$899`），商品详情/推荐位那种紧凑排版用。
+ *
+ * ⚠️ 与上面的 `formatPrice`（两位小数）**刻意并存，不要去"统一"** —— 两者显示结果不同
+ * （`$899` vs `$899.00`），统一是用户可见的改变，该单独提、单独确认。
+ * 名字里的 Plain 就是指"不带小数位"，不是"更简单"。
+ *
+ * 接 `undefined` 是因为调用点常写 `formatPricePlain(product?.price)` —— 商品还没加载时
+ * 不该显示 `NaN`。
+ */
+export function formatPricePlain(price: number | undefined): string {
+  return Number(price ?? 0).toLocaleString('en-US')
+}
