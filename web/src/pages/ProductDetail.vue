@@ -7,18 +7,14 @@ import {
   ShieldCheck,
   Minus,
   Plus,
-  Share2,
   MessageSquare,
   Check,
   ShoppingBag,
   Zap,
-  ChevronLeft,
-  ChevronRight,
   Hash,
   Store,
   Clock,
   Heart,
-  Play,
   Ruler,
 } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
@@ -35,6 +31,8 @@ import { getProductById, getRelatedProducts, getBoughtTogether } from '@/api/mod
 import type { Product } from '@/types/product'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import ReviewSection from '@/components/ui/product/ReviewSection.vue'
+import ProductGallery from '@/components/ui/product/ProductGallery.vue'
+import { IMAGE_FALLBACK } from '@/utils/imagePlaceholder'
 import Breadcrumb from '@/components/ui/Breadcrumb.vue'
 import ProductQA from '@/components/ui/ProductQA.vue'
 import ProductCard from '@/components/ui/card/ProductCard.vue'
@@ -59,8 +57,6 @@ const {
 })
 const productRef = ref<Product | null>(null)
 
-const currentImageIndex = ref(0)
-const thumbnailStripRef = ref<HTMLElement | null>(null)
 const selectedColor = ref<{ name: string; value?: string } | null>(null)
 const selectedSize = ref<string>('')
 const quantity = ref(1)
@@ -105,221 +101,13 @@ const hasHiddenSpecs = computed(
   () => (productRef.value?.sizes?.length || 0) > COLLAPSE_THRESHOLD_SPECS,
 )
 
-/** 相册条目：图片与演示视频混排（阶段 4.1）。视频固定插入到第 2 位（index 1）。 */
-type GalleryItem = { kind: 'image'; src: string } | { kind: 'video'; src: string }
-
-const galleryItems = computed<GalleryItem[]>(() => {
-  const p = productRef.value
-  if (!p) return []
-  const imgs = p.images?.length ? p.images : [p.image]
-  const items: GalleryItem[] = imgs.map((src) => ({ kind: 'image', src }))
-  if (p.video) {
-    items.splice(1, 0, { kind: 'video', src: p.video })
-  }
-  return items
-})
-
-const currentGalleryItem = computed<GalleryItem | null>(
-  () => galleryItems.value[currentImageIndex.value] ?? null,
-)
-const isCurrentVideo = computed(() => currentGalleryItem.value?.kind === 'video')
-/** 视频封面图：复用商品首图 */
-const videoPoster = computed(
-  () => productRef.value?.image ?? productRef.value?.images?.[0] ?? imageFallback,
-)
-
-const currentImage = computed(() => {
-  if (
-    productRef.value?.variantImages &&
-    selectedColor.value?.name &&
-    productRef.value.variantImages[selectedColor.value.name]
-  ) {
-    return productRef.value.variantImages[selectedColor.value.name]
-  }
-  const item = galleryItems.value[currentImageIndex.value]
-  if (item?.kind === 'image') return item.src
-  return productRef.value?.images?.[0] ?? productRef.value?.image ?? ''
-})
-
-const galleryImages = computed(() => {
-  const p = productRef.value
-  if (!p) return []
-  return p.images?.length ? p.images : [p.image]
-})
-
-const canPrevImage = computed(() => galleryItems.value.length > 1)
-const canNextImage = computed(() => galleryItems.value.length > 1)
-
-const mainImageSlotKey = computed(
-  () => `main-${selectedColor.value?.name || 'default'}-${currentImageIndex.value}`,
-)
-const resolvedMainImage = computed(() =>
-  resolveImageSrc(mainImageSlotKey.value, currentImage.value || imageFallback),
-)
-
 const safeRating = computed(() => Number(productRef.value?.rating ?? 0))
 const safeReviews = computed(() => Number(productRef.value?.reviews ?? 0))
 const comparePrice = computed(() => Number((productRef.value?.price ?? 0) * 1.2))
-const imageFallback =
-  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="720" height="540" viewBox="0 0 720 540"><rect width="720" height="540" fill="%23e5e7eb"/><g fill="%239ca3af"><circle cx="280" cy="220" r="34"/><path d="M120 390l130-120 95 90 85-70 170 100H120z"/></g><text x="360" y="470" font-family="Arial,sans-serif" font-size="28" fill="%236b7280" text-anchor="middle">Image unavailable</text></svg>'
-const imageFailoverCursor = ref<Record<string, number>>({})
-const isDevMode = import.meta.env.DEV
-const devImageFailTotal = ref(0)
-const devImageFailByUrl = ref<Record<string, number>>({})
 
+/** 注意：这里刻意**不带**两位小数（与 Checkout 的 formatPrice 不同），改它会让全站价格显示变化 */
 function formatPrice(price: number | undefined) {
   return Number(price ?? 0).toLocaleString('en-US')
-}
-
-function buildImageCandidates(primarySrc: string, slotKey: string) {
-  const sanitizedPrimary = String(primarySrc || '').trim()
-  const seed = encodeURIComponent(`product-${productId}-${slotKey}`)
-  const candidates = [
-    sanitizedPrimary,
-    `https://picsum.photos/seed/${seed}/1200/900`,
-    `https://picsum.photos/seed/${seed}-alt/1200/900`,
-  ].filter(Boolean)
-  candidates.push(imageFallback)
-  return candidates
-}
-
-function resolveImageSrc(slotKey: string, primarySrc: string) {
-  const candidates = buildImageCandidates(primarySrc, slotKey)
-  const cursor = imageFailoverCursor.value[slotKey] ?? 0
-  return candidates[Math.min(cursor, candidates.length - 1)]
-}
-
-function isUsingBackupSource(slotKey: string) {
-  return (imageFailoverCursor.value[slotKey] ?? 0) > 0
-}
-
-function onImageError(event: Event, slotKey: string, primarySrc: string) {
-  const target = event.target as HTMLImageElement
-  if (!target) return
-  const candidates = buildImageCandidates(primarySrc, slotKey)
-  const currentCursor = imageFailoverCursor.value[slotKey] ?? 0
-  const nextCursor = Math.min(currentCursor + 1, candidates.length - 1)
-  const failedSrc = target.currentSrc || target.src || primarySrc
-
-  if (isDevMode) {
-    devImageFailTotal.value += 1
-    const key = String(failedSrc || 'unknown')
-    devImageFailByUrl.value[key] = (devImageFailByUrl.value[key] ?? 0) + 1
-  }
-
-  if (isDevMode) {
-    console.warn('[ProductDetail:image-failover]', {
-      slotKey,
-      failedSrc,
-      primarySrc,
-      nextFallbackLevel: nextCursor,
-      nextSrc: candidates[nextCursor],
-    })
-  }
-
-  imageFailoverCursor.value[slotKey] = nextCursor
-  target.src = candidates[nextCursor]
-}
-
-function preloadImage(src: string | undefined) {
-  if (!src) return
-  const img = new Image()
-  img.decoding = 'async'
-  img.src = src
-}
-
-function getNetworkHints() {
-  const connection = (
-    navigator as Navigator & {
-      connection?: {
-        saveData?: boolean
-        effectiveType?: string
-      }
-    }
-  ).connection
-  return {
-    saveData: Boolean(connection?.saveData),
-    effectiveType: connection?.effectiveType || '4g',
-  }
-}
-
-function wrapIndex(i: number, len: number): number {
-  return ((i % len) + len) % len
-}
-
-function warmupNearbyGalleryImages() {
-  const len = galleryImages.value.length
-  if (!len) return
-
-  const { saveData, effectiveType } = getNetworkHints()
-  const nextSrc = galleryImages.value[wrapIndex(currentImageIndex.value + 1, len)]
-
-  if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g') {
-    preloadImage(nextSrc)
-    return
-  }
-
-  const prevSrc = galleryImages.value[wrapIndex(currentImageIndex.value - 1, len)]
-  preloadImage(nextSrc)
-  if (effectiveType !== '3g') {
-    preloadImage(prevSrc)
-  }
-}
-
-function scheduleIdleWarmup() {
-  const len = galleryImages.value.length
-  if (!len) return
-  const { saveData, effectiveType } = getNetworkHints()
-  if (saveData || effectiveType === 'slow-2g' || effectiveType === '2g' || effectiveType === '3g')
-    return
-
-  const run = () => {
-    const next2 = galleryImages.value[wrapIndex(currentImageIndex.value + 2, len)]
-    const prev2 = galleryImages.value[wrapIndex(currentImageIndex.value - 2, len)]
-    preloadImage(next2)
-    preloadImage(prev2)
-  }
-
-  const w = window as Window & {
-    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-    cancelIdleCallback?: (handle: number) => void
-  }
-
-  if (w.requestIdleCallback) {
-    if (idleWarmupTimer !== null && w.cancelIdleCallback) {
-      w.cancelIdleCallback(idleWarmupTimer)
-    }
-    idleWarmupTimer = w.requestIdleCallback(run, { timeout: 1200 })
-    return
-  }
-
-  if (idleWarmupTimer !== null) {
-    window.clearTimeout(idleWarmupTimer)
-  }
-  idleWarmupTimer = window.setTimeout(run, 280)
-}
-
-function selectImage(index: number) {
-  if (index < 0 || index >= galleryItems.value.length) return
-  currentImageIndex.value = index
-  nextTick(() => {
-    const target = thumbnailStripRef.value?.querySelector<HTMLElement>(
-      `button[data-thumb-index="${index}"]`,
-    )
-    target?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-  })
-}
-
-function prevImage() {
-  if (!galleryItems.value.length) return
-  const len = galleryItems.value.length
-  selectImage((currentImageIndex.value - 1 + len) % len)
-}
-
-function nextImage() {
-  if (!galleryItems.value.length) return
-  const len = galleryItems.value.length
-  selectImage((currentImageIndex.value + 1) % len)
 }
 
 let highlightTimer: ReturnType<typeof setTimeout> | null = null
@@ -448,49 +236,9 @@ const qaSectionRef = ref<HTMLElement | null>(null)
 const reviewsSectionElement = () => document.getElementById('reviews-section')
 const isProgrammaticTabScroll = ref(false)
 let tabScrollUnlockTimer: ReturnType<typeof setTimeout> | null = null
-let idleWarmupTimer: number | null = null
 
 const authStore = useAuthStore()
 
-const heroCardRef = ref<HTMLElement | null>(null)
-const zoomActive = ref(false)
-const zoomLensX = ref(0)
-const zoomLensY = ref(0)
-const zoomBgPos = ref('center')
-const zoomPanelLeft = ref(0)
-const zoomPanelTop = ref(0)
-const ZOOM_SCALE = 2.5
-const LENS_SIZE = 160
-const ZOOM_PANEL_SIZE = 420
-
-function onHeroMouseMove(e: MouseEvent) {
-  const el = heroCardRef.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-  const w = rect.width
-  const h = rect.height
-
-  const half = LENS_SIZE / 2
-  const lx = Math.max(half, Math.min(x, w - half))
-  const ly = Math.max(half, Math.min(y, h - half))
-  zoomLensX.value = lx - half
-  zoomLensY.value = ly - half
-
-  const px = (x / w) * 100
-  const py = (y / h) * 100
-  zoomBgPos.value = `${px}% ${py}%`
-
-  zoomPanelLeft.value = rect.right + 12
-  zoomPanelTop.value = rect.top
-
-  if (!zoomActive.value) zoomActive.value = true
-}
-
-function onHeroMouseLeave() {
-  zoomActive.value = false
-}
 const shareProduct = async () => {
   try {
     const shareData = {
@@ -734,43 +482,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (isDevMode && devImageFailTotal.value > 0) {
-    const topFailed = Object.entries(devImageFailByUrl.value)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([url, count]) => ({ url, count }))
-    console.info('[ProductDetail:image-failover-summary]', {
-      totalFailed: devImageFailTotal.value,
-      uniqueFailedUrls: Object.keys(devImageFailByUrl.value).length,
-      topFailed,
-    })
-  }
-
   window.removeEventListener('scroll', syncActiveTabByScroll)
   if (tabScrollUnlockTimer) {
     clearTimeout(tabScrollUnlockTimer)
     tabScrollUnlockTimer = null
   }
-  if (idleWarmupTimer !== null) {
-    const w = window as Window & { cancelIdleCallback?: (handle: number) => void }
-    if (w.cancelIdleCallback) {
-      w.cancelIdleCallback(idleWarmupTimer)
-    } else {
-      window.clearTimeout(idleWarmupTimer)
-    }
-    idleWarmupTimer = null
-  }
-})
-
-watch(currentImageIndex, () => {
-  warmupNearbyGalleryImages()
-  scheduleIdleWarmup()
-})
-
-watch(galleryItems, () => {
-  imageFailoverCursor.value = {}
-  warmupNearbyGalleryImages()
-  scheduleIdleWarmup()
 })
 
 watch(quantity, () => {
@@ -830,167 +546,14 @@ watch(
       <ErrorState v-else-if="errorRef" :message="errorRef" @retry="fetchDetail" />
 
       <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 lg:gap-12 items-start">
-        <!-- Left: Visual Experience (narrower column — product frame reads smaller) -->
-        <div class="lg:col-span-5 space-y-3 md:space-y-4 lg:sticky lg:top-24 relative w-full">
-          <div
-            ref="heroCardRef"
-            class="product-hero-card relative aspect-[4/3] rounded-2xl md:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 border border-border/50"
-          >
-            <!-- 演示视频：与图片混排相册，原生 controls 支持播放/暂停/全屏（阶段 4.1） -->
-            <video
-              v-if="isCurrentVideo"
-              :key="`gallery-video-${currentImageIndex}`"
-              :src="currentGalleryItem?.src"
-              class="w-full h-full object-contain p-3 md:p-5"
-              controls
-              playsinline
-              preload="metadata"
-              :poster="videoPoster"
-            ></video>
-            <img
-              v-else
-              :src="
-                resolveImageSrc(
-                  `main-${selectedColor?.name || 'default'}-${currentImageIndex}`,
-                  currentImage || imageFallback,
-                )
-              "
-              class="w-full h-full object-contain p-3 md:p-5"
-              :alt="productRef?.title"
-              fetchpriority="high"
-              loading="eager"
-              decoding="async"
-              draggable="false"
-              @error="
-                onImageError(
-                  $event,
-                  `main-${selectedColor?.name || 'default'}-${currentImageIndex}`,
-                  currentImage || imageFallback,
-                )
-              "
-            />
-            <!-- Zoom capture layer: sits above image, below buttons（视频时禁用，避免遮挡播放控件） -->
-            <div
-              v-if="!isCurrentVideo"
-              class="hidden lg:block absolute inset-0 z-[1]"
-              :class="zoomActive ? 'cursor-crosshair' : 'cursor-zoom-in'"
-              @mousemove="onHeroMouseMove"
-              @mouseleave="onHeroMouseLeave"
-            />
-            <!-- Zoom Lens Indicator -->
-            <div
-              v-if="!isCurrentVideo && zoomActive"
-              class="hidden lg:block absolute pointer-events-none border-2 border-primary/40 bg-primary/10 rounded-sm z-[2]"
-              :style="{
-                width: `${LENS_SIZE}px`,
-                height: `${LENS_SIZE}px`,
-                left: `${zoomLensX}px`,
-                top: `${zoomLensY}px`,
-              }"
-            />
-            <span
-              v-if="
-                isDevMode &&
-                isUsingBackupSource(`main-${selectedColor?.name || 'default'}-${currentImageIndex}`)
-              "
-              class="absolute top-4 right-16 md:top-6 md:right-20 px-2 py-1 rounded-full bg-black/50 text-white text-[10px] font-semibold tracking-wide z-[3]"
-            >
-              Backup image
-            </span>
-            <button
-              v-if="galleryItems.length > 1"
-              class="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/45 text-white flex items-center justify-center hover:bg-black/60 transition z-[3]"
-              :disabled="!canPrevImage"
-              :class="!canPrevImage ? 'opacity-40 cursor-not-allowed' : ''"
-              @click="prevImage"
-            >
-              <ChevronLeft class="w-5 h-5" />
-            </button>
-            <button
-              v-if="galleryItems.length > 1"
-              class="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 rounded-full bg-black/45 text-white flex items-center justify-center hover:bg-black/60 transition z-[3]"
-              :disabled="!canNextImage"
-              :class="!canNextImage ? 'opacity-40 cursor-not-allowed' : ''"
-              @click="nextImage"
-            >
-              <ChevronRight class="w-5 h-5" />
-            </button>
-            <!-- Badges -->
-            <div
-              class="absolute top-4 left-4 md:top-6 md:left-6 flex flex-col gap-1.5 md:gap-2 z-[3] pointer-events-none"
-            >
-              <span
-                class="px-2.5 md:px-3 py-1 md:py-1.5 bg-white/90 dark:bg-black/90 backdrop-blur-md rounded-full text-[9px] md:text-[10px] font-bold tracking-wider md:tracking-widest uppercase shadow-sm"
-                >New Arrival</span
-              >
-              <span
-                v-if="Number(productRef?.rating ?? 0) >= 4.8"
-                class="px-2.5 md:px-3 py-1 md:py-1.5 bg-primary text-primary-foreground rounded-full text-[9px] md:text-[10px] font-bold tracking-wider md:tracking-widest uppercase shadow-sm"
-                >Top Rated</span
-              >
-            </div>
-            <!-- Actions -->
-            <div class="absolute top-4 right-4 md:top-6 md:right-6 z-[3]">
-              <button
-                class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/90 dark:bg-black/90 backdrop-blur-md flex items-center justify-center text-foreground hover:bg-primary hover:text-white transition-all shadow-md active:scale-95"
-                @click="shareProduct"
-              >
-                <Share2 class="w-4 h-4 md:w-5 md:h-5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Thumbnail Strip（图片与演示视频混排，视频缩略图带播放角标） -->
-          <div
-            v-if="galleryItems.length > 1"
-            ref="thumbnailStripRef"
-            class="flex gap-2 md:gap-3 overflow-x-auto pb-2 no-scrollbar px-0.5 md:px-1 snap-x snap-mandatory scroll-px-1 md:scroll-px-2 [-webkit-overflow-scrolling:touch] justify-center lg:justify-start"
-          >
-            <button
-              v-for="(item, idx) in galleryItems"
-              :key="idx"
-              :data-thumb-index="idx"
-              :data-thumb-kind="item.kind"
-              class="relative flex-shrink-0 snap-start w-14 h-14 md:w-16 md:h-16 rounded-lg md:rounded-xl overflow-hidden border-2 transition-all duration-300 group"
-              :class="
-                currentImageIndex === idx
-                  ? 'border-primary p-1 scale-105'
-                  : 'border-transparent opacity-60 hover:opacity-100'
-              "
-              @click="selectImage(idx)"
-            >
-              <template v-if="item.kind === 'video'">
-                <img
-                  :src="resolveImageSrc(`thumb-${idx}`, videoPoster)"
-                  class="w-full h-full object-cover rounded-xl"
-                  :alt="`${productRef?.title || 'Product'} demo video`"
-                  :loading="idx <= 2 ? 'eager' : 'lazy'"
-                  decoding="async"
-                  @error="onImageError($event, `thumb-${idx}`, videoPoster)"
-                />
-                <span
-                  class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/35"
-                >
-                  <span
-                    class="flex items-center justify-center w-6 h-6 rounded-full bg-white/95 text-foreground shadow-sm"
-                  >
-                    <Play class="w-3.5 h-3.5 ml-0.5" />
-                  </span>
-                </span>
-              </template>
-              <img
-                v-else
-                :src="resolveImageSrc(`thumb-${idx}`, item.src || imageFallback)"
-                class="w-full h-full object-cover rounded-xl"
-                :alt="`${productRef?.title || 'Product'} thumbnail ${idx + 1}`"
-                :loading="idx <= 2 ? 'eager' : 'lazy'"
-                :fetchpriority="idx === currentImageIndex ? 'high' : 'low'"
-                decoding="async"
-                @error="onImageError($event, `thumb-${idx}`, item.src || imageFallback)"
-              />
-            </button>
-          </div>
-        </div>
+        <!-- Left: 主图 / 演示视频 / 缩略图 / 放大镜 —— 整块在 <ProductGallery> 里。
+             selectedColor 由右栏选择器驱动（变体图），share 是页面动作（navigator.share + toast）。 -->
+        <ProductGallery
+          :product-id="productId"
+          :product="productRef"
+          :selected-color="selectedColor"
+          @share="shareProduct"
+        />
 
         <!-- Right: Commerce & Configuration -->
         <div class="lg:col-span-7 flex flex-col space-y-5 md:space-y-10 lg:pt-2">
@@ -1575,7 +1138,7 @@ watch(
                       :alt="productRef.title"
                       class="w-full h-full object-cover"
                       loading="lazy"
-                      @error="(e) => ((e.target as HTMLImageElement).src = imageFallback)"
+                      @error="(e) => ((e.target as HTMLImageElement).src = IMAGE_FALLBACK)"
                     />
                   </div>
                   <p class="text-[11px] font-semibold line-clamp-1 mt-1.5 text-center">
@@ -1733,37 +1296,10 @@ watch(
         </div>
       </div>
     </div>
-
-    <!-- Zoom Preview Panel (teleported to body for correct stacking) -->
-    <Teleport to="body">
-      <div
-        v-if="zoomActive"
-        class="hidden lg:block fixed rounded-2xl border border-border bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden pointer-events-none"
-        :style="{
-          width: `${ZOOM_PANEL_SIZE}px`,
-          height: `${ZOOM_PANEL_SIZE}px`,
-          left: `${zoomPanelLeft}px`,
-          top: `${zoomPanelTop}px`,
-          zIndex: 9999,
-          backgroundImage: `url(${resolvedMainImage})`,
-          backgroundSize: `${ZOOM_SCALE * 100}%`,
-          backgroundPosition: zoomBgPos,
-          backgroundRepeat: 'no-repeat',
-        }"
-      />
-    </Teleport>
   </div>
 </template>
 
 <style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
 @media (max-width: 390px) {
   .product-detail-page .product-title {
     font-size: 1.65rem;
@@ -1772,10 +1308,6 @@ watch(
 
   .product-detail-page .product-price-row {
     gap: 0.35rem;
-  }
-
-  .product-detail-page .product-hero-card {
-    border-radius: 1.1rem;
   }
 
   .product-detail-page .mobile-buy-actions {
