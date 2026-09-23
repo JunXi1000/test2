@@ -1,7 +1,7 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel :error="errorRef" @retry="reloadNow">
+      <template #toolbar>
         <div class="admin-toolbar-search">
           <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
                @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
@@ -26,7 +26,7 @@
             data-testid="list-status-filter"
             placeholder="All Status"
             class="!w-full"
-            @change="loadData"
+            @change="reloadNow"
           >
             <el-option label="All Status" value="all" />
             <el-option label="Pending" value="pending" />
@@ -41,12 +41,7 @@
           <RefreshCw class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
-      </div>
-    </div>
-
-    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
-
-    <div v-else class="admin-table-shell">
+      </template>
       <el-table v-loading="loading" :data="orders" stripe class="admin-data-table min-w-[900px]">
         <el-table-column prop="id" label="Order ID" width="150">
           <template #default="{ row }">
@@ -120,7 +115,7 @@
           />
         </template>
       </el-table>
-    </div>
+    </DataTablePanel>
 
     <ConfirmDialog
       v-model="cancelDialogVisible"
@@ -151,56 +146,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref } from 'vue'
 import { RefreshCw, Search as SearchIcon, ShoppingCart as ShoppingCartIcon } from 'lucide-vue-next'
 import { getAdminOrders, adminCancelOrder, type AdminOrder } from '@/api/modules/adminOrders'
-import { debounce } from 'lodash-es'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
-import ErrorState from '@/components/ui/state/ErrorState.vue'
-import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useListQuery } from '@/composables/useListQuery'
 import { useToast } from '@/composables/useToast'
 
 const { toast } = useToast()
+
+// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，表格照常渲染成空态 ——
+// 用户看到的是「没有订单」而不是「加载失败」，且无重试入口）；取消订单等操作类 catch 仍用 toast。
 const {
+  items: orders,
+  searchQuery,
+  filter: statusFilter,
   isLoading: loading,
   error: errorRef,
-  run,
-} = useAsyncTask({
+  reloadNow,
+} = useListQuery<AdminOrder>({
   fallbackMessage: 'Failed to load orders',
+  task: async ({ q, filter, commit }) => {
+    commit(await getAdminOrders({ q, status: filter }))
+  },
 })
-const orders = ref<AdminOrder[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
+
 const cancelDialogVisible = ref(false)
 const cancelTarget = ref<AdminOrder | null>(null)
-
-const loadData = async () => {
-  // 原先只弹一个瞬时 toast，表格照常渲染成空态 —— 用户看到的是「没有订单」而不是
-  // 「加载失败」，且无重试入口。改由 ErrorState 承担持久态；取消订单等操作类 catch 仍用 toast。
-  const result = await run(() =>
-    getAdminOrders({
-      q: searchQuery.value,
-      status: statusFilter.value,
-    }),
-  )
-  if (result.ok) orders.value = result.value
-}
-
-// Debounce search
-const debouncedLoadData = debounce(loadData, 300)
-watch(searchQuery, () => {
-  debouncedLoadData()
-})
-
-/**
- * 立即刷新（回车 / Refresh 按钮）。必须先 cancel 掉挂起的 debounce：
- * 「刚打完字就回车」时那次 debounce 还在排队，不取消就会和这次立即请求重复发一遍。
- */
-const reloadNow = () => {
-  debouncedLoadData.cancel()
-  void loadData()
-}
 
 const requestCancel = (order: AdminOrder) => {
   cancelTarget.value = order
@@ -225,6 +199,4 @@ const confirmCancel = async () => {
     closeCancel()
   }
 }
-
-onMounted(loadData)
 </script>

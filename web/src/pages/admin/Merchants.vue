@@ -1,7 +1,7 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel :error="errorRef" @retry="reloadNow">
+      <template #toolbar>
         <div class="admin-toolbar-search">
           <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
                @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
@@ -26,7 +26,7 @@
             data-testid="list-status-filter"
             placeholder="All Status"
             class="!w-full"
-            @change="loadData"
+            @change="reloadNow"
           >
             <el-option label="All Status" value="all" />
             <el-option label="Pending Review" value="pending" />
@@ -44,12 +44,8 @@
           <Plus class="mr-1.5 inline h-4 w-4" />
           Add Merchant
         </el-button>
-      </div>
-    </div>
+      </template>
 
-    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
-
-    <div v-else class="admin-table-shell">
       <el-table v-loading="loading" :data="merchants" stripe class="admin-data-table min-w-[880px]">
         <el-table-column prop="storeName" label="Store" min-width="160">
           <template #default="{ row }">
@@ -195,7 +191,7 @@
           />
         </template>
       </el-table>
-    </div>
+    </DataTablePanel>
 
     <!-- Merchant Details Drawer -->
     <DetailDrawer v-model="drawerVisible" title="Merchant Details" size="500px">
@@ -385,7 +381,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, toRaw, watch } from 'vue'
+import { reactive, ref, toRaw } from 'vue'
 import {
   Eye,
   Pencil,
@@ -405,11 +401,10 @@ import {
   deleteMerchant,
   type AdminMerchant,
 } from '@/api/modules/adminMerchants'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
-import ErrorState from '@/components/ui/state/ErrorState.vue'
-import { debounce } from 'lodash-es'
-import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useListQuery } from '@/composables/useListQuery'
 import { useToast } from '@/composables/useToast'
 
 function statusLabel(s: AdminMerchant['status']) {
@@ -441,15 +436,19 @@ const { toast } = useToast()
 // 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，表格照常渲染成空态 ——
 // 用户看到的是「没有商家」而不是「加载失败」，且无重试入口）；操作类 catch 仍用 toast。
 const {
+  items: merchants,
+  searchQuery,
+  filter: statusFilter,
   isLoading: loading,
   error: errorRef,
-  run,
-} = useAsyncTask({
+  reloadNow,
+} = useListQuery<AdminMerchant>({
   fallbackMessage: 'Failed to load merchants',
+  task: async ({ q, filter, commit }) => {
+    commit(await getAdminMerchants({ q, status: filter }))
+  },
 })
-const merchants = ref<AdminMerchant[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
+
 const drawerVisible = ref(false)
 const selectedMerchant = ref<AdminMerchant | null>(null)
 
@@ -461,31 +460,6 @@ const form = reactive({
   ownerName: '',
   email: '',
 })
-
-const loadData = async () => {
-  const result = await run(() =>
-    getAdminMerchants({
-      q: searchQuery.value,
-      status: statusFilter.value,
-    }),
-  )
-  if (result.ok) merchants.value = result.value
-}
-
-// Debounce search
-const debouncedLoadData = debounce(loadData, 300)
-watch(searchQuery, () => {
-  debouncedLoadData()
-})
-
-/**
- * 立即刷新（回车 / Refresh 按钮）。必须先 cancel 掉挂起的 debounce：
- * 「刚打完字就回车」时那次 debounce 还在排队，不取消就会和这次立即请求重复发一遍。
- */
-const reloadNow = () => {
-  debouncedLoadData.cancel()
-  void loadData()
-}
 
 function syncSelectedRow(row: AdminMerchant, patch: Partial<AdminMerchant>) {
   Object.assign(row, patch)
@@ -613,7 +587,7 @@ const handleSubmit = async () => {
     } else {
       await createMerchant(payload)
       toast({ title: 'Merchant created', variant: 'success' })
-      await loadData() // Reload list to see new item
+      reloadNow() // Reload list to see new item
     }
     dialogVisible.value = false
   } catch (error) {
@@ -621,6 +595,4 @@ const handleSubmit = async () => {
     toast({ title: 'Operation failed', variant: 'destructive' })
   }
 }
-
-onMounted(loadData)
 </script>

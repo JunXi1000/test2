@@ -1,7 +1,7 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel :error="errorRef" @retry="reloadNow">
+      <template #toolbar>
         <div class="admin-toolbar-search">
           <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
                @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
@@ -26,7 +26,7 @@
             data-testid="list-status-filter"
             placeholder="All Status"
             class="!w-full"
-            @change="loadData"
+            @change="reloadNow"
           >
             <el-option label="All Status" value="all" />
             <el-option label="Visible" value="visible" />
@@ -38,12 +38,7 @@
           <RefreshCw class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
-      </div>
-    </div>
-
-    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
-
-    <div v-else class="admin-table-shell">
+      </template>
       <el-table
         v-loading="loading"
         :data="pagedReviews"
@@ -175,7 +170,7 @@
           background
         />
       </div>
-    </div>
+    </DataTablePanel>
 
     <DetailDrawer v-model="drawerVisible" title="Review detail" size="480px">
       <div v-if="selected" class="space-y-4 text-zinc-300">
@@ -254,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { RefreshCw, Search as SearchIcon, Star as StarIcon } from 'lucide-vue-next'
 import {
@@ -266,31 +261,40 @@ import {
 } from '@/api/modules/adminReviews'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
-import ErrorState from '@/components/ui/state/ErrorState.vue'
-import { debounce } from 'lodash-es'
-import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useListQuery } from '@/composables/useListQuery'
 import { useToast } from '@/composables/useToast'
 
 const { toast } = useToast()
 const router = useRouter()
+
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，表格照常渲染成空态 —— 用户看到的
+// 是「没有评价」而不是「加载失败」，且无重试入口）；删除等操作类 catch 仍用 toast。
 const {
+  items: reviews,
+  searchQuery,
+  filter: statusFilter,
   isLoading: loading,
   error: errorRef,
-  run,
-} = useAsyncTask({
+  reloadNow,
+} = useListQuery<AdminReview>({
   fallbackMessage: 'Failed to load reviews',
+  task: async ({ q, filter, commit }) => {
+    commit(await getAdminReviews({ q, status: filter }))
+    // 新结果回来要回到第一页。写在 commit 之后（即 run 回调内部），与迁移前
+    // 「if (result.ok)」的语义一致：失败时不重置页码。
+    currentPage.value = 1
+  },
 })
-const reviews = ref<AdminReview[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
+
 const drawerVisible = ref(false)
 const selected = ref<AdminReview | null>(null)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<AdminReview | null>(null)
-
-const currentPage = ref(1)
-const pageSize = ref(10)
 
 const pagedReviews = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
@@ -309,33 +313,6 @@ function formatDate(iso: string) {
   } catch {
     return iso
   }
-}
-
-const loadData = async () => {
-  // 原先只弹一个瞬时 toast，表格照常渲染成空态 —— 用户看到的是「没有评价」而不是
-  // 「加载失败」，且无重试入口。改由 ErrorState 承担持久态；删除等操作类 catch 仍用 toast。
-  const result = await run(() =>
-    getAdminReviews({
-      q: searchQuery.value,
-      status: statusFilter.value,
-    }),
-  )
-  if (result.ok) {
-    reviews.value = result.value
-    currentPage.value = 1
-  }
-}
-
-const debouncedLoad = debounce(loadData, 300)
-watch(searchQuery, () => debouncedLoad())
-
-/**
- * 立即刷新（回车 / Refresh 按钮）。必须先 cancel 掉挂起的 debounce：
- * 「刚打完字就回车」时那次 debounce 还在排队，不取消就会和这次立即请求重复发一遍。
- */
-const reloadNow = () => {
-  debouncedLoad.cancel()
-  void loadData()
 }
 
 async function setStatus(row: AdminReview, status: AdminReviewStatus) {
@@ -377,6 +354,4 @@ async function confirmDelete() {
     closeDelete()
   }
 }
-
-onMounted(loadData)
 </script>

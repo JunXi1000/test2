@@ -1,7 +1,12 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel
+      :error="errorRef"
+      :loading="loading"
+      shell-class="admin-grid-shell [--el-loading-spinner-size:42px] [--el-mask-color:rgb(24_24_27/0.72)]"
+      @retry="reloadNow"
+    >
+      <template #toolbar>
         <div class="admin-toolbar-search">
           <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
                @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
@@ -26,7 +31,7 @@
             data-testid="list-status-filter"
             placeholder="All Status"
             class="!w-full"
-            @change="loadData"
+            @change="reloadNow"
           >
             <el-option label="All Status" value="all" />
             <el-option label="Active" value="active" />
@@ -40,17 +45,7 @@
           <RefreshCw v-if="!loading" class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
-      </div>
-    </div>
-
-    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
-
-    <div
-      v-else
-      v-loading="loading"
-      class="admin-grid-shell [--el-loading-spinner-size:42px] [--el-mask-color:rgb(24_24_27/0.72)]"
-      element-loading-background="transparent"
-    >
+      </template>
       <!-- 本页是网格不是 el-table，没有 #empty 插槽可挂，空态得自己写。
            加 !loading 是必要的：网格不同于 EP 表格，加载中它什么都不渲染，
            若只看 products.length 就会在遮罩下先闪一屏「没有商品」。
@@ -112,7 +107,7 @@
           </div>
         </div>
       </div>
-    </div>
+    </DataTablePanel>
 
     <!-- Product Details Drawer -->
     <DetailDrawer v-model="drawerVisible" title="Product Inspection" size="500px">
@@ -196,87 +191,64 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref } from 'vue'
 import { RefreshCw, Search as SearchIcon, Package as PackageIcon } from 'lucide-vue-next'
 import { ElMessageBox } from 'element-plus'
 import { getAdminProducts, banProduct, type AdminProduct } from '@/api/modules/adminProducts'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
-import ErrorState from '@/components/ui/state/ErrorState.vue'
-import { debounce } from 'lodash-es'
-import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useListQuery } from '@/composables/useListQuery'
 import { useToast } from '@/composables/useToast'
 
 const { toast } = useToast()
-const products = ref<AdminProduct[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
 const drawerVisible = ref(false)
 const selectedProduct = ref<AdminProduct | null>(null)
-/** 刷新后递增，强制 <img>  remount 以重试加载外链图 */
+/** 刷新后递增，强制 <img> remount 以重试加载外链图 */
 const mediaReloadKey = ref(0)
+/** 下一次取数是否算「刷新」：只有点刷新按钮才 bump 媒体 key 并要求至少转够 spinner */
+let bumpNext = false
 
-// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，网格照常渲染成空态 ——
-// 用户看到的是「没有商品」而不是「加载失败」，且无重试入口）；审核等操作类 catch 仍用 toast。
-// ErrorState 的 @retry 直接调 loadData（options 可省）。注意那会跳过 bumpMediaKey，
-// 与 refreshList 的语义差别仅在图片 remount，重试场景下无影响。
+// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，网格照常渲染成空态 —— 用户看到的
+// 是「没有商品」而不是「加载失败」，且无重试入口）；审核等操作类 catch 仍用 toast。
 const {
+  items: products,
+  searchQuery,
+  filter: statusFilter,
   isLoading: loading,
   error: errorRef,
-  run,
-} = useAsyncTask({
+  reloadNow,
+} = useListQuery<AdminProduct>({
   fallbackMessage: 'Failed to load products',
-})
-
-const loadData = async (options?: { bumpMediaKey?: boolean; minSpinnerMs?: number }) => {
-  const started = Date.now()
-  await run(async () => {
+  task: async ({ q, filter, commit }) => {
+    const started = Date.now()
     try {
-      const data = await getAdminProducts({
-        q: searchQuery.value,
-        status: statusFilter.value,
-      })
-      products.value = data
-      if (options?.bumpMediaKey) mediaReloadKey.value += 1
+      commit(await getAdminProducts({ q, status: filter }))
+      if (bumpNext) mediaReloadKey.value += 1
     } finally {
-      // 这个「至少转够 minSpinnerMs」的等待必须落在回调的 finally 里：它要发生在
-      // useAsyncTask 复位 loading **之前**，否则 spinner 早就没了，等于没等。
-      // 放 finally 而不是 try 末尾，是为了失败时也照样等够（与迁移前一致）。
-      const minMs = options?.minSpinnerMs ?? 0
+      // 「至少转够 spinner」的等待必须落在 run 回调的 finally 里：它要发生在 useAsyncTask
+      // 复位 loading **之前**，否则 spinner 早就没了，等于没等。放 finally 而不是 try 末尾，
+      // 是为了失败时也照样等够（与迁移前一致）。
+      const minMs = bumpNext ? 280 : 0
       const elapsed = Date.now() - started
       if (minMs > 0 && elapsed < minMs) {
         await new Promise((r) => setTimeout(r, minMs - elapsed))
       }
+      bumpNext = false
     }
-  })
-}
-
-/**
- * 立即刷新（回车）。与 refreshList 的区别只有「不 bump 媒体 key、不强制转够 spinner」，
- * 但同样要先 cancel 挂起的 debounce，否则「刚打完字就回车」会重复发一次。
- */
-const reloadNow = () => {
-  debouncedLoadData.cancel()
-  void loadData()
-}
+  },
+})
 
 function refreshList() {
-  // 先 cancel 挂起的 debounce，避免紧接在输入之后点刷新时多发一次搜索请求
-  debouncedLoadData.cancel()
   // Mock 接口可能瞬间返回，保证至少短暂显示 loading，避免「点了没反应」
-  loadData({ bumpMediaKey: true, minSpinnerMs: 280 })
+  bumpNext = true
+  reloadNow()
 }
 
 function onImgError(e: Event) {
   const el = e.target as HTMLImageElement
   el.style.opacity = '0.35'
 }
-
-// Debounce search（输入时不反复 bump 媒体 key，避免列表闪动）
-const debouncedLoadData = debounce(() => loadData(), 300)
-watch(searchQuery, () => {
-  debouncedLoadData()
-})
 
 const handleBan = (product: AdminProduct) => {
   ElMessageBox.prompt('Reason for banning:', 'Ban Product', {
@@ -299,8 +271,6 @@ const openDrawer = (product: AdminProduct) => {
   selectedProduct.value = product
   drawerVisible.value = true
 }
-
-onMounted(loadData)
 </script>
 
 <style>
