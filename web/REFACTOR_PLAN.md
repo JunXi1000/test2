@@ -500,9 +500,14 @@ isSelf: (m.senderType === 'SHOP' ? 'merchant' : 'user') === selfSender
 2. **`silent` 只压 loading 标志，**不**影响 error**（该清照清、该写照写）。
    第一版写成「loading 和 error 都不动」，那是错的：`Home.vue` 的 Retry 走的正是 silent 分支
    （只在首屏空列表时才显示骨架屏），error 一起不清的话，点了 Retry 的 `ErrorState` 会原地不动，**看起来像按钮坏了**。
-3. **`initialLoading` 选项存在，且默认是 `false`。** 本项目 **13 个页面**的加载标志原本都是 `ref(true)`，
+3. **`initialLoading` 选项存在，且默认是 `false`。** 一部分页面的加载标志原本就是 `ref(true)`，
    是**有意为之**：请求在 `onMounted` 里才发起，而首屏渲染早于 `onMounted`，初值给 `false` 的话
    首帧会先渲染出「空态 / 错误态」再被骨架屏顶掉。迁移时**照抄原初值**，不要顺手统一成 `false`（选项 JSDoc 里写明了）。
+
+   > 原文写的是「本项目 **13 个页面**的加载标志原本都是 `ref(true)`」，这个数字是错的 ——
+   > 逐页核对后是「一部分传、一部分不传」。**阶段 5 末复核：当时 22 个调用点里只有 10 个传 `true`**
+   > （AdminHome / Checkout / Compare / dashboard 的 Addresses·Orders·Settings / merchant/MerchantHome /
+   > ProductDetail / StorePage），其余走默认。选项本身与「照抄原值」这条规矩不受影响，错的是那个计数。
 
 **`cause` 字段是后来补的（值得记一笔）**：迁移由两个子代理并行完成，其中一个报告了**唯一无法完全等价的地方** ——
 `merchant/Products.vue` 原先 `console.error` 打的是**原始抛出的 Error 对象**（含堆栈），

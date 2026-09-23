@@ -95,7 +95,7 @@
   `const result = await run(() => apiCall()); if (!result.ok) return`。要点见 [`REFACTOR_PLAN.md`](./REFACTOR_PLAN.md) 阶段 4a：
   - 结果是**可辨识联合**不是 boolean（任务体自己可能 `return false`）；失败分支带 `cause`（原始抛出物，给 `console.error` 用）
   - **`silent` 只压 loading 标志，不清 error** —— 重试走的正是它
-  - **`initialLoading` 要照抄原值**：13 个页面的加载标志原本是 `ref(true)`，是为了让首帧不闪空态
+  - **`initialLoading` 要照抄原值**：传不传取决于该页首帧是否真会渲染出空态（现状 22 个调用点里 10 个传 `true`），不是风格问题
   - 首次加载失败写 `error`（渲染 `ErrorState`）；**轮询/追加失败只 toast，别写 error**（两种语义，别合成一个 catch）
 - **错误文案用 `toErrorMessage(e, 兜底)`**（[`src/utils/error.ts`](src/utils/error.ts)），`catch` 一律写 `catch (e)` 不带 `any`。
   **不要**再去读 `e.response.data.msg` —— `http.ts` 的拦截器已把后端 `{ code, msg, data }` 里最具体的那句折算进了 `e.message`。

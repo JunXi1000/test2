@@ -42,9 +42,13 @@ export interface UseAsyncTaskOptions {
   /**
    * isLoading 的初值，默认 false。
    *
-   * 本项目 13 个页面的加载标志都是 `ref(true)`：请求在 onMounted 里才发起，而首屏渲染
-   * 早于 onMounted，初值给 false 的话首帧会先渲染出「空态 / 错误态」再被骨架屏顶掉。
-   * 迁移时**照抄原初值**，不要顺手统一成 false。
+   * 为什么需要它：请求在 onMounted 里才发起，而首屏渲染早于 onMounted。初值给 false 的话
+   * 首帧会先渲染出「空态 / 错误态」，然后才被骨架屏顶掉 —— 一帧闪动。
+   *
+   * 现状：22 个调用点里只有 10 个传 true（AdminHome / Checkout / Compare / dashboard 的
+   * Addresses·Orders·Settings / merchant/MerchantHome / ProductDetail / StorePage），
+   * 其余走默认。**迁移时照抄原初值，不要顺手统一** —— 传不传取决于该页首帧是否真的会
+   * 渲染出空态，不是风格问题。
    */
   initialLoading?: boolean
 }

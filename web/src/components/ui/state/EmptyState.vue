@@ -22,11 +22,13 @@ const emptyStateVariants = cva('text-center', {
 
 // 刻意不写 dark: 变体，而是纯用令牌（border-border / text-muted-foreground）。
 // 令牌在 .dark 下会自动换值，所以这一个组件在两种模式下都自动正确 —— 不需要第二套、
-// 也不需要 tone prop。.dark 由布局里的 useDark()（@vueuse/core）挂到 <html>：
-// DefaultLayout 有，故 storefront 与 dashboard 已生效；MerchantLayout 没有（merchant
-// 因此恒为亮色，此组件在那里仍按亮色渲染，同样正确）。
-// 唯一不能用的是 admin/**：它无条件渲染暗色却没挂 .dark，令牌会解析成亮色值 → 这里会画白边。
-// 解法是给 AdminLayout 挂 .dark（见 REFACTOR_PLAN 阶段 2b），不是改本组件。
+// 也不需要 tone prop。
+//
+// 三个布局现在都把 .dark 挂到了 <html>，本组件在哪儿都成立：
+//   DefaultLayout  —— useDark()（@vueuse/core），跟随用户偏好
+//   MerchantLayout —— 同样 useDark()（阶段 2b 补的接线；补之前 merchant 的 dark: 变体从未生效）
+//   AdminLayout    —— onMounted 里手动 add('dark')，恒定暗色，因为 admin 没有亮色形态
+// 因此三个域都不需要给本组件传色或加 tone prop。
 interface Props {
   /** lucide 图标组件；仅 default 形态使用 */
   icon?: Component
