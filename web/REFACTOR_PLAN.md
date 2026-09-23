@@ -602,10 +602,37 @@ isSelf: (m.senderType === 'SHOP' ? 'merchant' : 'user') === selfSender
 > 原计划把本项目标为「请求样板收敛」，现在看**真正的靶心其实是 `useAsyncTask` 一处**（22 文件受益），
 > 4b/4c 是它顺带带出来的两笔债。阶段 5 的 `useListQuery()` 应**建在 `useAsyncTask` 之上**，不要另起一套加载形态。
 
-### 阶段 5 — 列表页抽象
+### 阶段 5 — 列表页抽象 ✅ **已完成（2026-09-22）**
 
 `loading`/`searchQuery`/`statusFilter`/`loadData`/`onMounted`/debounce watch 六件套在 8 个 admin/merchant 页面逐字重复。抽 `useListQuery()` + `<DataTablePanel>`。
 **`el-table` 不动**——CLAUDE.md 明确禁止改写成自建表格。
+
+**范围**（与用户确认）：**只抽 A 组 5 个 admin 列表页**（Merchants / Orders / Products / Reviews / Users）。
+merchant 侧两个列表页**不迁到 `useListQuery`** —— 它们的取数是「全量拉取 + 客户端过滤」，
+与 admin 的「条件走服务端」不是一套管道，硬套会把客户端过滤逻辑塞进组合式。
+
+| 子项                                                                 | 提交      |
+| -------------------------------------------------------------------- | --------- |
+| 5a 先给 5 个页面补特性化 E2E 当护栏（18 条，5 个 describe）          | `7410fc1` |
+| 5b 去掉清空搜索时的重复请求                                          | `4101f50` |
+| 5c 抽 `useListQuery` + `DataTablePanel`，迁移 5 个页面；补单测 10 条 | `c82f9d3` |
+| 5d 给 merchant 订单/商品页补错误态与空态                             | `749692d` |
+
+**5c 的两个设计决定**，都不是顺手写的：
+
+1. **刻意不导出裸 `load`**。显式动作（回车 / 刷新 / 切筛选 / 重试）统一走 `reloadNow()`，
+   它先 `debouncedLoad.cancel()` 再立即取数。5b 那个 bug 的形状正是「裸 load 与 watch 并存」——
+   导出裸 load 等于把口子重新开一遍。`useListQuery.spec.ts` 有一条断言专门钉公开面形状。
+2. **`DataTablePanel` 用多根模板（Fragment）**。迁移前工具栏外壳、错误态、表格外壳
+   本来就是页面根节点的并列子元素，套 wrapper 会凭空多一个 DOM 节点。
+
+**请求次数的钉子落在 Vitest 而不是 E2E**：mock 是在 API 模块内 `if (RUNTIME_USE_MOCK.value)`
+直接短路的（`src/api/modules/admin*.ts`），根本不产生网络请求，Playwright 数不到次数。
+`useListQuery` 把 task 做成了注入点，于是在 `useListQuery.spec.ts` 里直接数调用次数。
+
+**未做、留给后续的**：merchant 两个列表页的 `debounce` 与「回车立即取数」并存 ——
+`@input` 走 300ms 防抖，而 `@keyup.enter` 立即调 `loadData()` 且**不 cancel** 挂起的那次，
+「刚打完字就回车」会重复发一次。与 5b 是同一类缺陷，但不在本轮确认的范围内，**只记录不改**。
 
 ### 阶段 6 — 类型地基（拆巨页的前提）
 
