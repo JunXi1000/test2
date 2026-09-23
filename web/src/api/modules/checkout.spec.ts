@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AVAILABLE_COUPONS, findRedeemableCoupon } from './coupons'
+import { POINTS_MALL } from './loyalty'
 import type { CartItem } from '@/stores/cart'
 
 // 这些 mock 会被 vitest 提升到 import 之前：checkout.ts 顶层就要读 USE_MOCK、
@@ -164,5 +166,58 @@ describe('calculateOrderSummary：mock 分支的算账规则', () => {
       discount: 0,
       total: 12,
     })
+  })
+})
+
+describe('券码规则：可领取的码都能兑出折扣（回归钉子）', () => {
+  /**
+   * 钉的是「券码目录散在三处、互不同步」那个 bug：券包与积分商城能领到 10 个码，
+   * 而结算页 mock 的折扣表原先只认 SAVE10 / VIP15 —— 领了用不了的码有 9 个。
+   *
+   * 之所以一直没被发现：原有的 applyPromoCode 用例**只测了能用的那两个码**，
+   * happy path 全绿。所以这条用例刻意**遍历目录**而不是逐个手写码 ——
+   * 以后往券包里加券，忘了同步规则表就会在这里红。
+   */
+  const claimableCodes = AVAILABLE_COUPONS.map((c) => c.code)
+  const mallCodes = POINTS_MALL.map((r) => r.code)
+
+  it('券包与积分商城的目录都不是空的（否则下面的遍历会空跑通过）', () => {
+    expect(claimableCodes.length).toBeGreaterThan(0)
+    expect(mallCodes.length).toBeGreaterThan(0)
+  })
+
+  it.each([...claimableCodes, ...mallCodes])('%s 在满足门槛的金额上兑出非零折扣', async (code) => {
+    const rule = findRedeemableCoupon(code)
+    expect(rule, `${code} 不在规则表里 —— 领得到却用不了`).toBeDefined()
+    // 免运费券的缺口单独测（见下一条），这里只看能算出来的
+    if (rule!.type === 'shipping') return
+
+    // 取一个高于所有 minOrder 的金额，隔离"门槛"这一维
+    const { discount } = await applyPromoCode(code, 1000)
+    expect(discount, `${code} 兑出 0 折扣`).toBeGreaterThan(0)
+  })
+
+  it('免运费券在 mock 下算不出折扣 —— 已知缺口，显式钉住而不是假装可用', async () => {
+    // 免运费要从运费里扣，而 applyPromoCode 只拿得到小计（真实分支同样拿不到）。
+    // 修它要改请求参数 → 需后端确认。这里把现状钉住，免得以后有人以为它已经能用。
+    await expect(applyPromoCode('FREESHIP', 1000)).resolves.toEqual({ discount: 0 })
+  })
+
+  it('percent 券受 maxDiscount 封顶', async () => {
+    // VIP15：15% off, max $50。1000 × 15% = 150 → 封顶到 50
+    await expect(applyPromoCode('VIP15', 1000)).resolves.toEqual({ discount: 50 })
+  })
+
+  it('fixed 券不超过小计本身，不会把应付扣成负数', async () => {
+    // SAVE20 是满 100 减 20；给一个刚好过门槛、低于券面额的金额
+    await expect(applyPromoCode('SAVE20', 100)).resolves.toEqual({ discount: 20 })
+    await expect(applyPromoCode('LOYAL40', 200)).resolves.toEqual({ discount: 40 })
+  })
+
+  it('未达 minOrder 时不打折', async () => {
+    // SAVE20 门槛 100
+    await expect(applyPromoCode('SAVE20', 99)).resolves.toEqual({ discount: 0 })
+    // LOYAL40 门槛 200
+    await expect(applyPromoCode('LOYAL40', 199)).resolves.toEqual({ discount: 0 })
   })
 })

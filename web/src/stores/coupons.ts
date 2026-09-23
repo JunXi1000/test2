@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { onUserScopeChange, scopedKey } from './userScope'
 import { RUNTIME_USE_MOCK } from '@/config/env'
 import {
+  AVAILABLE_COUPONS,
   getCoupons,
   getMyCoupons,
   claimCoupon as apiClaimCoupon,
@@ -13,87 +14,6 @@ import {
 export type { Coupon } from '@/api/modules/coupons'
 
 const STORAGE_KEY = 'nexus_user_coupons'
-
-// ── Available coupons to claim (mock fallback) ───────────────────────
-export const AVAILABLE_COUPONS: ClaimableCoupon[] = [
-  {
-    id: 'new-user-10',
-    code: 'WELCOME10',
-    title: 'New User Discount',
-    description: '10% off your first order',
-    type: 'percent',
-    value: 10,
-    minOrder: 0,
-    maxDiscount: 20,
-    expiresAt: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'save20-fixed',
-    code: 'SAVE20',
-    title: '$20 Off Orders Over $100',
-    description: 'Flat $20 discount on orders $100+',
-    type: 'fixed',
-    value: 20,
-    minOrder: 100,
-    expiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'percent15',
-    code: 'VIP15',
-    title: 'VIP 15% Off',
-    description: '15% off sitewide, max $50 discount',
-    type: 'percent',
-    value: 15,
-    minOrder: 50,
-    maxDiscount: 50,
-    expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'free-ship',
-    code: 'FREESHIP',
-    title: 'Free Shipping',
-    description: 'Free shipping on any order',
-    type: 'shipping',
-    value: 100,
-    minOrder: 0,
-    expiresAt: new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'phones-8',
-    code: 'PHONE8',
-    title: '8% Off Phones',
-    description: 'Extra 8% off all phones & accessories',
-    type: 'percent',
-    value: 8,
-    minOrder: 0,
-    maxDiscount: 30,
-    category: 'Phones',
-    expiresAt: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'audio-15',
-    code: 'AUDIO15',
-    title: '15% Off Audio',
-    description: 'Take 15% off any audio product',
-    type: 'percent',
-    value: 15,
-    minOrder: 0,
-    maxDiscount: 40,
-    category: 'Audio',
-    expiresAt: new Date(Date.now() + 21 * 24 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'office-10',
-    code: 'OFFICE10',
-    title: '$10 Off Office Supplies',
-    description: 'Flat $10 off office & desk products',
-    type: 'fixed',
-    value: 10,
-    minOrder: 50,
-    category: 'Office',
-    expiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
-  },
-]
 
 function loadClaimedFromStorage(): Coupon[] {
   try {

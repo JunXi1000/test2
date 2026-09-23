@@ -1,5 +1,6 @@
 import { USE_MOCK } from '@/config/env'
 import { post } from '@/api/http'
+import { computeCouponDiscount, findRedeemableCoupon } from '@/api/modules/coupons'
 import type { CartItem } from '@/stores/cart'
 
 export interface OrderSummary {
@@ -61,9 +62,10 @@ export async function applyPromoCode(
   currentSubtotal: number,
 ): Promise<{ discount: number }> {
   if (USE_MOCK) {
-    const map: Record<string, number> = { SAVE10: 0.1, VIP15: 0.15 }
-    const rate = map[code.toUpperCase()] || 0
-    const discount = +(currentSubtotal * rate).toFixed(2)
+    // 规则从券码的唯一来源取（api/modules/coupons.ts）—— 原先这里手写了一张只认
+    // SAVE10 / VIP15 的比率表，而券包与积分商城能领到 10 个码，于是 9 个领了用不了。
+    const rule = findRedeemableCoupon(code)
+    const discount = rule ? computeCouponDiscount(rule, currentSubtotal) : 0
     return Promise.resolve({ discount })
   }
   return post<{ discount: number }>('/checkout/promo', { code, subtotal: currentSubtotal })
