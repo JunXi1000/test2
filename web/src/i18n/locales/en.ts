@@ -310,8 +310,6 @@ export default {
     calcFailed: 'Calculation failed',
     calcFailedDesc: 'Failed to calculate order summary',
     alreadyAppliedDesc: 'Remove the current promo before applying another.',
-    prefilledDev: 'Checkout prefilled (dev)',
-    prefilledDevDesc: 'Dev helper applied.',
     defaultAddressLoaded: 'Default address loaded',
     defaultAddressLoadedDesc: 'Your shipping info has been pre-filled.',
     incompleteShipping: 'Incomplete shipping info',

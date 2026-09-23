@@ -45,7 +45,11 @@ async function loginAsUser(page: any) {
 }
 
 /**
- * 登录 + 清空积分 + 预填收货信息，回到购物车准备结账（Phase 2.1 起复用）。
+ * 登录 + 清空积分，回到购物车准备结账（Phase 2.1 起复用）。
+ *
+ * 收货信息**不再靠 localStorage 后门预填**：登录后结算页会走真实路径，从 mock 的资料与
+ * 默认地址（Alex Doe / alex.doe@example.com / 123 Innovation Dr / 94103）自动回填 ——
+ * 与真实用户进结算页时是同一条代码路径。后门 DEBUG_CHECKOUT_PREFILL 已在阶段 7 删除。
  */
 async function prepareCheckout(page: any) {
   await loginAsUser(page)
@@ -53,18 +57,6 @@ async function prepareCheckout(page: any) {
     localStorage.setItem(
       'nexus_loyalty_uuser_123',
       JSON.stringify({ points: 0, lifetimeSpend: 0, redeemed: [] }),
-    )
-    localStorage.setItem(
-      'DEBUG_CHECKOUT_PREFILL',
-      JSON.stringify({
-        email: 'test@example.com',
-        firstName: 'Alex',
-        lastName: 'Doe',
-        address: '1 Main St',
-        city: 'Springfield',
-        country: 'United States',
-        zip: '12345',
-      }),
     )
   })
   await page.reload({ waitUntil: 'domcontentloaded' })
@@ -908,22 +900,8 @@ test.describe('Loyalty Points & Membership (Phase 5.1)', () => {
   test('Earn points after an order completes and see them in Loyalty', async ({ page }) => {
     await loginAsUser(page)
 
-    // 基线：清空积分；并用应用自带的 DEBUG_CHECKOUT_PREFILL 预填收货信息
+    // 基线：清空积分。收货信息由结算页从 mock 资料与默认地址自动回填（见 prepareCheckout 的注释）
     await seedLoyalty(page, { points: 0, lifetimeSpend: 0 })
-    await page.evaluate(() => {
-      localStorage.setItem(
-        'DEBUG_CHECKOUT_PREFILL',
-        JSON.stringify({
-          email: 'test@example.com',
-          firstName: 'Alex',
-          lastName: 'Doe',
-          address: '1 Main St',
-          city: 'Springfield',
-          country: 'United States',
-          zip: '12345',
-        }),
-      )
-    })
 
     // 首页真实加购
     await gotoApp(page, '/')

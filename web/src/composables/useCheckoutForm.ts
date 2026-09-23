@@ -200,62 +200,49 @@ export function useCheckoutForm() {
   }
 
   /**
-   * 首屏预填：调试钩子优先，否则登录态下拉资料与默认地址。
+   * 首屏预填：登录态下拉资料与默认地址。
    *
-   * 外层 try 包住整个流程却不吞内层已处理的错误 —— 它挡的是 `JSON.parse` 抛出的坏数据
-   * （localStorage 里被人手改过）。内层 catch 只处理取资料失败。
+   * 早先这里还有个 `DEBUG_CHECKOUT_PREFILL` 的 localStorage 后门（优先于下面这条真实路径），
+   * 阶段 7 已删 —— 它把「从 localStorage 读对象直接 Object.assign 进表单」留在了生产代码里，
+   * 而 E2E 本来就能靠 mock 的资料与默认地址走通同一条真实路径。
+   *
+   * 取资料失败只打日志、不抛：结算页不该因为账号接口挂了就白屏，用户手填即可。
    */
   async function loadInitialData() {
+    if (!authStore.isAuthenticated) return
     try {
-      const prefill = localStorage.getItem('DEBUG_CHECKOUT_PREFILL')
-      if (prefill) {
-        const data = JSON.parse(prefill)
-        Object.assign(formData, data)
-        toast({
-          title: t('checkout.prefilledDev'),
-          description: t('checkout.prefilledDevDesc'),
-          variant: 'success',
-        })
-        localStorage.removeItem('DEBUG_CHECKOUT_PREFILL')
-      } else if (authStore.isAuthenticated) {
-        try {
-          const [addresses, profile] = await Promise.all([getAddresses(), getProfile()])
+      const [addresses, profile] = await Promise.all([getAddresses(), getProfile()])
 
-          savedAddresses.value = addresses
+      savedAddresses.value = addresses
 
-          if (profile) {
-            formData.email = profile.email
-            formData.firstName = profile.firstName
-            formData.lastName = profile.lastName
-          }
-
-          const defaultAddress = addresses.find((a) => a.isDefault)
-          if (defaultAddress) {
-            formData.address = defaultAddress.address
-            formData.city = defaultAddress.city
-            formData.country = defaultAddress.country
-            formData.zip = defaultAddress.zip
-            selectedAddressId.value = defaultAddress.id
-
-            if (defaultAddress.name) {
-              const parts = defaultAddress.name.split(' ')
-              if (parts.length > 0) formData.firstName = parts[0]
-              if (parts.length > 1) formData.lastName = parts.slice(1).join(' ')
-            }
-
-            toast({
-              title: t('checkout.defaultAddressLoaded'),
-              description: t('checkout.defaultAddressLoadedDesc'),
-              variant: 'default',
-            })
-          }
-        } catch (e) {
-          console.error('Failed to load user data for checkout', e)
-        }
+      if (profile) {
+        formData.email = profile.email
+        formData.firstName = profile.firstName
+        formData.lastName = profile.lastName
       }
-    } catch {
-      // 只有 JSON.parse 会走到这（localStorage 里的调试数据被人手改坏）。
-      // 吞掉是有意的：预填失败不该让整个结算页白屏，表单保持空值即可。
+
+      const defaultAddress = addresses.find((a) => a.isDefault)
+      if (defaultAddress) {
+        formData.address = defaultAddress.address
+        formData.city = defaultAddress.city
+        formData.country = defaultAddress.country
+        formData.zip = defaultAddress.zip
+        selectedAddressId.value = defaultAddress.id
+
+        if (defaultAddress.name) {
+          const parts = defaultAddress.name.split(' ')
+          if (parts.length > 0) formData.firstName = parts[0]
+          if (parts.length > 1) formData.lastName = parts.slice(1).join(' ')
+        }
+
+        toast({
+          title: t('checkout.defaultAddressLoaded'),
+          description: t('checkout.defaultAddressLoadedDesc'),
+          variant: 'default',
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load user data for checkout', e)
     }
   }
 
