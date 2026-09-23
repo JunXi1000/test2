@@ -24,7 +24,10 @@ export default defineConfig({
     // 两个虚拟网卡，于是横幅里冒出三个「Network」链接，其中一个还是 VPN 隧道地址。
     // 显式绑 127.0.0.1 精确解决原问题，且不对外暴露、横幅只剩一条 Local。
     //
-    // 若要在手机/别的机器上访问开发服务器，把它改回 `true`（或填具体网卡 IP）。
+    // 要在手机/别的机器上访问，用 `npm run dev:lan`（即 `vite --host`，CLI 会盖过这里的值）。
+    // 那样横幅会重新列出全部网卡地址 —— 那正是你要的：得先看见 IP 才能输进手机。
+    // 不要在这里绑死 192.168.x.x：绑具体 IP 就不再监听 127.0.0.1，`localhost` 会失效，
+    // 而 playwright.config.ts 的 baseURL 正是 http://localhost:5173。
     host: '127.0.0.1',
     proxy: {
       '/api': {

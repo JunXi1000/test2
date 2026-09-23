@@ -116,7 +116,8 @@ Vue 3.4 · Vite 5 · TS 5.9（`strict` + `noUnusedLocals` + `noUnusedParameters`
 > 依赖表已删 `dayjs`（源码零引用；它仍作为 element-plus 的**传递**依赖存在于 node_modules，不要直接 import）与 `@vueuse/motion`（零引用）。新增运行时依赖仍须先问。
 
 ```bash
-npm run dev          # vite，:5173，host: true
+npm run dev          # vite，:5173，绑 127.0.0.1（横幅只有一条 Local）
+npm run dev:lan      # vite --host，绑所有网卡 —— 手机/别的机器要访问时用这条
 npm run prod         # vite --mode production
 npm run build-prod   # 产物到 dist/
 npm run preview
