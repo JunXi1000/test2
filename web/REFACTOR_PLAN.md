@@ -663,11 +663,47 @@ merchant 侧两个列表页**不迁到 `useListQuery`** —— 它们的取数�
 
 **未做、且建议不再做**：合并三个 `*Product` 视图模型；把 64 个领域类型搬进 `src/types/`。要动类型组织，先回答"这能让今天哪一处会漏的类型被抓住"，答不上来就不做。
 
-### 阶段 7 — 拆巨页
+### 阶段 7 — 拆巨页 🔶 **Checkout 已完成（2026-09-23）；ProductDetail 未开始**
 
-`Checkout.vue`(1314) 先做——`usePaymentFlow()` 边界最清晰（支付网关状态机 + 3DS 回调 + 落单）。
-`ProductDetail.vue`(2083) 后做——评价子系统可整块搬成 `useProductReviews()` + `<ReviewSection>`。
-**风险高**：支付三步向导、3DS、评价 CRUD 必须人工 + E2E 双验证。**必须等阶段 0 的 E2E 就位。**
+> **原文（行数与前提均已过时，保留备查）**：
+> `Checkout.vue`(1314) 先做——`usePaymentFlow()` 边界最清晰（支付网关状态机 + 3DS 回调 + 落单）。
+> `ProductDetail.vue`(2083) 后做——评价子系统可整块搬成 `useProductReviews()` + `<ReviewSection>`。
+> **风险高**：支付三步向导、3DS、评价 CRUD 必须人工 + E2E 双验证。**必须等阶段 0 的 E2E 就位。**
+
+行数过时的原因是**阶段 2–4 自己把 `Checkout.vue` 撑到 1694**（`6f9e44b` 净 +378），`ProductDetail.vue` 现为 2686。**别按行数判断拆解收益** —— 这个仓的注释密度让行数不是好指标。
+
+#### Checkout.vue：1694 → 1160（5 个提交）
+
+| 子项                                                         | 提交      |
+| ------------------------------------------------------------ | --------- |
+| 7a 抽 `usePaymentFlow`（网关状态机 + 3DS 回调）              | `b2f20f2` |
+| 7b 抽 `useCheckoutForm`（表单 / 校验 / 掩码 / 地址 / 预填）  | `719f6ee` |
+| 7c 抽 `useOrderSummary`（摘要 / 优惠码 / 积分）              | `b550e2c` |
+| 7d 抽 `useCompleteTheLook` + `useSavedCards`，推荐位做成组件 | `8b1c016` |
+| 7e 删 `DEBUG_CHECKOUT_PREFILL` 后门 + 改 9 条 E2E            | `ef04e88` |
+
+**边界一律取「子职责」而不是「整页」**：`usePaymentFlow` 是 7 个参数（`items` / `formData` / `total` / `savedCard` / `currentStep` / `isCompletingOrder` / `finalize`），因为落单（`finalizeOrder`）留在页面 —— 它要读 `summaryRef` / `savedAddresses` / `pointsToUse` / `saveCardForNextTime` 并驱动三个 store，拉进来就是 12 个参数。`useCheckoutForm` 与 `useSavedCards` 则是**零参数**（状态全是自己的，全局 store 直接 import）。
+
+> ⚠️ 更正：`b2f20f2` 的提交信息里写的是「6 个参数」，实际是 **7 个**（漏数了 `isCompletingOrder` —— 它不在网关 API 里，容易被略过）。此处以代码为准。
+
+**两处逐字重复被真正消掉**（不是搬家）：`handlePayment` 与 `on3dsComplete` 各抄一份的失败处理（`settleGatewayFailure` / `settleThrown`）；`validateShipping` 与 `validatePayment` 各抄一份的「遍历字段 → 标 touched → 校验」（`validateFields`）。
+
+#### 两个计划外的判断
+
+- **订单摘要没有抽成组件**（原计划要抽）。读完发现它**不是自包含块**：那 203 行绑了 20 个标识符，扣掉组件能自己 import 的三个（`loyaltyStore` / `couponStore` / `POINTS_PER_DOLLAR`），仍需 **17 个 prop + 5 个 emit**。而「Complete the Look」只要 **3 prop + 2 emit**，那才是自包含。这与「三步区不拆子组件」是同一条理由 —— 所以对三块用了同一把尺子。**我先前说摘要自包含，是按位置和行数判断的，没数绑定；别再犯。**
+- **`DEBUG_CHECKOUT_PREFILL` 的依赖不需要「补手动填表」**：删掉后门后发现，登录态本来就会从 mock 资料与默认地址走**真实路径**回填（`Alex Doe` / `alex.doe@example.com` / `123 Innovation Dr` / `94103`），跟真实用户进结算页是同一条代码路径。所以两处 prefill 直接删即可。（计划写「10 条」，实测 **9 条** —— 8 条走 `prepareCheckout`，另 1 条在「Earn points」里内联设了一次，两处都容易漏数。）
+
+#### 更正：`e2e-functional` 的 Payment Gateway 组不是「坏的」，是**对负载敏感**
+
+`b2f20f2` 的提交信息里写过它「改动前就 4/4 全红、不具备当回归信号的能力」—— **下重了**。四次观察：4/4 红 → 2/4 红 → 4/4 绿 → 4/4 绿。失败模式固定是 `loginAsUser` 里那个固定 `waitForTimeout(2000)` 在机器忙时等不够，**失败点永远在登录、与支付逻辑无关**。结论应是**弱信号，不是坏信号**：它红了先重跑，别直接当回归。
+
+#### 单测的钉子仍在 Vitest（新增 78 条，95 → 173）
+
+支付状态机 17 / 表单 26 / 摘要 18 / 推荐位 9 / 已保存卡 8。**每条都做过变异验证**（临时拆掉被测逻辑，确认红的正是该红的那条、其余不受影响）—— 否则「测试通过」可能只是空跑。
+
+#### ProductDetail.vue（2686）**未开始**
+
+按原计划：评价子系统搬成 `useProductReviews()` + `<ReviewSection>`。**动手前先按上面的教训数一遍每个候选块的绑定数**，别又是「看着像自包含」。
 
 ### 阶段 8 — 数据层收敛
 
