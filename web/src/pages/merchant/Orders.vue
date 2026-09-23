@@ -51,7 +51,11 @@
         </div>
       </div>
 
+      <!-- 取数失败与表格互斥：错误时整块换成 ErrorState，而不是照常渲染成空表 -->
+      <ErrorState v-if="errorRef" :message="errorRef" class="m-4" @retry="fetchOrders" />
+
       <el-table
+        v-else
         v-loading="loading"
         :data="orders"
         row-key="id"
@@ -125,6 +129,17 @@
             </button>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="ShoppingCartIcon"
+            title="No orders found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </el-card>
 
@@ -220,7 +235,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Search as SearchIcon, RefreshCw as RefreshCwIcon } from 'lucide-vue-next'
+import {
+  Search as SearchIcon,
+  RefreshCw as RefreshCwIcon,
+  ShoppingCart as ShoppingCartIcon,
+} from 'lucide-vue-next'
 import {
   getMerchantOrders,
   getMerchantOrderDetails,
@@ -228,13 +247,24 @@ import {
   type MerchantOrder,
   type MerchantOrderDetail,
 } from '@/api/modules/merchantOrders'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { debounce } from 'lodash-es'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import { useToast } from '@/composables/useToast'
 
 // State
 const { toast } = useToast()
-const { isLoading: loading, run } = useAsyncTask({ reportError: false })
+// 取数失败由 ErrorState 承担持久态（原先 reportError:false + 一个瞬时 toast，
+// 表格照常渲染成空表 —— 用户看到的是「没有订单」而不是「加载失败」，toast 消失后
+// 也没有任何重试入口）；改状态等操作类 catch 仍用 toast。
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load orders',
+})
 const orders = ref<MerchantOrder[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -243,7 +273,7 @@ const selectedOrder = ref<MerchantOrderDetail | null>(null)
 
 // Methods
 const loadData = async () => {
-  const result = await run(async () => {
+  await run(async () => {
     // Mock filtering logic
     const allOrders = await getMerchantOrders({ status: 'all' })
     let filtered = allOrders
@@ -264,10 +294,6 @@ const loadData = async () => {
 
     orders.value = filtered
   })
-
-  if (!result.ok) {
-    toast({ title: 'Failed to load orders', variant: 'destructive' })
-  }
 }
 
 const debouncedSearch = debounce(loadData, 300)

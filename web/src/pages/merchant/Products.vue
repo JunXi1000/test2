@@ -59,7 +59,11 @@
         </div>
       </div>
 
+      <!-- 取数失败与表格互斥：错误时整块换成 ErrorState，而不是照常渲染成空表 -->
+      <ErrorState v-if="errorRef" :message="errorRef" class="m-4" @retry="fetchProducts" />
+
       <el-table
+        v-else
         v-loading="loading"
         :data="products"
         row-key="id"
@@ -154,6 +158,17 @@
             </div>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="PackageIcon"
+            title="No products found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </el-card>
 
@@ -399,6 +414,7 @@ import {
   RefreshCw as RefreshCwIcon,
   Image as ImageIcon,
   Upload as UploadIcon,
+  Package as PackageIcon,
 } from 'lucide-vue-next'
 import { debounce } from 'lodash-es'
 import { ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
@@ -410,6 +426,8 @@ import {
   type MerchantProduct,
 } from '@/api/modules/merchantProducts'
 import { PRODUCT_STORE_CATEGORIES } from '@/api/modules/product'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import { useToast } from '@/composables/useToast'
 
@@ -439,7 +457,16 @@ function isValidImageFieldValue(raw: string): boolean {
 
 // State
 const { toast } = useToast()
-const { isLoading: loading, run } = useAsyncTask({ reportError: false })
+// 取数失败由 ErrorState 承担持久态（原先 reportError:false + 一个瞬时 toast，表格照常
+// 渲染成空表 —— 用户看到的是「没有商品」而不是「加载失败」，toast 消失后也没有任何重试
+// 入口）；保存/删除等操作类 catch 仍用 toast。
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load products',
+})
 const submitting = ref(false)
 const products = ref<MerchantProduct[]>([])
 const searchQuery = ref('')
@@ -574,10 +601,9 @@ const loadData = async (options?: { silent?: boolean; showLoading?: boolean }) =
     return
   }
 
-  // 控制台保留原始抛出物（含堆栈）；用户可见文案仍走 toast。
+  // 控制台保留原始抛出物（含堆栈）；用户可见文案由 ErrorState 渲染 errorRef。
   // 迁移前这里打的就是原始 error 对象，run 之后只剩字符串，故取 cause。
   console.error('Failed to load products:', result.cause)
-  toast({ title: 'Failed to load products', variant: 'destructive' })
 }
 
 const debouncedSearch = debounce(() => {
