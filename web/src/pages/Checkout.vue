@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCartStore } from '@/stores/cart'
@@ -9,6 +9,7 @@ import { useToast } from '@/composables/useToast'
 import { toErrorMessage } from '@/utils/error'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import { usePaymentFlow } from '@/composables/usePaymentFlow'
+import { useCheckoutForm } from '@/composables/useCheckoutForm'
 import Button from '@/components/ui/button/Button.vue'
 import {
   CheckCircle2,
@@ -40,8 +41,6 @@ import { getCompleteTheLook } from '@/api/modules/product'
 import type { Product } from '@/types/product'
 import { appendCheckoutOrder, type Order, type OrderItem } from '@/api/modules/orders'
 import { USE_MOCK } from '@/config/env'
-import { getAddresses, type Address } from '@/api/modules/address'
-import { getProfile } from '@/api/modules/account'
 import { useLoyaltyStore } from '@/stores/loyalty'
 import { POINTS_PER_DOLLAR } from '@/api/modules/loyalty'
 
@@ -182,185 +181,28 @@ function removeSavedCard(id: string) {
   toast({ title: t('checkout.savedCardRemoved'), variant: 'success' })
 }
 
-// ── Form data ──
-const formData = reactive({
-  email: '',
-  firstName: '',
-  lastName: '',
-  address: '',
-  city: '',
-  country: 'United States',
-  zip: '',
-  cardNumber: '',
-  expiry: '',
-  cvc: '',
-})
-
-// ── Inline validation errors ──
-const fieldErrors = reactive<Record<string, string>>({})
-const fieldTouched = reactive<Record<string, boolean>>({})
-
-function markTouched(field: string) {
-  fieldTouched[field] = true
-  validateField(field)
-}
-
-function validateField(field: string) {
-  delete fieldErrors[field]
-  const v = (formData as any)[field]?.trim?.() ?? ''
-
-  switch (field) {
-    case 'email':
-      if (!v) fieldErrors.email = t('checkout.errEmailRequired')
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
-        fieldErrors.email = t('checkout.errEmailInvalid')
-      break
-    case 'firstName':
-      if (!v) fieldErrors.firstName = t('checkout.errFirstNameRequired')
-      break
-    case 'lastName':
-      if (!v) fieldErrors.lastName = t('checkout.errLastNameRequired')
-      break
-    case 'address':
-      if (!v) fieldErrors.address = t('checkout.errAddressRequired')
-      break
-    case 'city':
-      if (!v) fieldErrors.city = t('checkout.errCityRequired')
-      break
-    case 'zip':
-      if (!v) fieldErrors.zip = t('checkout.errZipRequired')
-      else if (!/^[A-Za-z0-9\s\-]{3,10}$/.test(v)) fieldErrors.zip = t('checkout.errZipInvalid')
-      break
-    case 'cardNumber': {
-      const digits = formData.cardNumber.replace(/\s/g, '')
-      if (!digits) fieldErrors.cardNumber = t('checkout.errCardRequired')
-      else if (!/^\d{13,19}$/.test(digits)) fieldErrors.cardNumber = t('checkout.errCardInvalid')
-      break
-    }
-    case 'expiry': {
-      if (!v) fieldErrors.expiry = t('checkout.errExpiryRequired')
-      else if (!/^\d{2}\/\d{2}$/.test(v)) fieldErrors.expiry = t('checkout.errExpiryFormat')
-      else {
-        const [mm, yy] = v.split('/').map(Number)
-        if (mm < 1 || mm > 12) fieldErrors.expiry = t('checkout.errExpiryMonth')
-        else {
-          const now = new Date()
-          const expDate = new Date(2000 + yy, mm)
-          if (expDate <= now) fieldErrors.expiry = t('checkout.errExpiryExpired')
-        }
-      }
-      break
-    }
-    case 'cvc':
-      if (!v) fieldErrors.cvc = t('checkout.errCvcRequired')
-      else if (!/^\d{3,4}$/.test(v)) fieldErrors.cvc = t('checkout.errCvcDigits')
-      break
-  }
-}
-
-function validateShipping(): boolean {
-  const fields = ['email', 'firstName', 'lastName', 'address', 'city', 'zip']
-  fields.forEach((f) => {
-    fieldTouched[f] = true
-    validateField(f)
-  })
-  return !fields.some((f) => fieldErrors[f])
-}
-
-function validatePayment(): boolean {
-  const fields = ['cardNumber', 'expiry', 'cvc']
-  fields.forEach((f) => {
-    fieldTouched[f] = true
-    validateField(f)
-  })
-  return !fields.some((f) => fieldErrors[f])
-}
-
-// ── Card number formatting ──
-function onCardNumberInput(e: Event) {
-  const input = e.target as HTMLInputElement
-  let raw = input.value.replace(/\D/g, '').slice(0, 16)
-  const formatted = raw.replace(/(\d{4})(?=\d)/g, '$1 ')
-  formData.cardNumber = formatted
-  nextTick(() => {
-    input.value = formatted
-  })
-  if (fieldTouched.cardNumber) validateField('cardNumber')
-}
-
-function onExpiryInput(e: Event) {
-  const input = e.target as HTMLInputElement
-  let raw = input.value.replace(/\D/g, '').slice(0, 4)
-  if (raw.length >= 3) raw = raw.slice(0, 2) + '/' + raw.slice(2)
-  formData.expiry = raw
-  nextTick(() => {
-    input.value = raw
-  })
-  if (fieldTouched.expiry) validateField('expiry')
-}
-
-function onCvcInput(e: Event) {
-  const input = e.target as HTMLInputElement
-  const raw = input.value.replace(/\D/g, '').slice(0, 4)
-  formData.cvc = raw
-  nextTick(() => {
-    input.value = raw
-  })
-  if (fieldTouched.cvc) validateField('cvc')
-}
-
-const cardBrand = computed(() => {
-  const d = formData.cardNumber.replace(/\s/g, '')
-  if (/^4/.test(d)) return 'Visa'
-  if (/^5[1-5]/.test(d) || /^2[2-7]/.test(d)) return 'Mastercard'
-  if (/^3[47]/.test(d)) return 'Amex'
-  if (/^6(?:011|5)/.test(d)) return 'Discover'
-  return ''
-})
-
-// ── Country list ──
-const countries = [
-  'United States',
-  'Canada',
-  'United Kingdom',
-  'Australia',
-  'Germany',
-  'France',
-  'Japan',
-  'South Korea',
-  'China',
-  'India',
-  'Brazil',
-  'Mexico',
-  'Singapore',
-  'Netherlands',
-  'Sweden',
-]
-
-// ── Saved addresses ──
-const savedAddresses = ref<Address[]>([])
-const selectedAddressId = ref<number | null>(null)
-const showAddressPicker = ref(false)
-
-function pickAddress(addr: Address) {
-  selectedAddressId.value = addr.id
-  formData.address = addr.address
-  formData.city = addr.city
-  formData.country = addr.country
-  formData.zip = addr.zip
-  if (addr.name) {
-    const parts = addr.name.split(' ')
-    formData.firstName = parts[0] || ''
-    formData.lastName = parts.slice(1).join(' ') || ''
-  }
-  showAddressPicker.value = false
-  // Clear related errors
-  ;['address', 'city', 'zip', 'firstName', 'lastName'].forEach((f) => delete fieldErrors[f])
-  toast({
-    title: t('checkout.addressSelected'),
-    description: t('checkout.addressLoadedDesc', { type: addr.type }),
-  })
-}
+// ── 收货 / 支付表单（字段、逐字段校验、卡号掩码、已存地址、首屏预填）──
+// 整块在 useCheckoutForm 里。本页只消费 formData（支付 payload 与 finalizeOrder 要读）
+// 和几个校验入口，不自己持有表单状态。
+const {
+  formData,
+  fieldErrors,
+  fieldTouched,
+  markTouched,
+  validateField,
+  validateShipping,
+  validatePayment,
+  onCardNumberInput,
+  onExpiryInput,
+  onCvcInput,
+  cardBrand,
+  countries,
+  savedAddresses,
+  selectedAddressId,
+  showAddressPicker,
+  pickAddress,
+  loadInitialData,
+} = useCheckoutForm()
 
 // ── Order summary & promo ──
 // summaryRef.discount 为后端/mock 计算的满减自动折扣；promoDiscount 为手动优惠码（可叠加）
@@ -477,55 +319,10 @@ function removePromo() {
 }
 
 // ── Init ──
+// 表单预填（调试钩子 / 登录态资料与默认地址）在 useCheckoutForm 里；
+// 这里只负责「预填完再取订单摘要」这个页面级的顺序 —— 摘要是页面的事，不归表单组合式。
 onMounted(async () => {
-  try {
-    const prefill = localStorage.getItem('DEBUG_CHECKOUT_PREFILL')
-    if (prefill) {
-      const data = JSON.parse(prefill)
-      Object.assign(formData, data)
-      toast({
-        title: t('checkout.prefilledDev'),
-        description: t('checkout.prefilledDevDesc'),
-        variant: 'success',
-      })
-      localStorage.removeItem('DEBUG_CHECKOUT_PREFILL')
-    } else if (authStore.isAuthenticated) {
-      try {
-        const [addresses, profile] = await Promise.all([getAddresses(), getProfile()])
-
-        savedAddresses.value = addresses
-
-        if (profile) {
-          formData.email = profile.email
-          formData.firstName = profile.firstName
-          formData.lastName = profile.lastName
-        }
-
-        const defaultAddress = addresses.find((a) => a.isDefault)
-        if (defaultAddress) {
-          formData.address = defaultAddress.address
-          formData.city = defaultAddress.city
-          formData.country = defaultAddress.country
-          formData.zip = defaultAddress.zip
-          selectedAddressId.value = defaultAddress.id
-
-          if (defaultAddress.name) {
-            const parts = defaultAddress.name.split(' ')
-            if (parts.length > 0) formData.firstName = parts[0]
-            if (parts.length > 1) formData.lastName = parts.slice(1).join(' ')
-          }
-
-          toast({
-            title: t('checkout.defaultAddressLoaded'),
-            description: t('checkout.defaultAddressLoadedDesc'),
-            variant: 'default',
-          })
-        }
-      } catch (e) {
-        console.error('Failed to load user data for checkout', e)
-      }
-    }
-  } catch {}
+  await loadInitialData()
   fetchSummary()
 })
 
