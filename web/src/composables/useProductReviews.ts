@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 import {
   getSeedReviews,
   loadReviewStore,
@@ -260,12 +261,8 @@ export function useProductReviews(options: UseProductReviewsOptions) {
         toast({ title: 'Image must be <= 2MB', variant: 'destructive' })
         continue
       }
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(String(reader.result || ''))
-        reader.onerror = () => reject(new Error('read_error'))
-        reader.readAsDataURL(file)
-      }).catch(() => '')
+      // 读不出来就跳过这一张（不打断其余已选文件）
+      const dataUrl = await readFileAsDataUrl(file).catch(() => '')
       if (dataUrl) reviewImages.value.push(dataUrl)
     }
 

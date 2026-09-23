@@ -421,6 +421,7 @@ import {
 import { uploadFile } from '@/api/modules/upload'
 import { RUNTIME_USE_MOCK } from '@/config/env'
 import { useToast } from '@/composables/useToast'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 
 const { toast } = useToast()
 
@@ -480,13 +481,11 @@ async function applyLogoFromFile(file: File) {
   }
   if (RUNTIME_USE_MOCK.value) {
     // Mock mode: keep the local data-URL preview (no backend).
-    const reader = new FileReader()
-    reader.onload = () => {
-      const r = reader.result
-      if (typeof r === 'string') form.logo = r
+    try {
+      form.logo = await readFileAsDataUrl(file)
+    } catch {
+      toast({ title: 'Could not read the file.', variant: 'destructive' })
     }
-    reader.onerror = () => toast({ title: 'Could not read the file.', variant: 'destructive' })
-    reader.readAsDataURL(file)
     return
   }
   // Real backend: upload to /file/upload and store the returned URL.

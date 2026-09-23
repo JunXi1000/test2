@@ -4,6 +4,7 @@ import Button from '@/components/ui/button/Button.vue'
 import { useToast } from '@/composables/useToast'
 import { toErrorMessage } from '@/utils/error'
 import { useAsyncTask } from '@/composables/useAsyncTask'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 import { Camera } from 'lucide-vue-next'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import {
@@ -110,20 +111,18 @@ const updatePassword = async () => {
   }
 }
 
-const handleAvatarUpload = (event: Event) => {
+const handleAvatarUpload = async (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      profile.value.avatar = e.target?.result as string
-      toast({
-        title: 'Avatar Updated',
-        description: 'Your profile picture has been changed.',
-        variant: 'success',
-      })
-    }
-    reader.readAsDataURL(file)
-  }
+  if (!file) return
+  // 读取失败就什么都不做（与改动前一致 —— 那时没有 onerror 分支）
+  const dataUrl = await readFileAsDataUrl(file).catch(() => '')
+  if (!dataUrl) return
+  profile.value.avatar = dataUrl
+  toast({
+    title: 'Avatar Updated',
+    description: 'Your profile picture has been changed.',
+    variant: 'success',
+  })
 }
 
 const {

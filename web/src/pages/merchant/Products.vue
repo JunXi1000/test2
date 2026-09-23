@@ -429,6 +429,7 @@ import { PRODUCT_STORE_CATEGORIES } from '@/api/modules/product'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { useAsyncTask } from '@/composables/useAsyncTask'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 import { useToast } from '@/composables/useToast'
 
 /** Legacy values that may still exist in localStorage mock data */
@@ -645,7 +646,7 @@ function stockTextClass(stock: number) {
   return 'text-emerald-600'
 }
 
-function applyCoverFile(file: File) {
+async function applyCoverFile(file: File) {
   if (!COVER_ACCEPT_MIME.has(file.type)) {
     toast({ title: 'Please choose a JPG, PNG, WebP, or GIF image', variant: 'destructive' })
     return
@@ -654,19 +655,13 @@ function applyCoverFile(file: File) {
     toast({ title: `Image must be ${COVER_IMAGE_MAX_LABEL} or smaller`, variant: 'destructive' })
     return
   }
-  const reader = new FileReader()
-  reader.onload = () => {
-    const result = reader.result
-    if (typeof result === 'string') {
-      formData.image = result
-      lastLocalCoverName.value = file.name
-      formRef.value?.validateField('image').catch(() => {})
-    }
-  }
-  reader.onerror = () => {
+  try {
+    formData.image = await readFileAsDataUrl(file)
+    lastLocalCoverName.value = file.name
+    formRef.value?.validateField('image').catch(() => {})
+  } catch {
     toast({ title: 'Could not read this file', variant: 'destructive' })
   }
-  reader.readAsDataURL(file)
 }
 
 function triggerCoverFilePick() {
