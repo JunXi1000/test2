@@ -23,6 +23,12 @@ public class OrderTimeoutTask {
     /** 待支付超时分钟数 */
     private static final int TIMEOUT_MINUTES = 30;
 
+    /**
+     * 单轮最多处理的订单行数。防止超时订单积压时一次性把所有行载入内存;
+     * 配合 60s 的 fixedDelay 逐批消化,积压会在若干轮内清空。
+     */
+    private static final int SCAN_BATCH_SIZE = 200;
+
     @Resource
     private ProductOrderMapper productOrderMapper;
 
@@ -32,7 +38,7 @@ public class OrderTimeoutTask {
     @Scheduled(fixedDelay = 60_000)
     public void cancelTimedOutOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(TIMEOUT_MINUTES);
-        List<ProductOrder> pending = productOrderMapper.selectPendingBefore(cutoff);
+        List<ProductOrder> pending = productOrderMapper.selectPendingBefore(cutoff, SCAN_BATCH_SIZE);
         if (pending.isEmpty()) {
             return;
         }

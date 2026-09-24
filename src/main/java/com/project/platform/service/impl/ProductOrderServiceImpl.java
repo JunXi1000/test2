@@ -357,18 +357,22 @@ public class ProductOrderServiceImpl implements ProductOrderService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void cancel(Integer id) {
-        ProductOrder productOrder = selectById(id);
-        if (!productOrder.getStatus().equals("待发货") && !productOrder.getStatus().equals("待支付")) {
-            throw new CustomException("数据已过期，请先刷新页面");
-        }
-        //返回库存
-        productService.in(productOrder.getProductId(), productOrder.getQuantity());
-        //退款 只有已付款的才退款 TODO 退款
-        if (productOrder.getStatus().equals("待发货")) {
+        ProductOrder productOrder = selectById(id);   // 内含归属校验
+        // 与 cancelRows 同一套做法:条件 UPDATE 抢占行所有权,只有抢到行的执行流才回补库存/退款,
+        // 避免并发下重复回补/重复退款。此前是「先读状态 → 判断 → 再写」。
+        if (productOrderMapper.updateStatusById(id, "待发货", "已取消") == 1) {
+            productService.in(productOrder.getProductId(), productOrder.getQuantity());
+            // 旧链路(无 payment 记录)的支付走的是余额扣款(pay(id) -> userService.consumption),
+            // 所以退款回余额 —— 与 storefront 按 payment.channel 分流的规则一致,不是特例。
             userService.topUp(productOrder.getUserId(), productOrder.getTotalMoney());
+            return;
         }
-        productOrder.setStatus("已取消");
-        updateById(productOrder);
+        if (productOrderMapper.updateStatusById(id, "待支付", "已取消") == 1) {
+            productService.in(productOrder.getProductId(), productOrder.getQuantity());
+            return;
+        }
+        // 两条都抢不到 = 已是终态(已取消/已完成等),与旧实现的语义一致
+        throw new CustomException("数据已过期，请先刷新页面");
     }
 
     /**

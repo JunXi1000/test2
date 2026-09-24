@@ -40,9 +40,15 @@ public interface ProductOrderMapper {
 
     /**
      * 查询待支付且已超时(order_no 非空的 storefront 订单行),供自动取消任务使用。
+     *
+     * <p><b>必须带 LIMIT</b>:此前无上限,一次会把所有超时订单行载入内存;按 create_time 升序取,
+     * 保证单轮处理的是最旧的一批,配合 60s 的 fixedDelay 逐批消化。
+     * 注意 LIMIT 只决定「本轮注意到哪些 orderNo」—— 取消本身按 order_no 重新取整组,
+     * 所以不会出现「只取消半个订单分组」。
      */
-    @Select("SELECT * FROM product_order WHERE status = '待支付' AND order_no IS NOT NULL AND create_time < #{cutoff}")
-    List<ProductOrder> selectPendingBefore(LocalDateTime cutoff);
+    @Select("SELECT * FROM product_order WHERE status = '待支付' AND order_no IS NOT NULL "
+            + "AND create_time < #{cutoff} ORDER BY create_time LIMIT #{limit}")
+    List<ProductOrder> selectPendingBefore(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
 
     /**
      * 按订单分组号条件更新状态(fromStatus -> toStatus),返回受影响行数;用于幂等推进。

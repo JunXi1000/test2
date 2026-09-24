@@ -146,7 +146,18 @@ public class MerchantApiController {
                 order.setTrackingNumber("");
             }
             case "delivered" -> order.setStatus("已完成");
-            case "cancelled" -> order.setStatus("已取消");
+            case "cancelled" -> {
+                // 取消必须走与前台同一套逻辑:回补库存 + 按支付渠道退款 + 推进支付单。
+                // 此前这里只把 status 改成「已取消」—— 库存永不回补、钱不退、支付单不动,
+                // 而订单按 order_no 分组展示,结果是留下一组「半取消」的订单。
+                if (order.getOrderNo() != null && !order.getOrderNo().isEmpty()) {
+                    productOrderService.cancelByOrderNo(order.getOrderNo());
+                } else {
+                    // 旧行(order_no 为空)没有分组,走单行取消(同样带归属校验与渠道一致的退款)
+                    productOrderService.cancel(id);
+                }
+                return ResponseVO.ok();
+            }
         }
         productOrderService.updateById(order);
         return ResponseVO.ok();

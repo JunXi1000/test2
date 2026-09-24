@@ -25,10 +25,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * 取消订单的**行为回归网**。
  *
- * 覆盖两条入口,它们复用同一段跨表写逻辑 {@code ProductOrderServiceImpl.cancelRows}:
+ * 覆盖三条取消入口,外加超时扫描的批量上限:
  * <ul>
- *   <li>用户手动取消:{@code POST /orders/{orderNo}/cancel} → {@code cancelByOrderNo}</li>
- *   <li>超时自动取消:{@code OrderTimeoutTask} → {@code cancelTimeoutOrder}</li>
+ *   <li>用户手动取消:{@code POST /orders/{orderNo}/cancel} → {@code cancelByOrderNo}(按分组)</li>
+ *   <li>超时自动取消:{@code OrderTimeoutTask} → {@code cancelTimeoutOrder}(按分组)</li>
+ *   <li>商家端取消:{@code PUT /merchant/orders/{id}/status}(status=cancelled) → 委派给上面两条之一</li>
  * </ul>
  *
  * <p><b>本类曾是特性化测试(characterization test)</b>:Phase 0 时它断言的是重构**前**的真实行为,
@@ -190,13 +191,8 @@ class OrderCancelCharacterizationTest extends BaseControllerTest {
         int stockBefore = productMapper.selectById(1).getStock();
         String orderNo = createPendingOrder(token, 1, 1);
 
-        // 回拨 create_time —— updateById 的 <set> 里包含 create_time,故无需裸 SQL
-        List<ProductOrder> rows = productOrderMapper.selectByOrderNo(orderNo);
-        LocalDateTime backdated = LocalDateTime.now().minusMinutes(31);
-        for (ProductOrder row : rows) {
-            row.setCreateTime(backdated);
-            productOrderMapper.updateById(row);
-        }
+        // 回拨 create_time 使其超过 30 分钟阈值
+        backdate(orderNo, LocalDateTime.now().minusMinutes(31));
 
         orderTimeoutTask.cancelTimedOutOrders();
 
@@ -205,7 +201,57 @@ class OrderCancelCharacterizationTest extends BaseControllerTest {
         assertEquals("已超时", paymentMapper.selectByOrderNo(orderNo).getStatus());
     }
 
+    // ─────────────────────────── 商家端取消(第三条入口) ───────────────────────────
+
+    @Test
+    @DisplayName("商家端取消订单:委派到统一取消逻辑 —— 回补库存、支付单退款、card 渠道不动余额")
+    void merchantCancelDelegatesToUnifiedLogic() throws Exception {
+        int stockBefore = productMapper.selectById(1).getStock();
+        BigDecimal balanceBefore = userMapper.selectById(1).getBalance();
+
+        String orderNo = createPendingOrder(userToken(), 1, 2);
+        confirm(userToken(), orderNo, "card");           // → 待发货
+        int rowId = productOrderMapper.selectByOrderNo(orderNo).get(0).getId();
+
+        // shopToken() 的 id=1,而商品 1 属于 shop 1,故归属校验通过
+        put("/merchant/orders/" + rowId + "/status", shopToken(), Map.of("status", "cancelled"))
+                .andExpect(status().isOk());
+
+        assertEquals("已取消", rowStatus(orderNo));
+        assertEquals(stockBefore, productMapper.selectById(1).getStock(),
+                "商家端取消也必须回补库存 —— 此前只改 status,库存永不回补");
+        assertEquals("已退款", paymentMapper.selectByOrderNo(orderNo).getStatus(),
+                "支付单必须被推进 —— 此前完全不动");
+        assertEquals(0, balanceBefore.compareTo(userMapper.selectById(1).getBalance()),
+                "card 渠道:退款不回余额(与前台同一套渠道规则)");
+    }
+
+    // ─────────────────────────── 超时扫描的批量上限 ───────────────────────────
+
+    @Test
+    @DisplayName("超时扫描带 LIMIT:上限足够时全返回,上限不足时只返回该数量")
+    void pendingScanIsBoundedByLimit() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            String orderNo = createPendingOrder(userToken(), 1, 1);
+            backdate(orderNo, LocalDateTime.now().minusMinutes(60));
+        }
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(30);
+
+        assertEquals(3, productOrderMapper.selectPendingBefore(cutoff, 100).size(),
+                "上限足够时应返回全部 3 笔超时订单");
+        assertEquals(2, productOrderMapper.selectPendingBefore(cutoff, 2).size(),
+                "LIMIT 必须生效 —— 此前无上限,超时订单一多会一次性载入内存");
+    }
+
     // ─────────────────────────── helpers ───────────────────────────
+
+    /** 把该 orderNo 分组的 create_time 回拨 —— updateById 的 <set> 里含 create_time,无需裸 SQL */
+    private void backdate(String orderNo, LocalDateTime when) {
+        for (ProductOrder row : productOrderMapper.selectByOrderNo(orderNo)) {
+            row.setCreateTime(when);
+            productOrderMapper.updateById(row);
+        }
+    }
 
     /** POST /payments/create 建一笔待支付订单,返回 orderNo */
     private String createPendingOrder(String token, int productId, int qty) throws Exception {
