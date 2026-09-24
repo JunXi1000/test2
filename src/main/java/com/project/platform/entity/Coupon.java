@@ -1,5 +1,6 @@
 package com.project.platform.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -29,15 +30,15 @@ public class Coupon {
     /**
      * 折扣值(百分比或固定金额)
      */
-    private Double value;
+    private BigDecimal value;
     /**
      * 最低消费门槛
      */
-    private Double minOrder;
+    private BigDecimal minOrder;
     /**
      * 最大优惠金额(percent 类型)
      */
-    private Double maxDiscount;
+    private BigDecimal maxDiscount;
     /**
      * 适用品类(可选)
      */
@@ -103,27 +104,27 @@ public class Coupon {
         this.type = type;
     }
 
-    public Double getValue() {
+    public BigDecimal getValue() {
         return value;
     }
 
-    public void setValue(Double value) {
+    public void setValue(BigDecimal value) {
         this.value = value;
     }
 
-    public Double getMinOrder() {
+    public BigDecimal getMinOrder() {
         return minOrder;
     }
 
-    public void setMinOrder(Double minOrder) {
+    public void setMinOrder(BigDecimal minOrder) {
         this.minOrder = minOrder;
     }
 
-    public Double getMaxDiscount() {
+    public BigDecimal getMaxDiscount() {
         return maxDiscount;
     }
 
-    public void setMaxDiscount(Double maxDiscount) {
+    public void setMaxDiscount(BigDecimal maxDiscount) {
         this.maxDiscount = maxDiscount;
     }
 

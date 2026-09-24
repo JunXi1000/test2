@@ -1,5 +1,6 @@
 package com.project.platform.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -37,7 +38,7 @@ public class ReturnRequest {
     /**
      * 退款金额
      */
-    private Double refundAmount;
+    private BigDecimal refundAmount;
     /**
      * 状态:pending / approved / rejected / refunded
      */
@@ -107,11 +108,11 @@ public class ReturnRequest {
         this.detail = detail;
     }
 
-    public Double getRefundAmount() {
+    public BigDecimal getRefundAmount() {
         return refundAmount;
     }
 
-    public void setRefundAmount(Double refundAmount) {
+    public void setRefundAmount(BigDecimal refundAmount) {
         this.refundAmount = refundAmount;
     }
 

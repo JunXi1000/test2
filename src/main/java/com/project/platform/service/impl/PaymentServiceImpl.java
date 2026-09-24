@@ -64,7 +64,10 @@ public class PaymentServiceImpl implements PaymentService {
             // 模拟银行卡网关:不改余额,订单行 待支付 -> 待发货
             productOrderMapper.updateStatusByOrderNo(orderNo, "待支付", "待发货");
         }
-        paymentMapper.updatePaid(orderNo, "TXN-" + orderNo, LocalDateTime.now());
+        // 把**实际扣款渠道**落库 —— 请求体在 confirm 时可以覆盖建单时的渠道,而扣款与否按
+        // effectiveChannel 决定;若不同步写回,payment.channel 就会与实际资金流向不符,
+        // 取消退款时按渠道分流就会判错。
+        paymentMapper.updatePaid(orderNo, effectiveChannel, "TXN-" + orderNo, LocalDateTime.now());
     }
 
     @Override

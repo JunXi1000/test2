@@ -50,6 +50,16 @@ public interface ProductOrderMapper {
     @Update("UPDATE product_order SET status = #{toStatus} WHERE order_no = #{orderNo} AND status = #{fromStatus}")
     int updateStatusByOrderNo(@Param("orderNo") String orderNo, @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus);
 
+    /**
+     * 按**行 id** 条件更新状态,返回受影响行数。
+     *
+     * <p>用途:取消订单时**抢占行所有权** —— 只有返回 1 的执行流才回补库存/退款,从而在
+     * 并发(用户手动取消 vs 超时任务)下保证「回补一次、退款一次」。不用「先读状态再判断再写」,
+     * 那种写法在无锁下可被两个执行流同时通过判断,导致重复退款。
+     */
+    @Update("UPDATE product_order SET status = #{toStatus} WHERE id = #{id} AND status = #{fromStatus}")
+    int updateStatusById(@Param("id") Integer id, @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus);
+
     @Select("SELECT * FROM product_order WHERE status='已完成' and  create_time >= DATE_SUB(NOW(), INTERVAL #{day} DAY) ")
     List<ProductOrder> selectRecentlyCompleted(Integer day);
     @Select("SELECT * FROM product_order WHERE shop_id= #{shopId} and status='已完成' and  create_time >= DATE_SUB(NOW(), INTERVAL #{day} DAY) ")

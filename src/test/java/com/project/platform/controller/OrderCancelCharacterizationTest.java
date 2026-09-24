@@ -23,20 +23,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 取消订单的**特性化测试**(characterization test)—— 钉住重构前的真实行为,不是目标态。
+ * 取消订单的**行为回归网**。
  *
  * 覆盖两条入口,它们复用同一段跨表写逻辑 {@code ProductOrderServiceImpl.cancelRows}:
  * <ul>
- *   <li>用户手动取消:{@code POST /orders/{orderNo}/cancel} → {@code cancelByOrderNo}(**有** {@code @Transactional})</li>
- *   <li>超时自动取消:{@code OrderTimeoutTask} → {@code cancelTimeoutOrder}(**无** {@code @Transactional})</li>
+ *   <li>用户手动取消:{@code POST /orders/{orderNo}/cancel} → {@code cancelByOrderNo}</li>
+ *   <li>超时自动取消:{@code OrderTimeoutTask} → {@code cancelTimeoutOrder}</li>
  * </ul>
  *
- * 本类里有两条测试**断言的是缺陷而不是期望行为**,各自用 {@code @DisplayName} 标了
- * 「当前缺陷」前缀。Phase 2 修好后必须把它们翻转为期望行为 —— 这是刻意为之,
- * 让修复的 diff 自解释。
+ * <p><b>本类曾是特性化测试(characterization test)</b>:Phase 0 时它断言的是重构**前**的真实行为,
+ * 其中 {@code cardPaidCancelDoesNotCreditBalance} 当时断言的是一条缺陷 —— card 渠道支付的订单被取消时
+ * 会把退款充进余额钱包,而那笔钱从未被扣过(可反复下单-支付-取消刷余额)。
+ * Phase 2a 修好后该断言已**翻转**为期望行为,现在是防回归的网,而不是缺陷存证。
  *
- * 注:{@code @Transactional} 测试基类使每个方法整体回滚,所以这里只能证明单线程下的
- * 行为,证明不了并发下的隔离性(那需要 Phase 2e 的非回滚测试基类)。
+ * 注:{@code @Transactional} 测试基类使每个方法整体回滚,所以这里只能证明单线程下的行为;
+ * 并发下的「只退一次」由 {@code OrderCancelConcurrencyTest} 覆盖(它不能用回滚基类)。
  */
 class OrderCancelCharacterizationTest extends BaseControllerTest {
 
@@ -61,8 +62,8 @@ class OrderCancelCharacterizationTest extends BaseControllerTest {
     // ─────────────────────────── 当前缺陷(Phase 2 必须翻转) ───────────────────────────
 
     @Test
-    @DisplayName("当前缺陷:card 支付后取消订单会凭空增加余额(钱从未被扣过)")
-    void cardPaidCancelCreatesBalanceOutOfNothing() throws Exception {
+    @DisplayName("card 支付后取消订单:退款不回余额(那笔钱从未被扣过)")
+    void cardPaidCancelDoesNotCreditBalance() throws Exception {
         String token = userToken();
         BigDecimal balanceBefore = userMapper.selectById(1).getBalance();
 
@@ -73,19 +74,20 @@ class OrderCancelCharacterizationTest extends BaseControllerTest {
 
         BigDecimal balanceAfterConfirm = userMapper.selectById(1).getBalance();
         assertEquals(0, balanceBefore.compareTo(balanceAfterConfirm),
-                "card 渠道确认支付不应改动余额(这是缺陷的成因,不是期望行为)");
+                "card 渠道确认支付不应改动余额(所以退款也不该进余额)");
 
         BigDecimal paid = rowTotalMoney(orderNo);
+        assertTrue(paid.signum() > 0, "订单金额应为正数,否则本测试无法证明'没进余额'");
 
-        // 取消 → 当前实现按「待发货即退款」往余额里加钱
         post("/orders/" + orderNo + "/cancel", token, Map.of())
                 .andExpect(status().isOk());
 
-        BigDecimal balanceAfterCancel = userMapper.selectById(1).getBalance();
-        assertEquals(0, balanceAfterConfirm.add(paid).compareTo(balanceAfterCancel),
-                "当前缺陷:取消一笔 card 支付的订单把 " + paid + " 充进了余额钱包,而这笔钱从未被扣过");
+        assertEquals(0, balanceAfterConfirm.compareTo(userMapper.selectById(1).getBalance()),
+                "card 渠道的退款应回原渠道、不进余额钱包。此前会凭空增加 " + paid
+                        + ",且可反复下单-支付-取消刷余额");
+        assertEquals("已取消", rowStatus(orderNo));
         assertEquals("已退款", paymentMapper.selectByOrderNo(orderNo).getStatus(),
-                "支付单当前被置为已退款(但退款去向是站内余额,不是原渠道)");
+                "退款去向是原渠道,体现为支付单置已退款");
     }
 
     // ─────────────────────────── 已正确的行为(Phase 2 必须保持) ───────────────────────────
@@ -103,6 +105,9 @@ class OrderCancelCharacterizationTest extends BaseControllerTest {
 
         confirm(token, orderNo, "balance");
         assertEquals("待发货", rowStatus(orderNo));
+        assertEquals("balance", paymentMapper.selectByOrderNo(orderNo).getChannel(),
+                "confirm 时的实际渠道必须落库 —— 建单给的是 card,confirm 用了 balance,"
+                        + "若不同步写回,payment.channel 会与实际扣款渠道不符,取消时就会退错去向");
         assertEquals(0, balanceBefore.subtract(paid).compareTo(userMapper.selectById(1).getBalance()),
                 "balance 渠道确认支付应扣减余额");
 

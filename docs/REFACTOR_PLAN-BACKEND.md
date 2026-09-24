@@ -36,6 +36,16 @@
 
 ## 2. 问题清单(按类别,均带证据)
 
+> **取证纪律(踩过两次,写下来)**:本项目的校验**分散在多层**——除了 service 里的判空/判角色,
+> 还有 **mapper 注解 SQL 的 WHERE 条件**。断言「某处没有校验 X」之前,必须把整条调用链
+> (controller → service → mapper SQL)读完。
+>
+> 反例一:`retrievePassword` 曾被判为「泄漏账号存在性」,实为**先校验验证码**再查用户,不成立。
+> 反例二(2026-09-24):`CouponServiceImpl.applyByCode` 曾被判为「不校验 status/expires_at」,
+> 实为 **`CouponMapper.selectByCode` 的 WHERE 里带了 `status='enabled' AND expires_at > NOW()`**,
+> 过期/下架券根本查不出来,行为本就正确。
+> 两次都是**假 finding**,都已撤回。宁可不报,不要错报。
+
 ### A. 安全
 
 **A1. 授权层是「默认放行」** ✅ **已于 Phase 1a 收口**(改 `AuthzRules` 路径段匹配 + 默认拒绝)
@@ -199,7 +209,36 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 `AuthorizationBaselineTest` B 段由「断言当前缺陷」翻转为「断言已收口」、
 `ChatControllerTest` 补齐正反例(4 → 10,删掉固化 IDOR 的 "works for any ID" 断言)。
 
-### Phase 2 — 数据一致性
+### Phase 2 — 数据一致性 🔄 进行中(2026-09-24)
+
+**三项前置报告(对 `template_v3` 实测,决定迁移做法)**:
+
+| 报告 | 结论 |
+| --- | --- |
+| **B0 存量影响** | **为零**。`product_order` / `payment` / `shopping_cart` **全 0 行** —— 没有任何 `已退款` 支付记录,那笔「凭空充入的余额」从未在本库发生过(用户余额来自 `schema.sql` 种子)。**无需数据订正** |
+| **唯一键查重** | **零重复**。三张关联表 0 行、`user`/`shop`/`admin` 的 username 无重复 → **可直接建约束,无需清理** |
+| **金额类型风险评估** | **零行会被舍入**。`coupon.value` / `return_request.refund_amount` 无超 2 位小数的行(`return_request` 本身为空)→ DOUBLE→DECIMAL(10,2) 无精度损失 |
+| (附)迁移代价 | 表几乎全空(user 5 / shop 2 / admin 1 / product 3 / coupon 7 / notification 3),执行代价≈0 |
+
+**已完成的代码改动**:
+
+- **2a 重写 `cancelRows`**:① 状态推进改为**条件 UPDATE 抢占行所有权**(新增
+  `ProductOrderMapper.updateStatusById`,与既有 `updateStatusByOrderNo` 同构),只有抢到行的
+  执行流才回补库存/退款;② **退款按 `payment.channel` 分流** —— 只有 `balance` 渠道才 `topUp` 回余额,
+  `card` 等只把支付单置「已退款」。`cancelTimeoutOrder` 补上 `@Transactional`(与 `cancelByOrderNo` 对齐)。
+- **2b 补事务**:`ChatServiceImpl.sendMessage`/`markAsRead`、`CouponServiceImpl.claim`。
+- **新增 `OrderCancelConcurrencyTest`**:不继承回滚基类(回滚语义下两线程互不可见,构不成竞态),
+  真提交 + `JdbcTemplate` 精确还原;注解与基类一致以复用同一 Spring 上下文(H2 种子不幂等,多一个上下文会重复插入)。
+  **已做牙齿检查**:把修复暂存后在旧代码上运行,`concurrentCancelTakesEffectOnlyOnce` **如期失败**
+  (`balanceAfter > balanceBefore + 50`,即并发退了两笔),而串行重复取消那条通过 —— 与「`anyActive`
+  只挡串行、挡不住并发」的缺陷性质完全吻合。
+- **`sql/migrations/V4__constraints_and_indexes.sql`**:6 个唯一键 + 13 个索引,含执行前自检查询与
+  执行后验证;**回滚脚本刻意放 `sql/migrations/rollback/`** —— `entrypoint.sh` 会 glob 导入
+  `sql/migrations/*.sql`,放同级会被当迁移自动执行并撤销。索引清单已按**线上 `information_schema`
+  实测**收敛(库里已有 `notification(role,user_id)`、`message` 两个索引等,不重复建)。
+- `src/test/resources/schema-h2.sql` 同步这 6 个唯一约束,使测试库与生产库的约束一致(否则测试抓不到重复插入)。
+
+**待做**:2d 金额类型(无风险,单独提交)、V4 手工执行(按下方命令)、Phase 2 提交。
 
 - **2a. 重写 `cancelRows` 的退款语义与原子性(最高优先,一次改完两件事)**
   - 验收一(B0 造钱):退款去向按 `payment.channel` 分流。

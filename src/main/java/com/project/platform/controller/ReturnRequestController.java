@@ -8,6 +8,7 @@ import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -45,8 +46,8 @@ public class ReturnRequestController {
         req.setProductImage(body.getString("productImage"));
         req.setReason(body.getString("reason"));
         req.setDetail(body.getString("detail"));
-        Double amount = body.getDouble("refundAmount");
-        req.setRefundAmount(amount == null ? 0D : amount);
+        BigDecimal amount = body.getBigDecimal("refundAmount");
+        req.setRefundAmount(amount == null ? BigDecimal.ZERO : amount);
         return ResponseVO.ok(toMap(returnRequestService.create(req)));
     }
 

@@ -12,6 +12,7 @@ import com.project.platform.utils.CurrentUserThreadLocal;
 import jakarta.annotation.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,6 +41,7 @@ public class ChatServiceImpl implements ChatService {
         return messageMapper.selectByConversation(conversationId);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public Message sendMessage(Integer senderId, String senderType, Integer receiverId,
                                String content, Integer conversationId, Integer productId) {
@@ -107,6 +109,7 @@ public class ChatServiceImpl implements ChatService {
         return message;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public void markAsRead(Integer conversationId, String readerType) {
         loadOwnedConversation(conversationId);

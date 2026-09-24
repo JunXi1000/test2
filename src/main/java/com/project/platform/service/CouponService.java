@@ -1,6 +1,7 @@
 package com.project.platform.service;
 
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.Map;
 
 /**
@@ -26,5 +27,5 @@ public interface CouponService {
     /**
      * 按优惠码对订单校验并计算折扣
      */
-    Map<String, Object> applyByCode(String code, Double subtotal);
+    Map<String, Object> applyByCode(String code, BigDecimal subtotal);
 }

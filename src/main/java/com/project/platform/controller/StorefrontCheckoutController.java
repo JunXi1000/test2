@@ -83,7 +83,7 @@ public class StorefrontCheckoutController {
     @PostMapping("/promo")
     public ResponseVO<Map<String, Object>> applyPromo(@RequestBody JSONObject body) {
         String code = body.getString("code");
-        double subtotal = body.getDoubleValue("subtotal");
+        BigDecimal subtotal = body.getBigDecimal("subtotal");
 
         Map<String, Object> result = new HashMap<>();
         // 1) 优先从 coupon 表校验(Phase 1 后端化)
@@ -94,9 +94,11 @@ public class StorefrontCheckoutController {
             return ResponseVO.ok(result);
         }
         // 2) 回退到旧的硬编码优惠码(兼容遗留 mock 码)
-        Map<String, Double> promos = Map.of("SAVE10", 0.10, "VIP15", 0.15);
-        double rate = promos.getOrDefault(code.toUpperCase(), 0.0);
-        result.put("discount", Math.round(subtotal * rate * 100.0) / 100.0);
+        Map<String, BigDecimal> promos = Map.of(
+                "SAVE10", new BigDecimal("0.10"),
+                "VIP15", new BigDecimal("0.15"));
+        BigDecimal rate = promos.getOrDefault(code.toUpperCase(), BigDecimal.ZERO);
+        result.put("discount", subtotal.multiply(rate).setScale(2, RoundingMode.HALF_UP));
         return ResponseVO.ok(result);
     }
 }

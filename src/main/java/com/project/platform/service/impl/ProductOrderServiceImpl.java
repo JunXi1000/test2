@@ -201,29 +201,41 @@ public class ProductOrderServiceImpl implements ProductOrderService {
     }
 
     /**
-     * 取消订单分组:回补库存 + 已付款退款 + 支付单推进,幂等(全已取消则直接返回)。
-     * 无用户上下文可调用(超时任务),故行状态更新走 mapper 而非带归属校验的 updateById。
+     * 取消订单分组:回补库存 + 退款 + 支付单推进。
      *
-     * @param payStatus 支付单目标状态:用户取消->已取消,超时自动取消->已超时
+     * <p><b>并发安全靠「抢占行所有权」</b>:每行先用条件 UPDATE({@link ProductOrderMapper#updateStatusById})
+     * 抢占,**只有返回 1 的执行流**才回补库存/退款。此前是「先读状态 → 判断 → 再写」,在无锁、
+     * 且 {@code cancelTimeoutOrder} 没有事务的情况下,用户手动取消与超时任务可以同时通过判断,
+     * 造成**同一笔钱退两次**、库存回补两次。
+     *
+     * <p><b>退款去向按支付渠道分流</b>:只有 {@code channel=balance}(确实从余额扣过款)才
+     * {@code topUp} 回余额;{@code card} 等网关渠道只把支付单置「已退款」而**不动余额**。
+     * 此前不区分渠道一律 {@code topUp},而 card 支付从未扣过余额 —— 取消一笔 card 订单等于
+     * **凭空增加用户余额**(且可反复下单-支付-取消来刷)。
+     *
+     * @param payStatus 支付单目标状态:用户取消 -> 已取消,超时自动取消 -> 已超时
      */
     private void cancelRows(String orderNo, List<ProductOrder> rows, String payStatus) {
-        boolean anyActive = rows.stream()
-                .anyMatch(r -> "待支付".equals(r.getStatus()) || "待发货".equals(r.getStatus()));
-        if (!anyActive) {
-            return; // 幂等:全已取消/已完成,不再重复退款
-        }
+        Payment payment = paymentMapper.selectByOrderNo(orderNo);
+        boolean refundToBalance = payment != null && "balance".equals(payment.getChannel());
+
         for (ProductOrder row : rows) {
-            if (!"待支付".equals(row.getStatus()) && !"待发货".equals(row.getStatus())) {
+            // ① 已付款的行:抢占「待发货 → 已取消」;抢到就必须退款
+            if (productOrderMapper.updateStatusById(row.getId(), "待发货", "已取消") == 1) {
+                productService.in(row.getProductId(), row.getQuantity()); // 回补库存
+                if (refundToBalance) {
+                    userService.topUp(row.getUserId(), row.getTotalMoney()); // 余额渠道才回余额
+                }
                 continue;
             }
-            productService.in(row.getProductId(), row.getQuantity()); // 回补库存
-            if ("待发货".equals(row.getStatus())) {
-                userService.topUp(row.getUserId(), row.getTotalMoney()); // 已付款退款
+            // ② 未付款的行:抢占「待支付 → 已取消」;抢到只回补库存
+            if (productOrderMapper.updateStatusById(row.getId(), "待支付", "已取消") == 1) {
+                productService.in(row.getProductId(), row.getQuantity());
             }
-            row.setStatus("已取消");
-            productOrderMapper.updateById(row);
+            // 两条都抢不到 = 已被其它执行流处理,或已是终态 —— 什么都不做(幂等)
         }
-        Payment payment = paymentMapper.selectByOrderNo(orderNo);
+
+        // 支付单推进:card 等渠道的退款只体现在支付单状态上(退款回原渠道)
         if (payment != null) {
             if ("已支付".equals(payment.getStatus())) {
                 paymentMapper.updateStatus(orderNo, "已退款");
@@ -303,7 +315,14 @@ public class ProductOrderServiceImpl implements ProductOrderService {
     /**
      * 超时自动取消(无用户上下文):回补库存 + 支付单置已超时。
      * 由 OrderTimeoutTask 调用,仅处理仍待支付的订单行。
+     *
+     * <p>与 {@link #cancelByOrderNo} 一样必须带事务 —— 它复用的 {@code cancelRows} 会跨
+     * {@code product} / {@code user} / {@code product_order} / {@code payment} 四张表写。
+     * 此前这里漏了 {@code @Transactional},同一条代码路径在用户手动取消时有事务、在超时
+     * 任务里没有,是「重复退款」缺陷的另一半成因(另一半是 cancelRows 的读-判-写竞态,已改为
+     * 条件 UPDATE 抢占行所有权)。
      */
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public void cancelTimeoutOrder(String orderNo) {
         List<ProductOrder> rows = productOrderMapper.selectByOrderNo(orderNo);
