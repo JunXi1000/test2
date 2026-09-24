@@ -7,6 +7,7 @@ import com.project.platform.service.CouponService;
 import com.project.platform.service.ProductService;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -84,6 +85,12 @@ public class StorefrontCheckoutController {
     public ResponseVO<Map<String, Object>> applyPromo(@RequestBody JSONObject body) {
         String code = body.getString("code");
         BigDecimal subtotal = body.getBigDecimal("subtotal");
+        // 缺 code 时原实现会在下面的 code.toUpperCase() 抛 NPE → 500。请求不合法应当是 400。
+        // 注:同方法内另两处校验用的是 CustomException 默认的 409,语义上同样偏了,
+        // 属既有的错误码不一致,未纳入本次改动范围。
+        if (code == null || code.isBlank()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "优惠码不能为空");
+        }
 
         Map<String, Object> result = new HashMap<>();
         // 1) 优先从 coupon 表校验(Phase 1 后端化)

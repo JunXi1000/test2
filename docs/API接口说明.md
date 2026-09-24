@@ -1,5 +1,20 @@
 # API 接口说明
 
+> ⚠️ **本文档是历史文档,描述的是前端「最初期望」的一套接口,与当前实际契约已有多处不符。**
+>
+> **当前权威来源**(按优先级):
+> 1. **`web/src/api/modules/*.ts`** —— 前端**实际**调用的路径,唯一 unavoidable 的事实来源;
+> 2. **[backend-api.md](backend-api.md)** —— 后端**实际**暴露的端点、实现状态与鉴权规则;
+> 3. 本文档 —— 仅用于了解各业务域的接口**意图**与字段语义,路径/字段名/响应格式请以上面两者为准。
+>
+> 已知不符(2026-09-24 核实,未逐条修正):
+> - **前端已直连 Java 后端**:`vite` 把 `/api` 代理到 `localhost:1000` 并 **rewrite 掉 `/api` 前缀**
+>   (后端无 context-path)。本文档第 11 节「需要网关/BFF 做路径映射」的说法**已不成立**。
+> - **响应格式**:实际是 `{ code, msg, data }` 且 `code=200` 表示成功(不是本文档 §1 写的
+>   `{ code, message, data }` / `code === 0`);错误原因现在**同时**出现在 `msg` 与 `data`。
+> - 后端已通过门面控制器(`Storefront*` / `AdminApi` / `MerchantApi`)把路径对齐到
+>   `web/src/api/modules/*.ts`,不再需要前端改路径去迁就 Java 侧。
+
 本文档根据 **`web/src/api`** 下的模块整理，描述 **Nexus 前端** 在关闭 Mock、请求真实后端时所使用的路径与含义。实际联调时请以 `web/.env` / `web/.env.production` 中的 **`VITE_API_BASE_URL`** 为前缀（默认多为 `/api`，由代理转到 Java 或其它网关）。
 
 ---
@@ -8,10 +23,11 @@
 
 | 项 | 说明 |
 |----|------|
-| **Base URL** | `import.meta.env.VITE_API_BASE_URL`，未配置时默认为 `/api` |
+| **Base URL** | `import.meta.env.VITE_API_BASE_URL`，默认 `/api`;`vite` 代理到 `localhost:1000` 并去掉 `/api` 前缀 |
 | **鉴权** | 请求头 `Authorization: Bearer <token>`（见 `web/src/api/http.ts`） |
 | **Mock** | `VITE_USE_MOCK=true` 或 `localStorage.RUNTIME_USE_MOCK` 为 `true` 时，多数接口不发起真实请求，由前端模块内 Mock 返回 |
-| **响应格式** | Axios 拦截器若识别 `{ code, message, data }` 且 `code === 0`，会解包为 `data`；否则返回原始 body |
+| **响应格式** | 实际为 `{ code, msg, data }`,`code=200` 表示成功（**不是**下文旧描述里的 `code===0`）。`http.ts` 的响应拦截器负责解包；错误时**具体原因同时出现在 `msg` 与 `data`**（过渡态，见 [backend-api.md](backend-api.md) §0） |
+| **鉴权失败** | 401 由 `http.ts` 统一处理(清会话、按角色跳登录并带 `?redirect=`)；业务错误(如 409)透传后端原因 |
 
 ---
 
@@ -218,15 +234,19 @@
 
 ## 11. 与仓库内 Spring Boot 后端的关系
 
-本仓库 **`src/main/java/.../controller`** 为另一套 **平台型** API（例如 `@RequestMapping("/common")` 下 `POST /common/login`，`@RequestMapping("/product")` 等）。路径、字段名（如 `username` vs `email`）与上文 **Nexus 前端** 约定 **并不一致**。
+> **更新(2026-09-24):本节原先描述的「前端期望 与 Java 后端不一致、需要网关/BFF 映射」状态已不成立。**
+> 那时后端只有传统 CRUD 控制器;此后的工作已补齐门面控制器(`Storefront*` / `AdminApi` / `MerchantApi`),
+> 路径与 `web/src/api/modules/*.ts` 对齐,**前端现在直连 Java 后端**:
+>
+> ```
+> 浏览器 → vite dev server :5173 → 代理 /api → localhost:1000(后端,无 context-path,前缀被 rewrite 掉)
+> ```
+>
+> 不再需要路径映射层。若发现某处仍"不一致",那是**缺陷**而非设计,应改后端或前端其一,
+> 而不是再加一层映射 —— 差异清单见 [backend-api.md](backend-api.md) §3。
 
-当前前端在 **Mock 关闭** 时，会按第 2～10 节路径请求 **`VITE_API_BASE_URL`**。若直接对接现有 Java 控制器，需要：
-
-- 在网关/BFF 做路径与 body 映射，或  
-- 在 Java 侧新增与上表一致的 Controller，或  
-- 修改前端 `api/modules` 中的路径以匹配 Java。
-
-「Java 已实现接口清单」已单独维护在 **`docs/backend-api.md`**（后端 33 个 Controller 端点 + 实现状态 + 与前端契约的差异对照），本仓库可直接使用。
+本仓库 **`src/main/java/.../controller`** 为平台型 API(例如 `@RequestMapping("/common")` 下的
+`POST /common/login`)。各业务域的实际端点、鉴权角色与实现状态以 [backend-api.md](backend-api.md) 为准。
 
 ---
 
@@ -234,3 +254,5 @@
 
 - **更新前端契约时**：同步改 `web/src/api/modules/*.ts` 与本文件。  
 - **路径一律写完整相对路径**（含前缀片段），不含域名；部署时由 Base URL 拼接。
+- **改后端端点时**:同步 `docs/backend-api.md`;若影响到前端可调用的路径,还必须同步
+  `config/AuthzRules.java` 的放行表(见 `docs/DEVELOPMENT.md` §4.1) —— **漏登记会让前端拿到 403**。

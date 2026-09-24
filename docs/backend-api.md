@@ -7,8 +7,17 @@
 ## 0. 通用约定
 
 - 统一响应 `ResponseVO<T>`:`{ code, msg, data }`,`code=200` 成功;分页 `PageVO<T>`:`{ list, total }`。
-- 鉴权:默认需登录(`Authorization: Bearer <token>` 或 `token` 头);公开接口见 [ARCHITECTURE.md](ARCHITECTURE.md) §4 白名单。
-- 角色:`/admin` 仅 ADMIN、`/merchant/` 仅 SHOP(LoginInterceptor.checkRole)。
+- **错误响应(2026-09-24 起为过渡态)**:`msg` 与 `data` **都**携带具体原因。
+  此前 `msg` 恒为字面量 `"操作失败"`,真实原因只在 `data` 里(前端 `http.ts` 据此把它折进 `e.message`)。
+  现在两处都带原因,对前端是**纯增量**;待前端不再依赖 `data` 携带原因后,再收敛为
+  「`msg` 放原因、`data` 只放业务数据」。见 [REFACTOR_PLAN-BACKEND.md](REFACTOR_PLAN-BACKEND.md) Phase 3a。
+- **鉴权是「默认拒绝 + 显式放行」**(2026-09-24 起):公开接口在 `config/SpringMvcConfig` 的
+  `excludePathPatterns` 声明;其余路径必须在 `config/AuthzRules` 的规则表里登记「路径 → 允许角色」,
+  **未登记的路径对所有角色一律 403**。规则表按**路径段**匹配(`AntPathMatcher`),不再用 `String.startsWith`。
+- **角色**:`/admin/**` → ADMIN、`/merchant/**` → SHOP、`/chat/**` → USER 或 SHOP、
+  `/notifications/**` → 三种角色(通知按角色投递);其余见 `AuthzRules`。
+- 未知路径对已登录用户返回 **403**、对匿名用户 **401**(而非 404):拦截先于 handler 解析生效,
+  好处是探测者无法区分路径存在与否。
 - 后端模块包名 `com.project.platform`,主类 `ProjectManagement`,端口 1000。
 
 ---
@@ -184,7 +193,21 @@
 
 ## 2. 传统 CRUD 控制器(17 个)
 
-> 标准模板:`page`(分页) / `selectById` / `list` / `add` / `update` / `delBatch`(批量删),均真实代理到对应 Service。下表只列前缀与额外业务端点。
+> ⚠️ **2026-09-24 起:下表绝大多数前缀已「默认拒绝」,对任何角色都返回 403。**
+> 授权改为「默认拒绝 + 显式放行表」后(`config/AuthzRules`),只有**前端真实调用的端点**被登记放行。
+> 经对账(`web/src/api/modules/*.ts` 全量抽取 + 核实 `api/` 之外无裸 HTTP 调用),
+> 传统 CRUD 里**仅 `/shoppingCart/page|add|update|delBatch` 四个端点仍放行**。
+>
+> **仍放行**:`/shoppingCart/{page,add,update,delBatch}`、`/file/upload`、`/file/**`(非图片下载)、
+> `/common/*`(见 §1 表)。
+> **已关闭(403)**:`/user`、`/admin-accounts`、`/shop`、`/product`、`/productOrder`、`/productType`、
+> `/productCollect`、`/productBrowsingHistory`、`/productOrderEvaluate`、`/shippingAddress`、
+> `/shopCollect`、`/slideshow`、`/advertising`、`/statisticalReportForms`,
+> 以及 `/shoppingCart/{selectById,list,createOrder}`。
+> 关闭方式**不删端点、不改 URL** —— 只是不再登记放行,需要时可随时加回规则表。
+> 详见 [REFACTOR_PLAN-BACKEND.md](REFACTOR_PLAN-BACKEND.md) Phase 1a。
+
+> 下表描述的是这些端点的**实现情况**(在它们仍可达时的行为),保留作为历史与参考。
 
 | 前缀 | 额外业务端点 | Service |
 |------|-------------|---------|
@@ -210,18 +233,23 @@
 
 对照 [docs/API接口说明.md](API接口说明.md),后端已通过门面控制器补齐了绝大部分路径,剩余差异:
 
-| 差异点 | 说明 | 归属阶段 |
+| 差异点 | 说明 | 归属 |
 |--------|------|----------|
-| `/payments/*` | 纯 mock,无表 | Phase 2 |
-| `/checkout/summary` | 伪计算(信任前端 price);`/checkout/promo` 已接 coupon 表 | Phase 2 |
-| `/addresses/:id/default` | no-op | Phase 2 |
-| `/search/trending`、facets | 硬编码/空 | Phase 3 |
-| `/products/category-counts` | 硬编码 0 | Phase 3 |
-| `/merchant/wallet*` | 无表 | Phase 3 |
-| `/merchant/settings`、`/admin/settings` | 硬编码 + no-op | Phase 3 |
-| dashboard stats(admin/merchant) | 硬编码 0 | Phase 3 |
-| `/merchants/:id/profile` | stats 硬编码 | Phase 3 |
-| 密码找回 | 前端 `email` vs 后端 `tel`;token 复用为 userId | Phase 4 |
+| 授权收口 | 传统 CRUD 绝大多数前缀自 2026-09-24 起默认拒绝(403),仅购物车 4 个端点仍放行 —— 见 §2 | 重构 Phase 1a |
+| 错误模型 | `msg` 与 `data` 双写原因(过渡态);补上 5 个缺失的异常处理器(畸形 JSON/类型不匹配/缺参数/方法不支持/无处理器:此前一律 500) | 重构 Phase 3 |
+| `/payments/*` | ~~纯 mock,无表~~ 已不成立:Phase 2 建了 `payment` 表,下单会真实落库(order_no 唯一键) | 已完成 |
+| `/checkout/summary` | ~~伪计算(信任前端 price)~~ 已不成立:现按 `product.price` 从 DB 重算小计/运费/税/满减 | 已完成 |
+| `/addresses/:id/default` | no-op | 待办 |
+| `/search/trending`、facets | 硬编码/空 | 待办 |
+| `/products/category-counts` | 硬编码 0 | 待办 |
+| `/merchant/wallet*` | 无表 | 待办 |
+| `/merchant/settings`、`/admin/settings` | 硬编码 + no-op | 待办 |
+| dashboard stats(admin/merchant) | 硬编码 0 | 待办 |
+| `/merchants/:id/profile` | stats 硬编码 | 待办 |
+| 密码找回 | 前端 `email` vs 后端 `tel`;token 复用为 userId | 待办 |
+
+> 注:「归属」列里「重构 Phase x」指 [REFACTOR_PLAN-BACKEND.md](REFACTOR_PLAN-BACKEND.md) 的阶段编号,
+> 与本仓库原有的 Phase 1–4 路线图**不是同一套编号**,勿混。
 
 ## 4. 维护约定
 

@@ -36,15 +36,22 @@
 
 ## 2. 问题清单(按类别,均带证据)
 
-> **取证纪律(踩过两次,写下来)**:本项目的校验**分散在多层**——除了 service 里的判空/判角色,
-> 还有 **mapper 注解 SQL 的 WHERE 条件**。断言「某处没有校验 X」之前,必须把整条调用链
-> (controller → service → mapper SQL)读完。
+> **取证纪律(踩过三次,写下来)**:
 >
-> 反例一:`retrievePassword` 曾被判为「泄漏账号存在性」,实为**先校验验证码**再查用户,不成立。
-> 反例二(2026-09-24):`CouponServiceImpl.applyByCode` 曾被判为「不校验 status/expires_at」,
-> 实为 **`CouponMapper.selectByCode` 的 WHERE 里带了 `status='enabled' AND expires_at > NOW()`**,
-> 过期/下架券根本查不出来,行为本就正确。
-> 两次都是**假 finding**,都已撤回。宁可不报,不要错报。
+> **一、断言「某处没有校验 X」之前,把整条调用链(controller → service → mapper SQL)读完。**
+> 本项目的校验分散在多层,除了 service 里的判空/判角色,还有 **mapper 注解 SQL 的 WHERE 条件**。
+> - 反例一:`retrievePassword` 曾被判为「泄漏账号存在性」,实为**先校验验证码**再查用户,不成立。
+> - 反例二:`CouponServiceImpl.applyByCode` 曾被判为「不校验 status/expires_at」,实为
+>   **`CouponMapper.selectByCode` 的 WHERE 里带了 `status='enabled' AND expires_at > NOW()`**。
+>
+> **二、断言「某段代码能被某个请求到达」之前,也要实测 —— Spring 的 handler/interceptor 顺序反直觉。**
+> - 反例三(2026-09-24):曾推断「无 handler 时拦截器不跑,所以 `DELETE /no/such` 会到
+>   `NoResourceFoundException`」。实测返回 **401**,因为 Spring 把 `/**` 映射到静态资源处理器时
+>   **不限方法**,方法检查在 handler 内部 → `getHandler()` 对任何路径都成功 → **拦截器总有得跑**。
+>   结论:`NoResourceFoundException` 只有**白名单路径**才能触发;非白名单的未知路径一律先被
+>   默认拒绝挡掉(匿名 401 / 已登录 403)。
+>
+> **两次假 finding 与一次错误的可达性推断,共同教训:先跑一遍,再下结论。** 宁可不报,不要错报。
 
 ### A. 安全
 
