@@ -1,6 +1,6 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.SearchRequestDTO;
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductType;
 import com.project.platform.service.ProductService;
@@ -62,13 +62,13 @@ public class StorefrontSearchController {
      * POST /search — advanced search with filters
      */
     @PostMapping
-    public ResponseVO<Map<String, Object>> search(@RequestBody JSONObject params) {
+    public ResponseVO<Map<String, Object>> search(@RequestBody SearchRequestDTO params) {
         Map<String, Object> query = new HashMap<>();
-        String q = params.getString("q");
+        String q = params.getQ();
         if (q != null && !q.isEmpty()) {
             query.put("name", q);
         }
-        String category = params.getString("category");
+        String category = params.getCategory();
         if (category != null && !category.isEmpty()) {
             List<ProductType> types = productTypeService.list();
             for (ProductType pt : types) {
@@ -79,16 +79,17 @@ public class StorefrontSearchController {
             }
         }
 
-        int page = params.getIntValue("page");
+        // 原实现用 getIntValue 读(缺失得 0),再由「< 1 → 默认」收敛;此处 null 与 <1 同样收敛
+        int page = params.getPage() == null ? 1 : params.getPage();
         if (page < 1) page = 1;
-        int limit = params.getIntValue("limit");
+        int limit = params.getLimit() == null ? 20 : params.getLimit();
         if (limit < 1) limit = 20;
 
         PageVO<Product> pageVO = productService.page(query, page, limit);
         List<Product> products = pageVO.getList();
 
         // Sort
-        String sort = params.getString("sort");
+        String sort = params.getSort();
         if ("price-asc".equals(sort)) {
             products.sort(Comparator.comparing(Product::getPrice));
         } else if ("price-desc".equals(sort)) {

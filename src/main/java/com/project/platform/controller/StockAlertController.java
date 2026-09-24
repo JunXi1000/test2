@@ -1,6 +1,6 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.StockAlertSubscribeDTO;
 import com.project.platform.entity.StockAlert;
 import com.project.platform.service.StockAlertService;
 import com.project.platform.utils.CurrentUserThreadLocal;
@@ -44,14 +44,14 @@ public class StockAlertController {
     }
 
     @PostMapping("")
-    public ResponseVO<?> subscribe(@RequestBody JSONObject body) {
+    public ResponseVO<?> subscribe(@RequestBody StockAlertSubscribeDTO body) {
         Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
         StockAlert alert = new StockAlert();
         alert.setUserId(userId);
-        alert.setProductId(body.getInteger("productId"));
-        alert.setProductTitle(body.getString("productTitle"));
-        alert.setProductImage(body.getString("productImage"));
-        alert.setEmail(body.getString("email"));
+        alert.setProductId(body.getProductId());
+        alert.setProductTitle(body.getProductTitle());
+        alert.setProductImage(body.getProductImage());
+        alert.setEmail(body.getEmail());
         stockAlertService.subscribe(alert);
         return ResponseVO.ok();
     }

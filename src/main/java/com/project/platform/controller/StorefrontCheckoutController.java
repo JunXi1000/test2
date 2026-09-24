@@ -1,6 +1,7 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.CheckoutPromoDTO;
+import com.project.platform.dto.CheckoutSummaryDTO;
 import com.project.platform.entity.Product;
 import com.project.platform.exception.CustomException;
 import com.project.platform.service.CouponService;
@@ -34,22 +35,19 @@ public class StorefrontCheckoutController {
      * - 限制:优惠/运费/税为**展示用**,不写入订单/支付金额(与钱包路径 totalMoney 保持一致)。
      */
     @PostMapping("/summary")
-    public ResponseVO<Map<String, Object>> calculateSummary(@RequestBody JSONObject body) {
+    public ResponseVO<Map<String, Object>> calculateSummary(@RequestBody CheckoutSummaryDTO body) {
         BigDecimal[] tierThresholds = {new BigDecimal("100"), new BigDecimal("200"), new BigDecimal("300")};
         BigDecimal[] tierDiscounts = {new BigDecimal("10"), new BigDecimal("30"), new BigDecimal("60")};
 
         BigDecimal subtotal = BigDecimal.ZERO;
-        var items = body.getJSONArray("items");
+        List<CheckoutSummaryDTO.Item> items = body.getItems();
         if (items != null) {
-            for (int i = 0; i < items.size(); i++) {
-                var item = items.getJSONObject(i);
-                // 兼容前端 CartItem:productId ?? id(cart store 的 id 即商品 id)
-                Integer productId = item.getInteger("productId");
-                if (productId == null) {
-                    productId = item.getInteger("id");
-                }
-                int qty = item.getIntValue("quantity");
-                if (productId == null || qty <= 0) {
+            for (CheckoutSummaryDTO.Item item : items) {
+                // 兼容前端 CartItem:productId 优先,缺省回落 id(DTO 里 resolveProductId 封装同一规则)
+                Integer productId = item.resolveProductId();
+                Integer qty = item.getQuantity();
+                // 原实现用 getIntValue 读数量(缺失得 0),故「缺失」与「<=0」同样拒绝
+                if (productId == null || qty == null || qty <= 0) {
                     throw new CustomException("结算商品参数不合法");
                 }
                 Product product = productService.selectById(productId);
@@ -82,9 +80,9 @@ public class StorefrontCheckoutController {
     }
 
     @PostMapping("/promo")
-    public ResponseVO<Map<String, Object>> applyPromo(@RequestBody JSONObject body) {
-        String code = body.getString("code");
-        BigDecimal subtotal = body.getBigDecimal("subtotal");
+    public ResponseVO<Map<String, Object>> applyPromo(@RequestBody CheckoutPromoDTO body) {
+        String code = body.getCode();
+        BigDecimal subtotal = body.getSubtotal();
         // 缺 code 时原实现会在下面的 code.toUpperCase() 抛 NPE → 500。请求不合法应当是 400。
         // 注:同方法内另两处校验用的是 CustomException 默认的 409,语义上同样偏了,
         // 属既有的错误码不一致,未纳入本次改动范围。

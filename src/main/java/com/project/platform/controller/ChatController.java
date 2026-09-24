@@ -1,6 +1,6 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.ChatSendMessageDTO;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.entity.Conversation;
 import com.project.platform.entity.Message;
@@ -49,21 +49,19 @@ public class ChatController {
      * <p>发送者身份**一律取自 token**:{@code senderId} 用 {@code currentUser.getId()},
      * {@code senderType} 用 {@code currentUser.getType()}。此前 {@code senderType} 由请求体里的
      * {@code isMerchant} 布尔决定,买家只要传 {@code isMerchant:true} 就能以「店铺」身份发消息
-     * —— 而 user 与 shop 是两套独立 id 空间,等于伪造发送者。请求体里的该字段现已忽略。
+     * —— 而 user 与 shop 是两套独立 id 空间,等于伪造发送者。入参已换成
+     * {@link ChatSendMessageDTO},该字段不再被声明,传了也会被忽略。
      */
     @PostMapping("/messages")
-    public ResponseVO<Message> sendMessage(@RequestBody JSONObject body) {
+    public ResponseVO<Message> sendMessage(@RequestBody ChatSendMessageDTO body) {
         CurrentUserDTO currentUser = CurrentUserThreadLocal.getCurrentUser();
 
         String senderType = "SHOP".equals(currentUser.getType()) ? "SHOP" : "USER";
         Integer senderId = currentUser.getId();
-        Integer receiverId = body.getInteger("receiverId");
-        String content = body.getString("content");
-        Integer conversationId = body.getInteger("conversationId");
-        Integer productId = body.getInteger("productId");
 
         Message message = chatService.sendMessage(
-                senderId, senderType, receiverId, content, conversationId, productId);
+                senderId, senderType, body.getReceiverId(), body.getContent(),
+                body.getConversationId(), body.getProductId());
         return ResponseVO.ok(message);
     }
 

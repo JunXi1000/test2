@@ -1,6 +1,6 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.ReturnRequestCreateDTO;
 import com.project.platform.entity.ReturnRequest;
 import com.project.platform.service.ReturnRequestService;
 import com.project.platform.utils.CurrentUserThreadLocal;
@@ -37,17 +37,17 @@ public class ReturnRequestController {
     }
 
     @PostMapping("")
-    public ResponseVO<Map<String, Object>> create(@RequestBody JSONObject body) {
+    public ResponseVO<Map<String, Object>> create(@RequestBody ReturnRequestCreateDTO body) {
         Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
         ReturnRequest req = new ReturnRequest();
         req.setUserId(userId);
-        req.setOrderId(body.getString("orderId"));
-        req.setProductTitle(body.getString("productTitle"));
-        req.setProductImage(body.getString("productImage"));
-        req.setReason(body.getString("reason"));
-        req.setDetail(body.getString("detail"));
-        BigDecimal amount = body.getBigDecimal("refundAmount");
-        req.setRefundAmount(amount == null ? BigDecimal.ZERO : amount);
+        req.setOrderId(body.getOrderId());
+        req.setProductTitle(body.getProductTitle());
+        req.setProductImage(body.getProductImage());
+        req.setReason(body.getReason());
+        req.setDetail(body.getDetail());
+        // 与既有实现一致:缺省按 0 处理
+        req.setRefundAmount(body.getRefundAmount() == null ? BigDecimal.ZERO : body.getRefundAmount());
         return ResponseVO.ok(toMap(returnRequestService.create(req)));
     }
 

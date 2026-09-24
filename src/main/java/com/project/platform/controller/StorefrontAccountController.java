@@ -1,6 +1,8 @@
 package com.project.platform.controller;
 
+import com.project.platform.dto.AccountProfileDTO;
 import com.project.platform.dto.CurrentUserDTO;
+import com.project.platform.dto.NotificationPrefsDTO;
 import com.project.platform.entity.UserNotificationPref;
 import com.project.platform.service.UserNotificationPrefService;
 import com.project.platform.service.UserService;
@@ -38,16 +40,19 @@ public class StorefrontAccountController {
     }
 
     @PostMapping("/profile")
-    public ResponseVO<?> updateProfile(@RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateProfile(@RequestBody AccountProfileDTO data) {
         CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
-        if (data.containsKey("firstName") || data.containsKey("lastName")) {
-            current.setNickname((String) data.getOrDefault("firstName", current.getNickname()));
+        // 既有实现用 containsKey 判断「是否要更新」,故显式传 null 会把字段置空;
+        // 换成 DTO 后 null 与「未传」不可区分,一律视为不更新。前端每次发送完整对象,
+        // 该差异在实践中不可观测(详见 AccountProfileDTO 的类注释)。
+        if (data.getFirstName() != null || data.getLastName() != null) {
+            current.setNickname(data.getFirstName() != null ? data.getFirstName() : current.getNickname());
         }
-        if (data.containsKey("phone")) {
-            current.setTel((String) data.get("phone"));
+        if (data.getPhone() != null) {
+            current.setTel(data.getPhone());
         }
-        if (data.containsKey("avatar")) {
-            current.setAvatarUrl((String) data.get("avatar"));
+        if (data.getAvatar() != null) {
+            current.setAvatarUrl(data.getAvatar());
         }
         userService.updateCurrentUserInfo(current);
         return ResponseVO.ok();
@@ -65,21 +70,15 @@ public class StorefrontAccountController {
     }
 
     @PostMapping("/notifications")
-    public ResponseVO<?> updateNotificationPrefs(@RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateNotificationPrefs(@RequestBody NotificationPrefsDTO data) {
         CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
         UserNotificationPref pref = new UserNotificationPref();
         pref.setUserId(current.getId());
-        pref.setEmailOrder(toBool(data.get("emailOrder"), true));
-        pref.setEmailPromo(toBool(data.get("emailPromo"), false));
-        pref.setSmsOrder(toBool(data.get("smsOrder"), true));
+        // null 视为未传,按既有默认值兜底(与原 toBool(v, default) 对 null 的处理一致)
+        pref.setEmailOrder(data.getEmailOrder() != null ? data.getEmailOrder() : true);
+        pref.setEmailPromo(data.getEmailPromo() != null ? data.getEmailPromo() : false);
+        pref.setSmsOrder(data.getSmsOrder() != null ? data.getSmsOrder() : true);
         userNotificationPrefService.upsert(pref);
         return ResponseVO.ok();
-    }
-
-    private boolean toBool(Object value, boolean def) {
-        if (value == null) {
-            return def;
-        }
-        return Boolean.parseBoolean(String.valueOf(value));
     }
 }

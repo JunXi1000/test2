@@ -94,6 +94,14 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
   docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test -Dtest=SomeTest -DfailIfNoSpecifiedTests=false'
   ```
   **必须带 `clean`**,原因见「常见问题」里 IDE 污染 `target/classes` 那条。
+  **跑闸门之前必须先停掉容器内的 dev 后端**,否则 `maven-clean-plugin` 删不掉被运行中的 JVM
+  占用的 `target/`(报 `Failed to clean project: Failed to delete /workspace/target`):
+  ```bash
+  docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'
+  # 跑完闸门后再拉起来
+  docker exec -d nexus-dev bash -lc 'cd /workspace && setsid nohup mvn spring-boot:run > /var/log/backend.log 2>&1 < /dev/null &'
+  ```
+  (`pkill` 的匹配串要用中括号写法,否则会匹配到 `pkill` 自己所在的命令行 —— 见「常见问题」。)
   2026-09-24 建立的基线:64 个测试全绿(11 个 test set)。另有三个**特性化测试**类用于钉住重构前行为(见 `docs/REFACTOR_PLAN-BACKEND.md`):`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、`AuthorizationBaselineTest`,后者的 B 段断言的是**当前缺陷**,重构时应翻转为 403。
 - **前端**:目前无单测脚本;`web/tests/*.spec.ts` 为 Playwright 端到端(可选择性运行)。改动页面建议手动验证:`npm run dev` + 控制台切 `RUNTIME_USE_MOCK`。
 
