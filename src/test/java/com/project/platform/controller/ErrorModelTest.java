@@ -94,6 +94,28 @@ class ErrorModelTest extends BaseControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
+    // ─────────────────────── 商家端订单状态:一个 500 与一个伪 404 ───────────────────────
+
+    @Test
+    @DisplayName("商家端改订单状态:status 缺失 → 400(此前 switch(null) 抛 NPE → 500)")
+    void merchantOrderStatusMissingIsBadRequest() throws Exception {
+        put("/merchant/orders/1/status", shopToken(), Map.of())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("商家端改不存在的订单 → 真正的 HTTP 404")
+    void merchantOrderNotFoundIsRealNotFound() throws Exception {
+        // 注:控制器里那行 `if (order == null) return ResponseVO.fail(404, ...)` **不可达** ——
+        // selectById 内部已对 null 抛 CustomException(NOT_FOUND, "订单不存在")。
+        // 那条写法的问题(未包 ResponseEntity ⇒ 真实状态码会是 200)因此**从未可观测**;
+        // 本用例钉住的是真实 404 由 service 层给出,以及断言的是 HTTP 状态码而非 body 里的 code。
+        put("/merchant/orders/999999/status", shopToken(), Map.of("status", "processing"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(404));
+    }
+
     // ─────────────────────── 双写过渡 ───────────────────────
 
     @Test

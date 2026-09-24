@@ -1,6 +1,7 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.AdminMerchantUpsertDTO;
+import com.project.platform.dto.AdminUserUpdateDTO;
 import com.project.platform.entity.*;
 import com.project.platform.service.*;
 import com.project.platform.utils.CurrentUserThreadLocal;
@@ -102,11 +103,12 @@ public class AdminApiController {
     }
 
     @PutMapping("/users/{id}")
-    public ResponseVO<?> updateUser(@PathVariable Integer id, @RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateUser(@PathVariable Integer id, @RequestBody AdminUserUpdateDTO data) {
         User u = userService.selectById(id);
         if (u != null) {
-            if (data.containsKey("name")) u.setNickname((String) data.get("name"));
-            if (data.containsKey("email")) u.setEmail((String) data.get("email"));
+            // 既有实现用 containsKey 判断;换成 DTO 后 null 即视为不更新(显式 null 不再置空)
+            if (data.getName() != null) u.setNickname(data.getName());
+            if (data.getEmail() != null) u.setEmail(data.getEmail());
             userService.updateById(u);
         }
         return ResponseVO.ok();
@@ -162,12 +164,13 @@ public class AdminApiController {
     }
 
     @PostMapping("/merchants")
-    public ResponseVO<?> createMerchant(@RequestBody Map<String, Object> data) {
+    public ResponseVO<?> createMerchant(@RequestBody AdminMerchantUpsertDTO data) {
         Shop shop = new Shop();
-        shop.setName((String) data.get("storeName"));
-        shop.setNickname((String) data.get("ownerName"));
-        shop.setEmail((String) data.get("email"));
-        shop.setUsername((String) data.get("email"));
+        // 既有行为如实保留:username 直接取 email,密码硬编码为 "123456"(属 Phase 4 的业务问题)
+        shop.setName(data.getStoreName());
+        shop.setNickname(data.getOwnerName());
+        shop.setEmail(data.getEmail());
+        shop.setUsername(data.getEmail());
         shop.setPassword("123456");
         shop.setStatus("启用");
         shop.setCreateTime(LocalDateTime.now());
@@ -176,12 +179,13 @@ public class AdminApiController {
     }
 
     @PutMapping("/merchants/{id}")
-    public ResponseVO<?> updateMerchant(@PathVariable Integer id, @RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateMerchant(@PathVariable Integer id, @RequestBody AdminMerchantUpsertDTO data) {
         Shop s = shopService.selectById(id);
         if (s != null) {
-            if (data.containsKey("storeName")) s.setName((String) data.get("storeName"));
-            if (data.containsKey("ownerName")) s.setNickname((String) data.get("ownerName"));
-            if (data.containsKey("email")) s.setEmail((String) data.get("email"));
+            // 既有实现用 containsKey 判断;换成 DTO 后 null 即视为不更新
+            if (data.getStoreName() != null) s.setName(data.getStoreName());
+            if (data.getOwnerName() != null) s.setNickname(data.getOwnerName());
+            if (data.getEmail() != null) s.setEmail(data.getEmail());
             shopService.updateById(s);
         }
         return ResponseVO.ok();
@@ -301,7 +305,9 @@ public class AdminApiController {
     }
 
     @PutMapping("/reviews/{id}")
-    public ResponseVO<?> updateReviewStatus(@PathVariable Integer id, @RequestBody JSONObject body) {
+    public ResponseVO<?> updateReviewStatus(@PathVariable Integer id) {
+        // 该端点原本接收 body 但**从不读取**(前端发 {status},被静默丢弃,却返回 200)。
+        // 入参已去掉以如实表达「输入被忽略」;是补实现还是删端点属业务决策,留给 Phase 4。
         return ResponseVO.ok();
     }
 
@@ -324,7 +330,9 @@ public class AdminApiController {
     }
 
     @PutMapping("/settings")
-    public ResponseVO<?> updateSettings(@RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateSettings() {
+        // 该端点原本接收 body 但**从不读取**(前端发完整 settings,被静默丢弃,却返回 200)。
+        // 入参已去掉以如实表达「输入被忽略」;补实现还是删端点留给 Phase 4。
         return ResponseVO.ok();
     }
 

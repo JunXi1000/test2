@@ -1,7 +1,7 @@
 package com.project.platform.service;
 
-import com.alibaba.fastjson2.JSONObject;
 import com.project.platform.dto.CurrentUserDTO;
+import com.project.platform.dto.RegisterRequestDTO;
 import com.project.platform.dto.RetrievePasswordDTO;
 import com.project.platform.dto.UpdatePasswordDTO;
 
@@ -21,7 +21,7 @@ public interface CommonService<T> {
      * @param data
      */
 
-    void register(JSONObject data);
+    void register(RegisterRequestDTO data);
 
     /**
      * 更新当前用户信息

@@ -1,6 +1,6 @@
 package com.project.platform.service.impl;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.RegisterRequestDTO;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.dto.RetrievePasswordDTO;
 import com.project.platform.dto.UpdatePasswordDTO;
@@ -116,17 +116,17 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    public void register(JSONObject data) {
+    public void register(RegisterRequestDTO data) {
         // 双保险:即使绕过 Controller 白名单,也禁止匿名创建管理员
         CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
         if (current == null || !"ADMIN".equals(current.getType())) {
             throw new CustomException(HttpStatus.FORBIDDEN, "禁止匿名创建管理员");
         }
         Admin admin = new Admin();
-        admin.setUsername(data.getString("username"));
-        admin.setNickname(data.getString("nickname"));
-        admin.setAvatarUrl(data.getString("avatarUrl"));
-        admin.setPassword(data.getString("password"));
+        admin.setUsername(data.getUsername());
+        admin.setNickname(data.getNickname());
+        admin.setAvatarUrl(data.getAvatarUrl());
+        admin.setPassword(data.getPassword());
         admin.setStatus("启用");
         insert(admin);
     }

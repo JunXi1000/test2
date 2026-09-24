@@ -1,9 +1,10 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.dto.LoginDTO;
+import com.project.platform.dto.RegisterRequestDTO;
 import com.project.platform.dto.RetrievePasswordDTO;
+import com.project.platform.dto.SendResetCodeDTO;
 import com.project.platform.dto.UpdatePasswordDTO;
 import com.project.platform.exception.CustomException;
 import com.project.platform.service.AdminService;
@@ -71,8 +72,8 @@ public class CommonController {
      */
 
     @PutMapping("register")
-    public ResponseVO register(@RequestBody JSONObject data) {
-        String type = data.getString("type");
+    public ResponseVO register(@RequestBody RegisterRequestDTO data) {
+        String type = data.getType();
         // 仅允许普通用户自助注册;SHOP 走商家入驻审核,ADMIN 一律拒绝,杜绝匿名建管理员
         if (!"USER".equals(type)) {
             throw new CustomException(HttpStatus.FORBIDDEN, "仅支持普通用户注册");
@@ -116,9 +117,9 @@ public class CommonController {
      * @param data {type, tel}
      */
     @PostMapping("sendResetCode")
-    public ResponseVO<String> sendResetCode(@RequestBody JSONObject data) {
-        String type = data.getString("type");
-        String tel = data.getString("tel");
+    public ResponseVO<String> sendResetCode(@RequestBody SendResetCodeDTO data) {
+        String type = data.getType();
+        String tel = data.getTel();
         if (type == null || type.isEmpty() || tel == null || tel.isEmpty()) {
             throw new CustomException("用户类型与手机号不能为空");
         }

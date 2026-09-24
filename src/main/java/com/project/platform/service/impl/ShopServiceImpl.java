@@ -1,6 +1,6 @@
 package com.project.platform.service.impl;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.RegisterRequestDTO;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.dto.RetrievePasswordDTO;
 import com.project.platform.dto.UpdatePasswordDTO;
@@ -111,14 +111,14 @@ public class ShopServiceImpl  implements ShopService {
     }
 
     @Override
-    public void register(JSONObject data) {
+    public void register(RegisterRequestDTO data) {
         Shop shop = new Shop();
-        shop.setUsername(data.getString("username"));
-        shop.setNickname(data.getString("nickname"));
-        shop.setAvatarUrl(data.getString("avatarUrl"));
-        shop.setPassword(data.getString("password"));
-        shop.setAptitudeImgs(data.getString("aptitudeImgs"));
-        shop.setName(data.getString("name"));
+        shop.setUsername(data.getUsername());
+        shop.setNickname(data.getNickname());
+        shop.setAvatarUrl(data.getAvatarUrl());
+        shop.setPassword(data.getPassword());
+        shop.setAptitudeImgs(data.getAptitudeImgs());
+        shop.setName(data.getName());
         shop.setStatus("禁用");//默认禁用，需要管理员审核
         insert(shop);
     }

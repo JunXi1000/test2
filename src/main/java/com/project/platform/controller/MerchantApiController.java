@@ -1,15 +1,17 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.MerchantOrderStatusDTO;
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductOrder;
 import com.project.platform.entity.Shop;
+import com.project.platform.exception.CustomException;
 import com.project.platform.service.*;
 import com.project.platform.utils.AccessGuard;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -134,10 +136,21 @@ public class MerchantApiController {
     }
 
     @PutMapping("/orders/{id}/status")
-    public ResponseVO<?> updateOrderStatus(@PathVariable Integer id, @RequestBody JSONObject body) {
-        String status = body.getString("status");
+    public ResponseVO<?> updateOrderStatus(@PathVariable Integer id, @RequestBody MerchantOrderStatusDTO body) {
+        String status = body.getStatus();
+        // 此前 switch(status) 没有 default,status 缺失 → switch(null) 抛 NPE → 500。
+        // 请求不合法应当是 400。(status 为**未知值**时仍是静默 no-op,那是业务语义问题,留给 Phase 4)
+        if (status == null) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "status 不能为空");
+        }
         ProductOrder order = productOrderService.selectById(id);
-        if (order == null) return ResponseVO.fail(404, "Order not found");
+        if (order == null) {
+            // 说明:本分支**当前不可达** —— productOrderService.selectById 内部已对 null 抛
+            // CustomException(NOT_FOUND, "订单不存在"),永远不会返回 null 到这里。
+            // 保留它并改成抛异常(而非 `return ResponseVO.fail(404, ...)`):后者未包 ResponseEntity、
+            // 类/方法上也无 @ResponseStatus,若真被执行会返回 **HTTP 200 + body 里 404**,是个陷阱写法。
+            throw new CustomException(HttpStatus.NOT_FOUND, "Order not found");
+        }
         // Map frontend status to action
         switch (status) {
             case "processing" -> order.setStatus("待发货");
@@ -180,7 +193,10 @@ public class MerchantApiController {
     }
 
     @PostMapping("/wallet/withdraw")
-    public ResponseVO<?> withdraw(@RequestBody JSONObject body) {
+    public ResponseVO<?> withdraw() {
+        // 该端点原本接收 body 但**从不读取**(前端发 {amount, destinationId, ...},被静默丢弃,
+        // 却返回 200,前端以为提现已受理)。入参已去掉以如实表达「输入被忽略」;
+        // 补实现还是删端点留给 Phase 4。
         return ResponseVO.ok();
     }
 
@@ -205,7 +221,9 @@ public class MerchantApiController {
     }
 
     @PutMapping("/settings")
-    public ResponseVO<?> updateSettings(@RequestBody Map<String, Object> data) {
+    public ResponseVO<?> updateSettings() {
+        // 同 withdraw:原本接收 body 但从不读取(前端发完整 settings 被丢弃、返回 200)。
+        // 入参已去掉;补实现还是删端点留给 Phase 4。
         return ResponseVO.ok();
     }
 

@@ -102,6 +102,9 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
   docker exec -d nexus-dev bash -lc 'cd /workspace && setsid nohup mvn spring-boot:run > /var/log/backend.log 2>&1 < /dev/null &'
   ```
   (`pkill` 的匹配串要用中括号写法,否则会匹配到 `pkill` 自己所在的命令行 —— 见「常见问题」。)
+  若报 `Failed to delete /workspace/target` 但**确认没有后端在跑**,那是**瞬时占用**:本仓库位于
+  OneDrive 同步目录下,同步客户端会去扫 `target/` 并短暂持有文件句柄。**重试即可**;
+  反复出现可把 `target/` 排除出 OneDrive 同步。
   2026-09-24 建立的基线:64 个测试全绿(11 个 test set)。另有三个**特性化测试**类用于钉住重构前行为(见 `docs/REFACTOR_PLAN-BACKEND.md`):`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、`AuthorizationBaselineTest`,后者的 B 段断言的是**当前缺陷**,重构时应翻转为 403。
 - **前端**:目前无单测脚本;`web/tests/*.spec.ts` 为 Playwright 端到端(可选择性运行)。改动页面建议手动验证:`npm run dev` + 控制台切 `RUNTIME_USE_MOCK`。
 

@@ -1,6 +1,7 @@
 package com.project.platform.controller;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.PaymentCompleteActionDTO;
+import com.project.platform.dto.PaymentConfirmDTO;
 import com.project.platform.dto.StorefrontCheckoutDTO;
 import com.project.platform.service.PaymentService;
 import com.project.platform.service.ProductOrderService;
@@ -50,12 +51,13 @@ public class StorefrontPaymentController {
      * 幂等:支付单已支付时直接返回 succeeded,不重复扣款。
      */
     @PostMapping("/confirm")
-    public ResponseVO<Map<String, Object>> confirmPayment(@RequestBody JSONObject body) {
-        String orderNo = body.getString("orderId");
+    public ResponseVO<Map<String, Object>> confirmPayment(@RequestBody PaymentConfirmDTO body) {
+        // 既有回落到顺序:orderId 优先,为空则读 paymentId(前端以 paymentId 携带 orderNo)
+        String orderNo = body.getOrderId();
         if (orderNo == null || orderNo.isEmpty()) {
-            orderNo = body.getString("paymentId");
+            orderNo = body.getPaymentId();
         }
-        paymentService.confirm(orderNo, body.getString("channel"));
+        paymentService.confirm(orderNo, body.getChannel());
         Map<String, Object> result = new HashMap<>();
         result.put("status", "succeeded");
         result.put("orderId", orderNo);
@@ -67,10 +69,11 @@ public class StorefrontPaymentController {
      * 读支付单 channel 转调 confirm,与 confirm 同语义(幂等)。
      */
     @PostMapping("/complete-action")
-    public ResponseVO<Map<String, Object>> completeAction(@RequestBody JSONObject body) {
-        String orderNo = body.getString("paymentId");
+    public ResponseVO<Map<String, Object>> completeAction(@RequestBody PaymentCompleteActionDTO body) {
+        // 注意与 confirm 的回落顺序**相反**:这里 paymentId 优先
+        String orderNo = body.getPaymentId();
         if (orderNo == null || orderNo.isEmpty()) {
-            orderNo = body.getString("orderId");
+            orderNo = body.getOrderId();
         }
         paymentService.complete(orderNo);
         Map<String, Object> result = new HashMap<>();

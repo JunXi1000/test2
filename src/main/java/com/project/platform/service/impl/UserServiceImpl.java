@@ -1,6 +1,6 @@
 package com.project.platform.service.impl;
 
-import com.alibaba.fastjson2.JSONObject;
+import com.project.platform.dto.RegisterRequestDTO;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.dto.RetrievePasswordDTO;
 import com.project.platform.dto.UpdatePasswordDTO;
@@ -160,11 +160,11 @@ public class UserServiceImpl implements UserService {
      * 空白用户名、弱密码、非法邮箱、超长字段会导致入库脏数据或 DB 列宽溢出报错。
      */
     @Override
-    public void register(JSONObject data) {
-        String username = data.getString("username");
-        String password = data.getString("password");
-        String nickname = data.getString("nickname");
-        String email = data.getString("email");
+    public void register(RegisterRequestDTO data) {
+        String username = data.getUsername();
+        String password = data.getPassword();
+        String nickname = data.getNickname();
+        String email = data.getEmail();
 
         if (username == null || username.trim().isEmpty()) {
             throw new CustomException(HttpStatus.BAD_REQUEST, "用户名不能为空");
@@ -187,7 +187,7 @@ public class UserServiceImpl implements UserService {
         user.setUsername(username.trim());
         user.setPassword(password);
         user.setNickname(nickname);
-        user.setAvatarUrl(data.getString("avatarUrl"));
+        user.setAvatarUrl(data.getAvatarUrl());
         // 注册时邮箱必须同时落 email 列(前端把邮箱既当 username 又作为 email 字段传入),
         // 否则管理端用户列表 email 为空(登录用 username,这里两者一致)。
         user.setEmail(email.trim());
