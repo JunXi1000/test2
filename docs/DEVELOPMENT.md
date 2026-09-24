@@ -26,6 +26,37 @@
 
 演示账号(密码均 `123456`):管理员 `admin` / 买家 `user1` / 商家 `shop1`。
 
+### 2.4 配置与密钥(**必填环境变量**,2026-09-24 起)
+
+仓库里**不再有任何明文口令/密钥兜底**。以下四项必须由环境提供,缺任意一项会**明确报错停止**
+(compose 用 `${VAR:?...}` 拒绝启动,应用侧缺 `JWT_SECRET` 会抛异常)——而不是静默用弱口令跑起来:
+
+| 变量 | 用途 | 说明 |
+|------|------|------|
+| `SPRING_DATASOURCE_PASSWORD` | 后端连 MySQL 的口令 | `application.yaml` 里已无默认值 |
+| `RESET_PASSWORD` | 管理员重置用户密码时的默认新密码 | 同上,**不要**再用 `123456` |
+| `JWT_SECRET` | JWT 签名密钥 | `JwtUtils` 已无硬编码兜底:`-Djwt.secret`(测试) → `JWT_SECRET`(环境),都没有就启动失败 |
+| `MYSQL_ROOT_PASSWORD` | 容器内 MySQL 的 root 口令 | compose/Dockerfile 原有,现在由 `.env` 提供 |
+
+**容器里怎么配**(模板已备好):
+
+```bash
+cp docker/.env.example docker/.env      # 首次;docker/.env 已被 gitignore
+$EDITOR docker/.env                     # 给四项填真实值(模板里有生成建议)
+cd docker && docker compose up -d       # ⚠️ env 变更需**重建**容器,restart 不生效
+```
+
+**为什么不再给默认值**:原先 `application.yaml` 写着 `${SPRING_DATASOURCE_PASSWORD:123456}`、
+`${RESET_PASSWORD:123456}`,JwtUtils 里还留了一个"仅限本地开发"的硬编码签名密钥。这些一旦进仓库
+就等于公开 —— **尤其 JWT 密钥:谁都能拿它伪造任意用户的 token**。改成必填后,"起不来"取代了
+"看起来正常但用着公开密钥",这是两种失败里明显更好的那种。
+
+> 测试不受影响:口令与 `resetPassword` 由 `application-test.yaml` 覆盖,`jwt.secret` 由
+> `BaseControllerTest` 的静态块提供(用 System property 而非环境变量,不污染容器环境)。
+
+> 注:`sql/migrations/V1__security.sql` 里出现明文 `'123456'` 是**迁移的匹配条件**
+> (它按该值找出旧行改成 BCrypt),不是配置兜底,无法移除。
+
 ## 3. Mock 开关机制(务必理解)
 
 ```ts

@@ -25,6 +25,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Transactional
 public abstract class BaseControllerTest {
 
+    static {
+        // JwtUtils 不再有硬编码兜底密钥(公开的密钥等于没有签名),测试必须自己提供。
+        // 用 System property 而不是环境变量:不污染容器环境,也不依赖 CI 的 env 配置。
+        System.setProperty("jwt.secret", "test-only-secret-not-for-production-0123456789abcd");
+    }
+
     @Autowired
     protected MockMvc mockMvc;
 

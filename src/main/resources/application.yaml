@@ -15,7 +15,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/template_v3?useUnicode=true&useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -38,7 +38,10 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
-resetPassword: ${RESET_PASSWORD:123456}
+# 重置密码的默认值:**必填环境变量,不再有明文兜底**(§25:敏感配置不得提交到仓库)。
+# 缺这个变量时应用启动即失败,而不是静默用 123456 —— 那种"能跑起来"最危险。
+# 本地/容器怎么提供见 docs/DEVELOPMENT.md §「配置与密钥」。
+resetPassword: ${RESET_PASSWORD}
 
 # 是否在 /common/sendResetCode 响应中直接返回验证码。
 # 默认 false(安全):生产/默认 profile 不回显,验证码应走短信/邮件下发;

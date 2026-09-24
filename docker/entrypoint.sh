@@ -14,7 +14,7 @@ set -e
 
 DATA_DIR="${MYSQL_DATA_DIR:-/var/lib/mysql}"
 DB="${MYSQL_DATABASE:-template_v3}"
-PW="${MYSQL_ROOT_PASSWORD:-123456}"
+PW="${MYSQL_ROOT_PASSWORD}"
 # 安全:显式置空密码会回落默认弱口令(易被误以为"已禁用鉴权"),直接拒绝启动
 if [ -z "${MYSQL_ROOT_PASSWORD}" ]; then
   echo "!! MYSQL_ROOT_PASSWORD 被置空:禁止以默认密码 123456 回落,请显式设置密码" >&2

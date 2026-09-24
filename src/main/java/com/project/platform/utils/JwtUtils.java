@@ -28,12 +28,17 @@ public class JwtUtils {
     private static final long TOKEN_EXPIRED_TIME = 24L * 60 * 60 * 1000;
 
     /**
-     * jwt 加密密钥,由环境变量 JWT_SECRET 注入(生产必配,勿用兜底值)。
+     * jwt 签名密钥。来源优先级:{@code -Djwt.secret}(测试/本地) → {@code JWT_SECRET} 环境变量。
+     *
+     * <p><b>没有兜底值</b>:两者都没提供就抛异常让应用启动失败 —— 此前有一个硬编码的
+     * "仅限本地开发"密钥,但那串东西一旦进了仓库就等于公开(§12/§25),谁都能拿它伪造 token。
+     * "起不来"远好过"看起来正常但用着公开密钥"。
+     *
+     * <p>测试由 {@code BaseControllerTest} 的静态块设 {@code jwt.secret} 提供,不依赖兜底。
      */
     private static final String JWT_SECRET = resolveSecret();
 
     private static String resolveSecret() {
-        // 兼容 -Djwt.secret=xxx(测试/本地)与 JWT_SECRET 环境变量(生产)
         String fromSystem = System.getProperty("jwt.secret");
         if (fromSystem != null && !fromSystem.isBlank()) {
             return fromSystem;
@@ -42,8 +47,9 @@ public class JwtUtils {
         if (fromEnv != null && !fromEnv.isBlank()) {
             return fromEnv;
         }
-        // 仅限本地开发/测试的兜底值,长度 44B >= HS256 要求的 32B;生产必须由环境变量注入
-        return "dev-only-secret-2f8a1b9c3d4e5f6a7b8c9d0e1f2a3b4c";
+        throw new IllegalStateException(
+                "缺少 JWT 签名密钥:请设置环境变量 JWT_SECRET(或 -Djwt.secret=... 用于测试)。"
+                        + "本应用不再提供硬编码兜底值 —— 公开的密钥等于没有签名。");
     }
 
     /**
