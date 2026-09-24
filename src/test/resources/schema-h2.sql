@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS admin (
   tel VARCHAR(255),
   email VARCHAR(255),
   status VARCHAR(128),
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (username)
 );
 
 CREATE TABLE IF NOT EXISTS user (
@@ -23,7 +24,8 @@ CREATE TABLE IF NOT EXISTS user (
   email VARCHAR(255),
   status VARCHAR(128),
   balance DECIMAL(10,2) DEFAULT 0.00,
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (username)
 );
 
 CREATE TABLE IF NOT EXISTS shop (
@@ -38,7 +40,8 @@ CREATE TABLE IF NOT EXISTS shop (
   name VARCHAR(255),
   fans_count INT DEFAULT 0,
   aptitude_imgs VARCHAR(500),
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (username)
 );
 
 CREATE TABLE IF NOT EXISTS product_type (
@@ -126,7 +129,8 @@ CREATE TABLE IF NOT EXISTS shopping_cart (
   product_id INT,
   user_id INT,
   quantity INT DEFAULT 1,
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, product_id)
 );
 
 CREATE TABLE IF NOT EXISTS product_collect (
@@ -135,7 +139,8 @@ CREATE TABLE IF NOT EXISTS product_collect (
   product_name VARCHAR(255),
   user_id INT,
   username VARCHAR(255),
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, product_id)
 );
 
 CREATE TABLE IF NOT EXISTS shop_collect (
@@ -145,7 +150,8 @@ CREATE TABLE IF NOT EXISTS shop_collect (
   shop_avatar VARCHAR(500),
   user_id INT,
   user_name VARCHAR(255),
-  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, shop_id)
 );
 
 CREATE TABLE IF NOT EXISTS product_browsing_history (
@@ -234,9 +240,9 @@ CREATE TABLE IF NOT EXISTS coupon (
   title VARCHAR(255),
   description VARCHAR(500),
   type VARCHAR(20) DEFAULT 'percent',
-  value DOUBLE DEFAULT 0,
-  min_order DOUBLE DEFAULT 0,
-  max_discount DOUBLE,
+  value DECIMAL(10,2) DEFAULT 0.00,
+  min_order DECIMAL(10,2) DEFAULT 0.00,
+  max_discount DECIMAL(10,2),
   category VARCHAR(64),
   expires_at TIMESTAMP,
   total INT DEFAULT 1000,
@@ -264,7 +270,7 @@ CREATE TABLE IF NOT EXISTS return_request (
   product_image VARCHAR(500),
   reason VARCHAR(255),
   detail TEXT,
-  refund_amount DOUBLE DEFAULT 0,
+  refund_amount DECIMAL(10,2) DEFAULT 0.00,
   status VARCHAR(20) DEFAULT 'pending',
   created_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_time TIMESTAMP

@@ -104,6 +104,33 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 | 新增表(正式环境) | 新建/追加一份增量 SQL 到 `sql/migrations/`,对已初始化的库执行 |
 | 新增表(测试) | 同步追加到 `src/test/resources/schema-h2.sql` |
 | 种子数据 | 写入增量 SQL,保持可重复执行(如 INSERT IGNORE / DELETE 守卫) |
+| 回滚脚本 | 放 **`sql/migrations/rollback/`** 子目录,不要与迁移同级 |
+
+### 6.1 迁移怎么应用到**已存在的库**(重要)
+
+`docker/entrypoint.sh` **只在首次建库时**导入 `sql/migrations/*.sql`(靠 `/tmp/.schema-imported`
+标记文件判断),所以**新增的迁移对已有库不会自动生效,必须手工执行**:
+
+```bash
+# 容器内执行(口令取自容器环境变量,不回显)
+docker exec nexus-dev bash -lc '
+  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --default-character-set=utf8mb4 \
+    template_v3 < /workspace/sql/migrations/V4__constraints_and_indexes.sql'
+
+# 回滚
+docker exec nexus-dev bash -lc '
+  MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --default-character-set=utf8mb4 \
+    template_v3 < /workspace/sql/migrations/rollback/V4__constraints_and_indexes.sql'
+```
+
+- **必须带 `--default-character-set=utf8mb4`**,否则含中文的脚本会被双重编码(见「常见问题」)。
+- ⚠️ **回滚脚本必须放 `rollback/` 子目录**:`entrypoint.sh` 会 glob 导入
+  `sql/migrations/*.sql`(非递归),回滚脚本若与迁移同级,会在首次建库时被当成迁移自动执行,
+  把刚建好的约束立刻删掉。
+- MySQL 8 的 `CREATE INDEX` **没有** `IF NOT EXISTS`,所以迁移脚本默认**不可重复执行**;
+  要重跑先执行回滚脚本,或把脚本写成 `information_schema` 先查后建的形式。
+- 涉及唯一键的迁移,**执行前必须先查重**(脚本里应自带自检查询);本仓库 `V4` 的查重结果
+  是「零重复,无需清理」,但那是对当时的 `template_v3` 而言,换库要重跑自检。
 
 ## 7. 常见问题
 
