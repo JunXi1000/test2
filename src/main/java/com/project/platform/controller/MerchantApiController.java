@@ -37,6 +37,8 @@ public class MerchantApiController {
 
     @GetMapping("/dashboard/stats")
     public ResponseVO<List<Map<String, Object>>> getDashboardStats() {
+        // ⚠️ 占位数据:以下 4 个统计全部硬编码("$0"/"0"/"+0%"),没有聚合查询支撑,
+        // 前端 MerchantHome 会当成真实指标展示。完整占位清单见 docs/MODULES.md §2。
         List<Map<String, Object>> stats = new ArrayList<>();
         stats.add(buildStat("Total Sales", "$0", "+0%", "DollarSign"));
         stats.add(buildStat("Orders", "0", "+0%", "ShoppingCart"));

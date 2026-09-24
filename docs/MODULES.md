@@ -18,8 +18,8 @@
 | 账户 | 资料/通知偏好 | dashboard/Settings | `/account/profile` `/account/notifications` | 🟢 真实(通知偏好落库 `user_notification_pref`) |
 | 地址 | CRUD/默认 | dashboard/Addresses | `/addresses` CRUD | 🟡 CRUD 真实;`setDefaultAddress` no-op |
 | 聊天 | 会话/消息/未读 | UserMessages / MerchantMessages / ChatWidget | `/chat/*` | 🟢 全量真实(唯一无 mock 兜底的模块) |
-| 收藏/关注 | 心愿单/收藏/浏览历史/店铺关注 | Wishlist / ProductDetail | `/productCollect` `/productBrowsingHistory` `/shopCollect` | 🟡 后端真实;前端 Wishlist store 未同步后端 |
-| 评价 | 评论/审核 | ProductDetail 评论区 / AdminReviews | `/productOrderEvaluate` + 管理端 | 🟢 真实 |
+| 收藏/关注 | 心愿单/收藏/浏览历史/店铺关注 | Wishlist / ProductDetail | ~~`/productCollect` `/productBrowsingHistory` `/shopCollect`~~ | 🔴 **端点已于 2026-09-24 物理删除**;前端 store 本就是 localStorage 未同步 → 该功能现在**完全没有后端**。底层 entity/mapper 仍保留(被 `ProductServiceImpl.recommended()` 的个性化权重使用),但已无 CRUD 入口 |
+| 评价 | 评论/审核 | ProductDetail 评论区 / AdminReviews | ~~`/productOrderEvaluate`~~ + 管理端 `/admin/reviews` | 🟡 传统 CRUD 端点已删除;**管理端 `/admin/reviews` 仍真实**(用 `ProductOrderEvaluateService`);前端商品详情页的评论子系统是纯 localStorage |
 | 退换货 | 申请/状态 | dashboard/Returns | `/returns`(GET/POST) | 🟢 真实(`return_request` 表) |
 | 优惠券 | 领券/使用 | dashboard/Coupons / Cart / Checkout | `/coupons` `/coupons/:id/claim` `/coupons/my-coupons` | 🟢 真实(`coupon` + `user_coupon` 表,checkout promo 已打通) |
 | 到货订阅 | 订阅/通知 | ProductDetail | `/stock-alerts`(GET/POST/DELETE) | 🟢 真实(`stock_alert` 表) |
@@ -38,7 +38,7 @@
 | 管理端 | 系统设置 | admin/Settings | `/admin/settings` | 🔴 硬编码、update no-op |
 | 店铺公开页 | 资料/商品 | StorePage | `/merchants/:id/profile` `/products` | 🟡 商品真实;profile stats/featured/policies 硬编码 |
 | 文件 | 上传/访问 | 各页面上传 | `/file/upload` `/{fileName}` | 🟢 真实(MD5 命名落盘) |
-| 统计 | 报表图表 | (传统后台) | `/statisticalReportForms` | 🟢 真实 SQL 聚合 |
+| 统计 | 报表图表 | (传统后台) | ~~`/statisticalReportForms`~~ | 🔴 **端点与其 service 均已于 2026-09-24 删除**(该 service 只有这一个控制器在用,另有两处死注入一并清理) |
 
 ## 2. 完整占位清单(按文件定位)
 
@@ -66,11 +66,13 @@
 
 ### 后端明确 TODO / Bug
 
+> 2026-09-24 逐条复核过一遍:下面三条**原先的记载有误或已过时**,已按当前代码更正。
+
 | 位置 | 内容 |
 |------|------|
-| `UserServiceImpl.check` L213 | `entity.getId() != entity.getId()` 恒 false → 用户名查重失效 |
-| `ProductOrderServiceImpl` L107/L125 | `//TODO 退款`(退款逻辑未完成) |
-| `ProductMapper` L32 | `//TODO 图表` |
+| ~~`UserServiceImpl.check` L213 用户名查重失效~~ | **更正:此条不成立。** 当前 `check(User)` 的判定是 `byUsername != null && !byUsername.getId().equals(entity.getId())` → 重名且不是自己时才抛「用户名已存在」,是**正确的**查重;且 `insert` 与 `updateById` 都调用了它。原记载里的 `entity.getId() != entity.getId()` 在当前代码中不存在(疑似描述已被 `aa959c4` 修掉的旧版本)。**不要按原记载去"修"它。** |
+| `ProductOrderServiceImpl` L388 | `//消费 TODO 退款` —— 仅剩这一处(原记载的 L107/L125 已过时)。它在**遗留** `pay(id)` 里:该方法只扣余额,不涉及退款;而遗留 `cancel(id)` 的退款已在 2026-09-24 补上(按渠道分流)。故此 TODO 现在指的是"遗留链路整体废弃或补齐"这件事,不是某个缺失的退款分支。 |
+| `ProductCollectMapper` L32(**原记载误作 `ProductMapper`**) | `//TODO 图表` |
 
 ### 前端纯占位 / 本地模拟
 
@@ -84,8 +86,8 @@
 | store | localStorage 键 | 后端对应 | 是否同步 |
 |-------|----------------|----------|----------|
 | cart | `nexus_cart_items` | `/shoppingCart`(page/add/update/delBatch) | ✅ 登录态后端同步 / guest 本地 |
-| wishlist | `nexus_wishlist_items` | `/productCollect` | ❌ 未同步 |
-| browsingHistory | `nexus_browsing_history` | `/productBrowsingHistory` | ❌ 未同步 |
+| wishlist | `nexus_wishlist_items` | ~~`/productCollect`~~ | ❌ 未同步(**且端点已于 2026-09-24 删除,现无后端可同步**) |
+| browsingHistory | `nexus_browsing_history` | ~~`/productBrowsingHistory`~~ | ❌ 未同步(同上,端点已删除) |
 | compare | `nexus_compare_items` | — | ❌ 仅本地 |
 | coupons | `nexus_user_coupons` | `/coupons` `/coupons/my-coupons` | ✅ 后端化(领券/我的券) |
 | returns | `nexus_return_requests` | `/returns` | ✅ 后端化 |

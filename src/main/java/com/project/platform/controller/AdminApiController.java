@@ -33,6 +33,9 @@ public class AdminApiController {
 
     @GetMapping("/dashboard/stats")
     public ResponseVO<List<Map<String, Object>>> getDashboardStats() {
+        // ⚠️ 占位数据:以下 4 个统计全部硬编码("$0"/"0"/"+0%"),没有任何聚合查询支撑。
+        // 前端 AdminHome 会把它当成真实指标展示。完整占位清单见 docs/MODULES.md §2。
+        // 补实现或改前端标注,属 Phase 4 之后的事 —— 本次只标注,不改行为。
         List<Map<String, Object>> stats = new ArrayList<>();
         stats.add(buildStat("Total Revenue", "$0", "+0%", "DollarSign"));
         stats.add(buildStat("Active Users", "0", "+0%", "Users"));
