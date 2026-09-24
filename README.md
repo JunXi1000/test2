@@ -44,7 +44,7 @@
 │   ├── chat.sql              # 聊天表
 │   └── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
 ├── src/                      # 后端 Java 源码（Spring Boot）
-│   └── main/java/com/project/platform/  # 33 个 Controller + service/mapper/entity
+│   └── main/java/com/project/platform/  # 19 个 Controller + service/mapper/entity
 ├── uploads/                  # 上传文件（运行时数据，git 忽略）
 ├── web/                      # 前端 Vue 源码
 │   ├── src/                  # 页面 / api / stores / router

@@ -1,6 +1,5 @@
 package com.project.platform.mapper;
 
-import com.project.platform.entity.ProductCollect;
 import com.project.platform.entity.ShoppingCart;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Param;

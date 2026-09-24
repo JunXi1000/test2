@@ -89,13 +89,17 @@ public final class AuthzRules {
             // ── 管理后台 ──
             new Rule("/admin/**", Set.of(ADMIN))
 
-            // 以下路径**刻意没有规则**,即默认拒绝(前端 0 引用,且其中多数存在越权面):
+            // 以下路径**刻意没有规则**,即默认拒绝:
             //   /product/**            /productType/**        /slideshow/**
             //   /advertising/**        /shop/**               /shippingAddress/**
             //   /productCollect/**     /shopCollect/**        /productBrowsingHistory/**
             //   /productOrder/**       /productOrderEvaluate/**  /user/**
             //   /admin-accounts/**     /statisticalReportForms/**
             //   /shoppingCart/selectById/**  /shoppingCart/list  /shoppingCart/createOrder
+            //
+            // 2026-09-24 起:上述前缀对应的 14 个「遗留 CRUD」控制器已**物理删除**(约 90 个端点),
+            // 所以这些路径现在根本没有处理器 —— 请求仍会被本表的默认拒绝挡下(匿名 401 / 已登录 403),
+            // 与删除前的外部表现一致。仅 /shoppingCart 的 3 个未登记端点其控制器仍在(另 4 个在用端点见上)。
     );
 
     private AuthzRules() {

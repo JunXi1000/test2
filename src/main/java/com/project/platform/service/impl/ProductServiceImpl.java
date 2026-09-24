@@ -2,8 +2,6 @@ package com.project.platform.service.impl;
 
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.entity.Product;
-import com.project.platform.entity.ProductBrowsingHistory;
-import com.project.platform.entity.ProductCollect;
 import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.ProductBrowsingHistoryMapper;
 import com.project.platform.mapper.ProductCollectMapper;
@@ -29,8 +27,10 @@ public class ProductServiceImpl implements ProductService {
     @Resource
     private ProductMapper productMapper;
 
+    /** 以下两个 mapper 供 recommended() 计算个性化权重使用 —— 不要因为「遗留 CRUD 已删」而一起删掉 */
     @Resource
     private ProductBrowsingHistoryMapper productBrowsingHistoryMapper;
+
     @Resource
     private ProductCollectMapper productCollectMapper;
 

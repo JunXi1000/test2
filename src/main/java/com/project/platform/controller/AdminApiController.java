@@ -28,7 +28,6 @@ public class AdminApiController {
     @Resource private ProductService productService;
     @Resource private ProductOrderService productOrderService;
     @Resource private ProductOrderEvaluateService evaluateService;
-    @Resource private StatisticalReportFormsService statsService;
 
     // ── Dashboard ──────────────────────────────────────────────────────
 

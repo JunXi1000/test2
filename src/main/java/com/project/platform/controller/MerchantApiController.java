@@ -33,9 +33,6 @@ public class MerchantApiController {
     @Resource
     private ShopService shopService;
 
-    @Resource
-    private StatisticalReportFormsService statsService;
-
     // ── Dashboard ──────────────────────────────────────────────────────
 
     @GetMapping("/dashboard/stats")

@@ -1,6 +1,8 @@
 # 后端接口契约清单(backend-api)
 
-> 本文档列出 **Spring Boot 后端当前实际暴露的端点**(33 个 Controller),并标注每个端点的**实现状态**与所委托的 Service。
+> 本文档列出 **Spring Boot 后端当前实际暴露的端点**(19 个 Controller),并标注每个端点的**实现状态**与所委托的 Service。
+> 2026-09-24:原先的 33 个 Controller 里有 14 个「遗留 CRUD」控制器(约 90 个端点)已**物理删除** —— 它们
+> 早已被授权层默认拒绝(见 §2),代码留着只是负担。删除后 Controller 数为 **19**。
 > 用途:与 [docs/API接口说明.md](API接口说明.md)(前端期望的接口)对照,找出路径/字段差异与缺口;也是实现各阶段路线图的起点清单。
 > 状态标记:🟢 真实 · 🟡 部分(含占位) · 🔴 占位/mock · ⚪ 未建
 
@@ -191,25 +193,22 @@
 
 ---
 
-## 2. 传统 CRUD 控制器(17 个)
+## 2. 传统 CRUD 控制器 —— **已于 2026-09-24 物理删除**
 
-> ⚠️ **2026-09-24 起:下表绝大多数前缀已「默认拒绝」,对任何角色都返回 403。**
-> 授权改为「默认拒绝 + 显式放行表」后(`config/AuthzRules`),只有**前端真实调用的端点**被登记放行。
-> 经对账(`web/src/api/modules/*.ts` 全量抽取 + 核实 `api/` 之外无裸 HTTP 调用),
-> 传统 CRUD 里**仅 `/shoppingCart/page|add|update|delBatch` 四个端点仍放行**。
+> 这一组控制器(14 个、约 90 个端点,占当时全部端点的 48%)自 Phase 1a 起就被授权层「默认拒绝」,
+> 对任何角色都返回 403;随后按用户决策**连同其孤儿 service/mapper/XML/entity 一并删除**
+> (共 36 个 Java 文件 + 5 个 mapper XML)。**这些路径现在没有处理器**;请求仍会被
+> `LoginInterceptor` 的默认拒绝挡下(匿名 401 / 已登录 403),与删除前的外部表现一致。
 >
-> **仍放行**:`/shoppingCart/{page,add,update,delBatch}`、`/file/upload`、`/file/**`(非图片下载)、
-> `/common/*`(见 §1 表)。
-> **已关闭(403)**:`/user`、`/admin-accounts`、`/shop`、`/product`、`/productOrder`、`/productType`、
-> `/productCollect`、`/productBrowsingHistory`、`/productOrderEvaluate`、`/shippingAddress`、
-> `/shopCollect`、`/slideshow`、`/advertising`、`/statisticalReportForms`,
-> 以及 `/shoppingCart/{selectById,list,createOrder}`。
-> 关闭方式**不删端点、不改 URL** —— 只是不再登记放行,需要时可随时加回规则表。
-> 详见 [REFACTOR_PLAN-BACKEND.md](REFACTOR_PLAN-BACKEND.md) Phase 1a。
+> 保留下来的三个**不是**孤儿,因此未删:`ProductTypeService`(店铺前台分类要用)、
+> `ShippingAddressService`(`/addresses` 用)、`ProductOrderEvaluateService`(管理端评论用)。
+> 另:`ProductBrowsingHistoryMapper` / `ProductCollectMapper` 虽然失去了遗留控制器,
+> 但 `ProductServiceImpl.recommended()` 用它们算「为你推荐」的个性化权重(`/products/recommend/{size}`
+> 是前端在用的放行端点),故**一并保留**。
+>
+> 下表是删除前的记录,保留作为历史参考 —— 这些前缀已不存在,不要再按它对接。
 
-> 下表描述的是这些端点的**实现情况**(在它们仍可达时的行为),保留作为历史与参考。
-
-| 前缀 | 额外业务端点 | Service |
+| 已删除的前缀 | 额外业务端点(曾) | Service(已删) |
 |------|-------------|---------|
 | `/user` | `POST /user/topUp/{amount}` 充值 | UserService |
 | `/admin-accounts` | — | AdminService |
