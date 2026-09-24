@@ -54,4 +54,22 @@ public interface ProductOrderService {
      * 超时自动取消(Phase 2,无用户上下文):回补库存 + 支付单置已超时。
      */
     void cancelTimeoutOrder(String orderNo);
+
+    /**
+     * 按**前端展示的订单标识**取该订单的行,并校验归属当前用户。
+     *
+     * <p>接受的形态(与前端展示一致):
+     * <ul>
+     *   <li>分组号 {@code orderNo} —— 真实订单。前端 {@code orders.ts} 把 {@code raw.orderNo}
+     *       映射为 {@code order.id},而订单页展示的就是 {@code order.id};</li>
+     *   <li>{@code LEGACY-{id}} —— 后端对 {@code order_no} 为空的旧行的分组展示名;</li>
+     *   <li>纯数字行 id —— 兼容手工输入(退货页的订单号是文本框)。</li>
+     * </ul>
+     *
+     * <p>归属规则与其它订单接口一致({@code AccessGuard.checkOrderOwner}):USER 比 userId、
+     * SHOP 比 shopId、ADMIN 放行。
+     *
+     * @throws com.project.platform.exception.CustomException 订单不存在 → 404;不属于当前用户 → 403
+     */
+    List<ProductOrder> listOwnedOrderRows(String orderId);
 }

@@ -113,19 +113,58 @@ class RequestShapeTest extends BaseControllerTest {
     }
 
     @Test
-    @DisplayName("退货申请:前端完整载荷 → 200 并回显 orderId")
-    void returnRequestAcceptsDto() throws Exception {
+    @DisplayName("退货申请:必须用**本人真实订单号**;退款金额被订单实付金额封顶")
+    void returnRequestRequiresOwnOrderAndCapsRefund() throws Exception {
+        // 先真实下一单,拿到 orderNo(前端 orders.ts 把 raw.orderNo 映射为 order.id)
+        Map<String, Object> createBody = new LinkedHashMap<>();
+        createBody.put("items", List.of(Map.of("id", 1, "quantity", 2)));
+        createBody.put("channel", "card");
+        String orderNo = JSONObject.parseObject(
+                        post("/payments/create", userToken(), createBody)
+                                .andExpect(status().isOk()).andReturn()
+                                .getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .getJSONObject("data").getString("orderId");
+
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("orderId", "NO-SHAPE-TEST");
+        body.put("orderId", orderNo);
         body.put("productTitle", "Test Product 1");
         body.put("productImage", "/img/p1.jpg");
         body.put("reason", "damaged");
         body.put("detail", "arrived cracked");
-        body.put("refundAmount", 19.99);
-        post("/returns", userToken(), body)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data.orderId").value("NO-SHAPE-TEST"));
+        body.put("refundAmount", 99999.99);     // 远高于实付(99×2=198)→ 必须被夹到 198
+        JSONObject data = JSONObject.parseObject(
+                        post("/returns", userToken(), body)
+                                .andExpect(status().isOk()).andReturn()
+                                .getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .getJSONObject("data");
+        assertEquals(orderNo, data.getString("orderId"));
+        assertEquals(198.0, data.getDoubleValue("refundAmount"), DELTA);
+    }
+
+    @Test
+    @DisplayName("退货申请:用不存在的订单号 → 404(此前完全不校验、静默入库)")
+    void returnRequestUnknownOrderIsNotFound() throws Exception {
+        post("/returns", userToken(), Map.of("orderId", "NO-SUCH-ORDER", "reason", "x"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(404));
+    }
+
+    @Test
+    @DisplayName("退货申请:用他人订单号 → 403(此前可为他人订单伪造退货)")
+    void returnRequestOtherUsersOrderIsForbidden() throws Exception {
+        Map<String, Object> createBody = new LinkedHashMap<>();
+        createBody.put("items", List.of(Map.of("id", 1, "quantity", 1)));
+        createBody.put("channel", "card");
+        String orderNo = JSONObject.parseObject(
+                        post("/payments/create", userToken(), createBody)
+                                .andExpect(status().isOk()).andReturn()
+                                .getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .getJSONObject("data").getString("orderId");
+
+        // user2 拿 user1 的订单号提退货
+        post("/returns", user2Token(), Map.of("orderId", orderNo, "reason", "x"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
     }
 
     @Test

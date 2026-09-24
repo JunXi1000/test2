@@ -1,7 +1,10 @@
 package com.project.platform.controller;
 
+import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.dto.ReturnRequestCreateDTO;
+import com.project.platform.entity.ProductOrder;
 import com.project.platform.entity.ReturnRequest;
+import com.project.platform.service.ProductOrderService;
 import com.project.platform.service.ReturnRequestService;
 import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.ResponseVO;
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 退换货 API — matches frontend's expected /returns contract.
@@ -25,6 +29,9 @@ public class ReturnRequestController {
 
     @Resource
     private ReturnRequestService returnRequestService;
+
+    @Resource
+    private ProductOrderService productOrderService;
 
     @GetMapping("")
     public ResponseVO<List<Map<String, Object>>> getReturns() {
@@ -38,17 +45,37 @@ public class ReturnRequestController {
 
     @PostMapping("")
     public ResponseVO<Map<String, Object>> create(@RequestBody ReturnRequestCreateDTO body) {
-        Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        // 归属校验:orderId 必须是**当前用户自己的**订单(不存在 404 / 非本人 403)。
+        // 此前 orderId 完全不校验 —— 任何登录用户都能为他人订单提退货申请。
+        List<ProductOrder> rows = productOrderService.listOwnedOrderRows(body.getOrderId());
+
         ReturnRequest req = new ReturnRequest();
-        req.setUserId(userId);
+        req.setUserId(current.getId());
         req.setOrderId(body.getOrderId());
         req.setProductTitle(body.getProductTitle());
         req.setProductImage(body.getProductImage());
         req.setReason(body.getReason());
         req.setDetail(body.getDetail());
-        // 与既有实现一致:缺省按 0 处理
-        req.setRefundAmount(body.getRefundAmount() == null ? BigDecimal.ZERO : body.getRefundAmount());
+        req.setRefundAmount(resolveRefundAmount(body.getRefundAmount(), rows));
         return ResponseVO.ok(toMap(returnRequestService.create(req)));
+    }
+
+    /**
+     * 退款金额以**该订单实付金额**为上限(服务端算),客户端可在此之内指定(支持部分退货)。
+     * 此前完全采信客户端传值,虚报多少就存多少。
+     *
+     * <p>取值规则:客户端给的正数 → 与实付金额取小;未给/非正 → 取实付金额。
+     */
+    private BigDecimal resolveRefundAmount(BigDecimal requested, List<ProductOrder> rows) {
+        BigDecimal paid = rows.stream()
+                .map(ProductOrder::getTotalMoney)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (requested == null || requested.signum() <= 0) {
+            return paid;
+        }
+        return requested.min(paid);
     }
 
     private Map<String, Object> toMap(ReturnRequest r) {

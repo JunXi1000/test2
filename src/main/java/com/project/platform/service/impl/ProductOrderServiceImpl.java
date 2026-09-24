@@ -332,6 +332,47 @@ public class ProductOrderServiceImpl implements ProductOrderService {
         cancelRows(orderNo, rows, "已超时");
     }
 
+    /** 旧行(order_no 为空)在列表里的分组展示名前缀,与 {@code listStorefrontOrders} 一致 */
+    private static final String LEGACY_ORDER_PREFIX = "LEGACY-";
+
+    @Override
+    public List<ProductOrder> listOwnedOrderRows(String orderId) {
+        if (orderId == null || orderId.isBlank()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "订单号不能为空");
+        }
+        List<ProductOrder> rows;
+        if (orderId.startsWith(LEGACY_ORDER_PREFIX)) {
+            rows = singleRowById(parseRowId(orderId.substring(LEGACY_ORDER_PREFIX.length())));
+        } else if (orderId.chars().allMatch(Character::isDigit)) {
+            rows = singleRowById(parseRowId(orderId));
+        } else {
+            rows = productOrderMapper.selectByOrderNo(orderId);
+        }
+        if (rows.isEmpty()) {
+            throw new CustomException(HttpStatus.NOT_FOUND, "订单不存在");
+        }
+        // 归属校验:与其它订单接口同一套规则(USER 比 userId、SHOP 比 shopId、ADMIN 放行)。
+        // 注意用 mapper 而非本类 selectById —— 后者只取单行且语义不同。
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        for (ProductOrder row : rows) {
+            AccessGuard.checkOrderOwner(row, current);
+        }
+        return rows;
+    }
+
+    private List<ProductOrder> singleRowById(Integer id) {
+        ProductOrder row = (id == null) ? null : productOrderMapper.selectById(id);
+        return row == null ? List.of() : List.of(row);
+    }
+
+    private Integer parseRowId(String raw) {
+        try {
+            return Integer.valueOf(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;   // 非法数字 → 当作"找不到该订单",由调用方抛 404
+        }
+    }
+
 
     /**
      * 支付
