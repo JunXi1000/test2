@@ -48,7 +48,23 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 - **Mapper**:每个表一对接口 + XML。常规 CRUD 沿用模板方法名 `queryPage / queryCount / selectById / list / insert / updateById / removeByIds`;复杂查询在 XML 写动态 SQL,简单查询可用 `@Select`。
 - **响应**:统一 `ResponseVO<T>`(code=200 成功,msg,data);分页用 `PageVO<T>`(list,total)。参数校验用 Bean Validation(`@NotBlank` 等),自定义异常抛 `CustomException`(默认 HTTP 409)。
 - **鉴权**:新端点默认受拦截;公开接口在 `config/SpringMvcConfig.java` 白名单显式声明。角色敏感接口在 `LoginInterceptor.checkRole` 增加前缀分支。
+  > ⚠️ 已知问题:`checkRole` 目前是**默认放行**——只对 `/admin`、`/merchant/`、`/user`、`/productOrder` 四个前缀判角色,其余一律返回 `true`(任意登录用户可访问)。且前缀匹配有副作用:`startsWith("/admin")` 顺带命中 `/admin-accounts/**`,`startsWith("/productOrder")` 顺带命中 `/productOrderEvaluate/**`。重构计划要把这里改成「默认拒绝 + 显式放行表」,详见 `docs/REFACTOR_PLAN-BACKEND.md`。
 - **前端路径对齐**:面向前端页面的新端点放**门面控制器**(`Storefront*` / `AdminApi` / `MerchantApi`),路径与 `web/src/api/modules/*.ts` 一一对应;传统 CRUD 放传统控制器。
+- **服务层守卫必须「成对写」**:现有代码存在系统性遗漏——同一个 service 里 `page()` 按 `userId` 过滤,而 **`list()` 完全不过滤**;`insert()` 判角色,而 **`updateById()`/`removeByIds()` 不判**。`ProductTypeServiceImpl` / `SlideshowServiceImpl` / `AdvertisingServiceImpl` 甚至一处守卫都没有。新增/修改遗留 CRUD 时,**读方法要给 `list()` 也加过滤,写方法要逐个判角色或归属**,不要只加在 `page()`/`insert()` 上。
+
+### 4.4 依赖与构建(已知偏差)
+
+`pom.xml` 里有两行**偏离 Spring Boot 托管版本**的改动,于 2026-09-24 未提交状态下存在于工作区。客观事实如下,**原始意图未能从代码确认**:
+
+| 项 | 事实 |
+|----|------|
+| 改动内容 | 把 `mockito.version` 从 Spring Boot 3.2.10 托管的 `5.7.0`(`spring-boot-dependencies-3.2.10.pom` 第 144 行)覆盖为 `5.11.0`;并新增依赖 `org.mockito:mockito-subclass:5.11.0` |
+| 代码里的理由 | 注释写「新增:强制指定高版本依赖,解决 JDK 兼容性问题」 |
+| 实际使用情况 | **全项目测试代码没有使用 Mockito**(无 `@MockBean`、无 `Mockito` 调用);测试形态是 `@SpringBootTest` + 真 H2 + 真 mapper |
+| 副作用 | 这两个坐标未进 `.m2` 缓存时,**离线构建失败**(报 `org.mockito:mockito-bom:pom:5.11.0 (absent)`)。联网构建一次后写入持久化的 `.m2` volume,之后可离线构建 |
+
+> 处理约定:保留现状但**不要**在此基础上继续调整版本;若后续要动,按「说明原因 / 收益 / 风险 / 影响范围 / 迁移成本 / 回滚方案」报备后再改。
+
 
 ### 4.2 前端(Vue 3 + TS)
 
@@ -68,8 +84,14 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 - **后端**:`src/test/java/.../controller/` 下 MockMvc 冒烟测试(基于 `BaseControllerTest`,H2 `MODE=MySQL` 内存库,自动生成 ADMIN/USER/SHOP 的 JWT)。新增表必须同步 `src/test/resources/schema-h2.sql`,否则测试报表不存在。
   ```bash
-  mvn test
+  # 闸门命令(容器内;仓库 bind mount 在 /workspace)
+  docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test'
+
+  # 只跑某几个测试类
+  docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test -Dtest=SomeTest -DfailIfNoSpecifiedTests=false'
   ```
+  **必须带 `clean`**,原因见「常见问题」里 IDE 污染 `target/classes` 那条。
+  2026-09-24 建立的基线:64 个测试全绿(11 个 test set)。另有三个**特性化测试**类用于钉住重构前行为(见 `docs/REFACTOR_PLAN-BACKEND.md`):`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、`AuthorizationBaselineTest`,后者的 B 段断言的是**当前缺陷**,重构时应翻转为 403。
 - **前端**:目前无单测脚本;`web/tests/*.spec.ts` 为 Playwright 端到端(可选择性运行)。改动页面建议手动验证:`npm run dev` + 控制台切 `RUNTIME_USE_MOCK`。
 
 ## 6. 数据库 schema 维护约定
@@ -91,3 +113,5 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 | 改了后端不生效 | 本地需重启 Spring Boot |
 | 本机 MySQL 端口冲突 | 改 `application.yaml` 中 datasource 端口,或换用另一实例 |
 | 迁移 SQL 中文变乱码 | 导入含中文的 SQL 必须加 `--default-character-set=utf8mb4`;mysql CLI 默认 latin1,会把 UTF-8 字节双重编码入库 |
+| 构建报 `cannot find symbol: method setId(...)`,且指向 Lombok 类的 getter/setter | **IDE 污染了 `target/classes`**。本机 IDE 的 Lombok 注解处理器会崩(`NoClassDefFoundError: lombok.javac.Javac`),但仍把**不含 Lombok 生成方法**的 class 写进 `target/classes`;这些 class 比源码新,Maven 增量编译据此判定「已最新」而不重编。判别式:`javap -p target/classes/.../X.class \| grep -c getXxx` 为 0 即被污染。处理:`mvn clean test` 重来,并**不要去改源码**。同时,IDE 里大量主源码「错误」(`PageVO.getList()` undefined 等)是同一个原因造成的**假报错**,以 Maven 结果为准 |
+| 离线构建失败 `mockito-bom:pom:5.11.0 (absent)` | `pom.xml` 覆盖了 Spring Boot 托管的 mockito 版本,见 4.4 节。联网构建一次即写入 `.m2` 缓存,之后可离线 |
