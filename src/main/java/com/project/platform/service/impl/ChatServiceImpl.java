@@ -1,11 +1,16 @@
 package com.project.platform.service.impl;
 
+import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.entity.Conversation;
 import com.project.platform.entity.Message;
+import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.ConversationMapper;
 import com.project.platform.mapper.MessageMapper;
 import com.project.platform.service.ChatService;
+import com.project.platform.utils.AccessGuard;
+import com.project.platform.utils.CurrentUserThreadLocal;
 import jakarta.annotation.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -31,6 +36,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public List<Message> getMessages(Integer conversationId) {
+        loadOwnedConversation(conversationId);
         return messageMapper.selectByConversation(conversationId);
     }
 
@@ -43,6 +49,11 @@ public class ChatServiceImpl implements ChatService {
 
         if (conversationId != null) {
             conversation = conversationMapper.selectById(conversationId);
+            if (conversation != null) {
+                // 归属校验:不能往别人的会话里插消息。
+                // 会话不存在时保持原行为(落到下面按 user+shop 查找/新建),只有「别人的会话」才拒绝。
+                checkParticipant(conversation);
+            }
         }
 
         if (conversation == null) {
@@ -98,6 +109,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public void markAsRead(Integer conversationId, String readerType) {
+        loadOwnedConversation(conversationId);
         messageMapper.markAsRead(conversationId, readerType);
         // Reset unread counter for the reader
         if ("SHOP".equals(readerType)) {
@@ -105,5 +117,32 @@ public class ChatServiceImpl implements ChatService {
         } else {
             conversationMapper.resetUnread(conversationId, "user_unread_count");
         }
+    }
+
+    /**
+     * 按会话 id 取会话并校验当前用户是参与者;不存在则 404。
+     */
+    private Conversation loadOwnedConversation(Integer conversationId) {
+        Conversation conversation = conversationMapper.selectById(conversationId);
+        if (conversation == null) {
+            throw new CustomException(HttpStatus.NOT_FOUND, "会话不存在");
+        }
+        checkParticipant(conversation);
+        return conversation;
+    }
+
+    /**
+     * 校验当前用户是该会话的参与者(买卖双方之一)。
+     *
+     * <p><b>关键</b>:{@code user} 与 {@code shop} 是**两套独立 id 空间**(两边都有 id=1),所以
+     * 必须按角色选要比较的列 —— SHOP 比 {@code shop_id},其余比 {@code user_id}。若混用,
+     * 「买家 1」会被误判为「店铺 1」的会话。
+     */
+    private void checkParticipant(Conversation conversation) {
+        CurrentUserDTO current = CurrentUserThreadLocal.getCurrentUser();
+        Integer ownerId = "SHOP".equals(current.getType())
+                ? conversation.getShopId()
+                : conversation.getUserId();
+        AccessGuard.checkOwner(ownerId, current, "会话");
     }
 }

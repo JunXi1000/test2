@@ -3,9 +3,11 @@ package com.project.platform.utils;
 import com.alibaba.fastjson2.JSON;
 import com.project.platform.dto.CurrentUserDTO;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import lombok.extern.slf4j.Slf4j;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
@@ -17,6 +19,7 @@ import java.util.UUID;
 /**
  * 生成jwt
  */
+@Slf4j
 public class JwtUtils {
 
     /**
@@ -68,21 +71,26 @@ public class JwtUtils {
 
 
     /**
-     * 验证jwt
+     * 验证jwt。
+     *
+     * <p>过期与无效都返回 {@code null}(对调用方语义相同:token 不可用)。但**日志要能区分** ——
+     * 此前一律 {@code catch (Exception)} 吞掉,导致「用户 token 过期」和「有人拿伪造 token 试探」
+     * 在日志里长得一样,排障时无法分辨。只记异常消息,不记 token 内容。
      */
     public static Claims verifyJwt(String token) {
         //签名秘钥，和生成的签名的秘钥一模一样
         SecretKey key = generalKey();
-        Claims claims;
         try {
-            claims = Jwts.parser()  //得到DefaultJwtParser
+            return Jwts.parser()  //得到DefaultJwtParser
                     .setSigningKey(key)         //设置签名的秘钥
                     .parseClaimsJws(token).getBody();
+        } catch (ExpiredJwtException e) {
+            log.info("token 已过期(需重新登录)");
+            return null;
         } catch (Exception e) {
-            claims = null;
-        }//设置需要解析的jwt
-        return claims;
-
+            log.warn("token 校验失败({})", e.getClass().getSimpleName());
+            return null;
+        }
     }
 
     /**

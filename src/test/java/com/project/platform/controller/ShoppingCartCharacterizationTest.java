@@ -69,14 +69,17 @@ class ShoppingCartCharacterizationTest extends BaseControllerTest {
     }
 
     @Test
-    @DisplayName("add 只允许 USER:SHOP/ADMIN 被拒(409)")
+    @DisplayName("add 只允许 USER:SHOP/ADMIN 被授权层拒绝(403)")
     void addRejectedForNonUserRole() throws Exception {
+        // 服务层 ShoppingCartServiceImpl.insert 另有「非 USER 抛 409」的守卫,但 Phase 1a 之后
+        // 授权层更早一步拒绝(/shoppingCart/add 只登记给 USER),所以外部看到的是 403。
+        // 服务层那条守卫保留为纵深防御,只是对非 USER 已不可达。
         post("/shoppingCart/add", shopToken(), Map.of("productId", 1, "quantity", 1))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(409));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
 
         post("/shoppingCart/add", adminToken(), Map.of("productId", 1, "quantity", 1))
-                .andExpect(status().isConflict());
+                .andExpect(status().isForbidden());
     }
 
     @Test

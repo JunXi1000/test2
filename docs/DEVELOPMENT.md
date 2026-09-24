@@ -47,8 +47,11 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 - **Entity**:纯 POJO,不用 Lombok,手写 getter/setter;关联字段(如 `productTypeName`、`shopName`)直接加在实体上。
 - **Mapper**:每个表一对接口 + XML。常规 CRUD 沿用模板方法名 `queryPage / queryCount / selectById / list / insert / updateById / removeByIds`;复杂查询在 XML 写动态 SQL,简单查询可用 `@Select`。
 - **响应**:统一 `ResponseVO<T>`(code=200 成功,msg,data);分页用 `PageVO<T>`(list,total)。参数校验用 Bean Validation(`@NotBlank` 等),自定义异常抛 `CustomException`(默认 HTTP 409)。
-- **鉴权**:新端点默认受拦截;公开接口在 `config/SpringMvcConfig.java` 白名单显式声明。角色敏感接口在 `LoginInterceptor.checkRole` 增加前缀分支。
-  > ⚠️ 已知问题:`checkRole` 目前是**默认放行**——只对 `/admin`、`/merchant/`、`/user`、`/productOrder` 四个前缀判角色,其余一律返回 `true`(任意登录用户可访问)。且前缀匹配有副作用:`startsWith("/admin")` 顺带命中 `/admin-accounts/**`,`startsWith("/productOrder")` 顺带命中 `/productOrderEvaluate/**`。重构计划要把这里改成「默认拒绝 + 显式放行表」,详见 `docs/REFACTOR_PLAN-BACKEND.md`。
+- **鉴权**:新端点默认受拦截。**授权是「默认拒绝 + 显式放行」**——公开接口在 `config/SpringMvcConfig.java` 的 `excludePathPatterns` 声明(那些路径根本不进拦截器),其余一律要在 `config/AuthzRules.java` 的规则表里登记「路径 → 允许角色」,**未登记的路径对所有角色一律 403**。
+  - 规则表用 `AntPathMatcher` 做**路径段**匹配,所以 `/admin/**` 不会命中 `/admin-accounts`(旧实现用 `String.startsWith`,曾因此误门控两个无关控制器)。
+  - 加新端点时必须同时登记规则,否则前端会拿到 403。登记前先核对两处:① 前端真实调用面(`web/src/api/modules/*.ts` 与各域页面 import 的模块);② 既有测试断言的角色语义。
+  - 放行清单的回归网:`config/AuthzRulesTest`(规则表纯单测)与 `controller/AuthorizationBaselineTest`(端起端到端);两者分工是「规则表说放不放」与「拦截器真的照做了」。
+  - 行为须知:未知路径对已登录用户返回 **403**、对匿名用户 **401**,而不是 404 —— 拦截先于 `NoResourceFoundException` 生效。好处是探测者无法区分路径存在与否。
 - **前端路径对齐**:面向前端页面的新端点放**门面控制器**(`Storefront*` / `AdminApi` / `MerchantApi`),路径与 `web/src/api/modules/*.ts` 一一对应;传统 CRUD 放传统控制器。
 - **服务层守卫必须「成对写」**:现有代码存在系统性遗漏——同一个 service 里 `page()` 按 `userId` 过滤,而 **`list()` 完全不过滤**;`insert()` 判角色,而 **`updateById()`/`removeByIds()` 不判**。`ProductTypeServiceImpl` / `SlideshowServiceImpl` / `AdvertisingServiceImpl` 甚至一处守卫都没有。新增/修改遗留 CRUD 时,**读方法要给 `list()` 也加过滤,写方法要逐个判角色或归属**,不要只加在 `page()`/`insert()` 上。
 

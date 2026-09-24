@@ -26,7 +26,7 @@
 | 项 | 事实 |
 |----|------|
 | 构建 | 容器 `nexus-dev`(仓库 bind mount 到 `/workspace`,Maven 3.9.9 + JDK 17);`mvn -B clean test` 通过 |
-| 测试 | **64 个测试全绿**,11 个 test set(2026-09-24 实测) |
+| 测试 | **108 个测试全绿**,17 个 test set(2026-09-24,Phase 1 后)。基线为 64,Phase 0 后 91 |
 | 测试形态 | `@SpringBootTest` + MockMvc + 真 H2(`MODE=MySQL`)+ 真 MyBatis mapper + 真 JWT 签发;`BaseControllerTest` 的 `@Transactional` 逐方法回滚 |
 | 规模 | 33 个 Controller / 187 个端点;23 个 Mapper 接口(16 有 XML + 7 纯注解);22 张表 |
 | 前端真实调用面 | 遗留 CRUD 里**只调用 4 个**端点:`/shoppingCart/page\|add\|update\|delBatch`;13 个遗留 Controller 的约 80 个端点**前端 0 引用** |
@@ -38,11 +38,11 @@
 
 ### A. 安全
 
-**A1. 授权层是「默认放行」**
+**A1. 授权层是「默认放行」** ✅ **已于 Phase 1a 收口**(改 `AuthzRules` 路径段匹配 + 默认拒绝)
 
 `LoginInterceptor.checkRole` 只对 `/admin`、`/merchant/`、`/user`、`/productOrder` 四个前缀判角色,**其余一律 `return true`**(任意登录用户放行)。另有两处**前缀碰撞**:`startsWith("/admin")` 顺带命中 `/admin-accounts/**`;`startsWith("/productOrder")` 顺带命中 `/productOrderEvaluate/**`。
 
-**A2. 服务层守卫是「不完整」的 —— 这才是洞的实体**
+**A2. 服务层守卫是「不完整」的** ✅ **已随 Phase 1a 一并关闭(相关端点整类默认拒绝)**
 
 | 类别 | 具体 | 后果 |
 |------|------|------|
@@ -61,9 +61,16 @@
 
 **A4. 认证面**
 
-- `retrievePassword` 区分「验证码无效」(400)与「手机号不存在」→ 可枚举已注册手机号。
-- `ResetCodeStore.verify` **无失败尝试次数限制**,6 位码在 5 分钟窗口内可暴力尝试(限流只作用于**发送**)。
-- JWT:jjwt **0.9.1**、HS256、密钥有**硬编码兜底值**、无 issuer/audience、**无 refresh、无吊销**(签了 `jti` 但无处存储/校验);`verifyJwt` 把过期/签名错/格式错一律归为 null,无法区分。
+- ~~`retrievePassword` 区分「验证码无效」(400)与「手机号不存在」→ 可枚举已注册手机号。~~
+  **❌ 此条经复核不成立,已撤销(2026-09-24)**:`UserServiceImpl.retrievePassword` **先校验验证码再查用户**,
+  而验证码只发到该手机(`sendResetCode` 走内存态 `ResetCodeStore`,**根本不查库**,对未注册手机号也返回成功),
+  攻击者拿不到码就无从枚举。**故未改代码** —— 记录在此以免后人重复"修"一个不存在的问题。
+- ✅ **已修**:`ResetCodeStore.verify` 补上失败次数上限(5 次即销毁验证码,必须重发)。此前校验侧可无限次猜测,
+  发送侧的 60s/日 10 次限流挡不住猜测;现在两者合起来把 6 位码的暴力面压到「每日 10 次发送 × 5 次尝试」量级。
+- ✅ **已修(仅日志)**:`JwtUtils.verifyJwt` 区分「过期」与「校验失败」。此前一律 `catch (Exception)` 吞掉,
+  导致「token 过期」与「伪造 token 试探」在日志里长得一样;对外文案与返回(null)不变。
+- 遗留(未动,属后续阶段):jjwt **0.9.1**、HS256、密钥有**硬编码兜底值**(生产须由 `JWT_SECRET` 注入)、
+  无 issuer/audience、**无 refresh、无吊销**(签了 `jti` 但无处存储/校验)。
 
 **A5. 配置与凭据**
 
@@ -159,13 +166,38 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 新增测试:`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、`AuthorizationBaselineTest`。
 **约定**:`AuthorizationBaselineTest` 的 B 段断言的是**当前缺陷**(「授权层没有拦截」),Phase 1 收口后应翻转为 403 —— 这是刻意为之,让修复的 diff 自解释。
 
-### Phase 1 — 安全:授权模型收口
+### Phase 1 — 安全:授权模型收口 ✅ 已完成(2026-09-24)
 
-- **1a. 默认拒绝 + 显式放行**:把 `checkRole` 的前缀判断换成**显式路由表**(建议独立类便于单测),语义从「未命中即放行」翻转为「未命中即拒绝」。放行清单**逐条依据前端 api 层的实测对账**生成(见 §1)。未登记的端点整体关闭 → 那约 80 个遗留端点(含 A2/A3 的越权面)一次改动关掉,不删端点、不改 URL。注意 `checkRole` 需改成可单测的纯函数。
-- **1b. 对象级校验补齐**:`ChatServiceImpl` 三个方法校验会话归属;`ShopCollectServiceImpl.removeByIds` 先查行校验归属再动 `fansCount`;`ReturnRequestController.create` 校验 `orderId` 归属且 `refundAmount` 以服务端按订单实付金额为准。其余落在「未登记即拒绝」集合内的**不逐个补校验**(不给已关闭的门加锁),仅在验收时对账确认。
-- **1c. 认证面加固**:`retrievePassword` 统一文案消除账号枚举;`ResetCodeStore.verify` 加失败计数与锁定;`JwtUtils.verifyJwt` 区分过期与无效(**仅用于日志**,对外文案不变)。**不引入 refresh token / 吊销**(§23,无需求不扩大改动面)。
-- **验证**:全量测试绿 + 权限矩阵断言翻转 + IDOR 回归测试(user2 用 user1 的会话/购物车行/地址 id 请求,断言 403)。**关键**:修 `ChatControllerTest` 那条把 IDOR 固化成预期的断言。
-- **回滚**:单类(+1 新类)改动,`git revert` 单个提交,无 schema、无契约变更。
+闸门:`mvn -B clean test` → **108 个测试全绿**(Phase 0 后为 91)。
+
+**1a. 默认拒绝 + 显式放行** —— 新增 `config/AuthzRules.java`(路径段匹配的规则表),
+`LoginInterceptor.checkRole` 改为查表,语义从「未命中即放行」翻转为「未命中即拒绝」。
+
+- **一次改动关闭 90 个端点**(14 个控制器整类关闭 87 个 + 购物车未登记的 3 个),
+  占 187 个端点总数的约 48% —— 全部是前端 0 引用的遗留 CRUD。
+- **两类问题从机制上消除**:① 前缀误命中(`String.startsWith` → `AntPathMatcher` 路径段匹配,
+  `/admin/**` 不再命中 `/admin-accounts`、`/productOrder/**` 不再命中 `/productOrderEvaluate`);
+  ② 遗留 CRUD 的读写越权面(A2/A3)整体消失,无需逐个补校验。
+- **放行清单的依据**(两条,缺一不可):前端真实调用面 + 既有测试断言的角色语义。
+  本次额外做了完备性核查:`api/` 之外**没有任何**裸 `axios`/`fetch` 调用,`api/` 内部只有 `http.ts`
+  import axios,故 `api/modules/*` 的路径前缀清单即前端调用全集,逐条都能对上。
+- `SpringMvcConfig` 放行 `/error`:拦截器在 handler 解析之后、执行之前运行,若不放行错误转发路径,
+  真错误会被变成 403。
+- **行为变化(需知晓)**:未知路径现在对已登录用户返回 **403**、对匿名用户 **401**,而非 404 ——
+  因为 Spring 的静态资源处理器认领 `/**`,拦截器先于 `NoResourceFoundException` 生效。
+  好处是探测者无法区分路径存在与否。
+
+**1b. 对象级校验** —— `ChatServiceImpl` 的 `getMessages`/`markAsRead`/`sendMessage` 补会话归属校验
+(会话不存在 404、非参与者 403)。**关键陷阱**:`user` 与 `shop` 是**两套独立 id 空间**(两边都有 id=1),
+故必须按角色选要比较的列(`ChatControllerTest.shopParticipantCanReadItsOwnConversation` 是这条的回归网)。
+另修 `ChatController.sendMessage` 的**身份伪造**:`senderType` 此前由请求体的 `isMerchant` 布尔决定,
+买家传 `isMerchant:true` 即以「店铺」身份发消息;现改为一律取自 token 的 `type`。
+
+**1c. 认证面** —— 见 A4 的两条 ✅(验证码失败计数、JWT 日志区分);一条 ❌ 撤销。
+
+**新增/改动的测试**:`config/AuthzRulesTest`(6,规则表纯单测)、`service/impl/ResetCodeStoreTest`(6)、
+`AuthorizationBaselineTest` B 段由「断言当前缺陷」翻转为「断言已收口」、
+`ChatControllerTest` 补齐正反例(4 → 10,删掉固化 IDOR 的 "works for any ID" 断言)。
 
 ### Phase 2 — 数据一致性
 

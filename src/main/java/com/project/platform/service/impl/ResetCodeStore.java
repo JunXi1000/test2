@@ -14,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 找回密码验证码存储(演示实现:内存 Map + 5 分钟 TTL)。
  * 接入真实短信/邮件服务时,替换为 Redis 存储并改为下发而非返回。
  * 发送限流:同一 (type, tel) 最小间隔 60s、单日上限 10 次(进程内统计,重启清零)。
+ * 校验侧另有失败次数上限 {@link #MAX_VERIFY_ATTEMPTS}:达上限即销毁验证码,必须重新发送。
+ * 两者合起来把 6 位码的暴力猜测压到「每日 10 次发送 × 5 次尝试 = 50 次」量级。
  */
 @Component
 public class ResetCodeStore {
@@ -23,8 +25,12 @@ public class ResetCodeStore {
     private static final Duration MIN_SEND_INTERVAL = Duration.ofSeconds(60);
     private static final int DAILY_SEND_LIMIT = 10;
 
+    /** 同一 (type, tel) 允许的连续校验失败次数,达上限即销毁验证码 */
+    private static final int MAX_VERIFY_ATTEMPTS = 5;
+
     private final Map<String, CodeEntry> store = new ConcurrentHashMap<>();
     private final Map<String, SendState> sendStates = new ConcurrentHashMap<>();
+    private final Map<String, Integer> verifyFailures = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     private record CodeEntry(String code, Instant expiresAt) {
@@ -50,22 +56,43 @@ public class ResetCodeStore {
         checkRateLimit(type, tel);
         String code = String.format("%0" + CODE_LENGTH + "d", random.nextInt(1_000_000));
         store.put(key(type, tel), new CodeEntry(code, Instant.now().plus(TTL)));
+        // 新码开始,失败计数清零
+        verifyFailures.remove(key(type, tel));
         return code;
     }
 
     /**
      * 校验验证码:存在、未过期且与 (type, tel) 匹配则通过并销毁,否则返回 false。
+     *
+     * <p><b>失败次数上限</b>:同一 (type, tel) 连续失败 {@link #MAX_VERIFY_ATTEMPTS} 次即销毁
+     * 验证码,必须重新发送才能再试。此前没有这个上限 —— 发送侧虽有 60s/日 10 次限流,但校验侧
+     * 可无限次猜测,6 位码(5 分钟窗口)存在被暴力猜中的空间。
      */
     public boolean verify(String type, String tel, String code) {
         if (code == null || code.isEmpty()) {
             return false;
         }
-        CodeEntry entry = store.get(key(type, tel));
-        if (entry == null || entry.expired() || !entry.code().equals(code)) {
+        String k = key(type, tel);
+        CodeEntry entry = store.get(k);
+        if (entry == null) {
             return false;
         }
-        store.remove(key(type, tel));
-        return true;
+        if (entry.expired()) {
+            store.remove(k);
+            verifyFailures.remove(k);
+            return false;
+        }
+        if (entry.code().equals(code)) {
+            store.remove(k);
+            verifyFailures.remove(k);
+            return true;
+        }
+        int failures = verifyFailures.merge(k, 1, Integer::sum);
+        if (failures >= MAX_VERIFY_ATTEMPTS) {
+            store.remove(k);
+            verifyFailures.remove(k);
+        }
+        return false;
     }
 
     /**

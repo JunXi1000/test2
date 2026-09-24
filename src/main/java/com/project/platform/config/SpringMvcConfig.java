@@ -28,8 +28,11 @@ public class SpringMvcConfig implements WebMvcConfigurer {
                         "/search/**",
                         "/merchants/**",
                         "/checkout/summary",
-                        "/checkout/promo"
+                        "/checkout/promo",
                         // 注意: /payments/create 需要登录(创建订单),不能放白名单
+                        // 错误转发路径必须放行 —— 否则 LoginInterceptor 的「默认拒绝」会把
+                        // 错误渲染本身变成 403,客户端拿不到真正的 4xx/5xx 语义
+                        "/error"
                 );
     }
 }

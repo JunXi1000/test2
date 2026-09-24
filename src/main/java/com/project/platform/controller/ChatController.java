@@ -44,14 +44,18 @@ public class ChatController {
 
     /**
      * Send a message.
-     * Body: { conversationId?, receiverId, content, productId?, isMerchant }
+     * Body: { conversationId?, receiverId, content, productId? }
+     *
+     * <p>发送者身份**一律取自 token**:{@code senderId} 用 {@code currentUser.getId()},
+     * {@code senderType} 用 {@code currentUser.getType()}。此前 {@code senderType} 由请求体里的
+     * {@code isMerchant} 布尔决定,买家只要传 {@code isMerchant:true} 就能以「店铺」身份发消息
+     * —— 而 user 与 shop 是两套独立 id 空间,等于伪造发送者。请求体里的该字段现已忽略。
      */
     @PostMapping("/messages")
     public ResponseVO<Message> sendMessage(@RequestBody JSONObject body) {
         CurrentUserDTO currentUser = CurrentUserThreadLocal.getCurrentUser();
-        boolean isMerchant = body.getBooleanValue("isMerchant");
 
-        String senderType = isMerchant ? "SHOP" : "USER";
+        String senderType = "SHOP".equals(currentUser.getType()) ? "SHOP" : "USER";
         Integer senderId = currentUser.getId();
         Integer receiverId = body.getInteger("receiverId");
         String content = body.getString("content");

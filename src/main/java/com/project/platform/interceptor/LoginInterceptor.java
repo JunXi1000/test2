@@ -1,6 +1,7 @@
 package com.project.platform.interceptor;
 
 import com.alibaba.fastjson2.JSON;
+import com.project.platform.config.AuthzRules;
 import com.project.platform.dto.CurrentUserDTO;
 import com.project.platform.exception.CustomException;
 import com.project.platform.utils.CurrentUserThreadLocal;
@@ -76,28 +77,17 @@ public class LoginInterceptor implements HandlerInterceptor {
     }
 
     /**
-     * 按路径前缀校验角色权限
-     * 注意: /merchants/** (公开店铺页) 与 /merchant/** (商家后台) 前缀不同, 需区分
+     * 按 {@link AuthzRules} 的显式规则表校验角色权限。
+     *
+     * <p><b>语义是「默认拒绝」</b>:未命中任何规则的路径一律拒绝(403)。此前这里用
+     * {@code String.startsWith} 做前缀判断且「未命中即放行」,既让约 80 个前端不调用的
+     * 遗留 CRUD 端点对任意登录用户开放,又因前缀匹配误命中 {@code /admin-accounts} 与
+     * {@code /productOrderEvaluate}。规则表按路径段匹配,两类问题一并消除。
+     *
+     * <p>放行清单的依据与维护约定见 {@link AuthzRules} 的类注释。
      */
     private boolean checkRole(String path, CurrentUserDTO currentUserDTO) {
-        String type = currentUserDTO.getType();
-        // 显式「路径前缀→角色」映射,收紧遗留 CRUD 接口的越权面
-        if (path.startsWith("/admin")) {
-            return "ADMIN".equals(type);
-        }
-        // /merchant/** 为商家后台; /merchants/** 为公开店铺页(已配置白名单,不经过此处)
-        if (path.startsWith("/merchant/")) {
-            return "SHOP".equals(type);
-        }
-        // /user/**、/productOrder/** 为后台/遗留 CRUD,前端不调用,收紧为仅管理员
-        if (path.startsWith("/user")) {
-            return "ADMIN".equals(type);
-        }
-        if (path.startsWith("/productOrder")) {
-            return "ADMIN".equals(type);
-        }
-        // 其余接口(公开白名单外的)保持"任意登录用户可访问"
-        return true;
+        return AuthzRules.isAllowed(path, currentUserDTO.getType());
     }
 
     private boolean isPublicImage(String uri) {
