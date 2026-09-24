@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  日志配置。此前项目没有 logback 配置文件,走 Spring Boot 默认(控制台单行)。
+
+  这里只做一件默认配置做不到的事:**把 requestId 打进每一行**,使同一次请求的多条日志可串联。
+  日志级别仍由 application*.yaml 的 logging.level.* 控制 —— Spring Boot 在本文件之后应用那些
+  属性,所以这里写 root INFO、prod 再把它压到 WARN 的既有做法不受影响。
+
+  %X{requestId:-no-request-id}:没有 MDC 时(如启动期日志)显示占位串而不是空白,
+  避免出现「行首多一个空格」这种看不出所以然的形态。
+-->
+<configuration>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{requestId:-no-request-id}] %logger{36} - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <!-- 中文日志务必显式 UTF-8,否则容器里可能打出乱码 -->
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>
