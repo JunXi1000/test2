@@ -281,9 +281,66 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 - **2d. 金额类型**:4 个 DOUBLE 列改 `DECIMAL(10,2)`,Java 侧 `double` → `BigDecimal`(含去掉 `Math.round(x*100)/100.0`)。**单独一个提交**;迁移前 `SELECT` 出会被舍入的行给你确认。
 - **2e. 并发测试**:退款并发(只退一次)、并发扣库存(不超卖)、超时任务幂等。需非回滚事务的测试基类(`BaseControllerTest` 的回滚语义测不了并发),**不改既有基类**。
 
-### Phase 3 — 契约与错误模型
+### Phase 3 — 契约与错误模型 ✅ 已完成(2026-09-24)
 
-`ResponseVO` 双写过渡(P2);补 5 个缺失的异常处理器(**每个都要有测试**);`JSONObject`/`Map` 入参换 DTO + `@Valid`;修 `StorefrontCheckoutController:98` 的 NPE;`docs/backend-api.md` 与 `docs/API接口说明.md` 与实际端点对齐 —— 尤其 Phase 1a 后**哪些端点变成默认拒绝**要显式列出。
+**提交**:`3787f32` 错误模型(5 个异常处理器 + 双写过渡 + NPE + 文档对齐)、
+`d4eda1f` DTO 化批次 A(买家侧 8 端点)、`c3d2fe5` DTO 化批次 B(其余 10 端点 + 2 处 500)。
+**闸门**:`mvn -B clean test` → **141 个测试全绿**(Phase 2 后为 123)。
+
+#### 3a `ResponseVO` 双写过渡(P2)
+
+`fail(int code, String message)` —— 原因**同时**写进 `msg` 与 `data`。此前 `msg` 恒为字面量
+`"操作失败"`,真实原因只在 `data` 里(前端 `http.ts` 据此折进 `e.message`)。对前端是**纯增量**;
+`ErrorModelTest.failWritesReasonToBothFields` 把该契约钉住 —— 将来收敛为「msg 放原因、data 只放业务数据」时
+它会失败并提醒同步改前端。
+签名从 `Object` 收紧为 `String`:全部 11 处调用本来就传 String,收紧后无需防御分支,且消掉一处 raw type。
+
+#### 3b 补 5 个缺失的异常处理器
+
+`HttpMessageNotReadableException` → 400、`MethodArgumentTypeMismatchException` → 400、
+`MissingServletRequestParameterException` → 400、`HttpRequestMethodNotSupportedException` → 405、
+`NoResourceFoundException` → 404。**此前一律落入通用 500** —— 把客户端错误报成 500 会让前端与运维都误判。
+每一项都有对应测试(否则只是把 500 换成一个未验证的分支)。
+
+#### 3c 参数校验 DTO 化(两批,共 18 个端点 / 15 个 DTO)
+
+**只换入参形态、不加新校验**,因此没有任何"现在能成功"的请求会变成失败。
+批次 A = 买家侧 8 个端点;批次 B = 其余 10 个(含唯一跨 service 边界的 `PUT /common/register` ——
+连带改了 `CommonService` 接口与 3 个实现)。
+
+**结构改动自带的收益(无需新增规则)**:
+- `(String) data.get(...)` 强转全部消失 → 传数字不再 `ClassCastException` → 500;
+- `toBool` 的 `Boolean.parseBoolean(String.valueOf(v))` 副作用消失(数字 1 曾得到 `false`,现为 `true`);
+- `/checkout/summary` 的 `items` 元素非对象时,从 NPE → 500 变成反序列化失败 → 400;
+- 4 个**从不读取 body** 的端点(merchant wallet withdraw/settings、admin review status/settings)
+  去掉了无用的入参 —— 它们此前静默丢弃入参却返回 200,前端以为已保存。补实现还是删端点属 Phase 4。
+
+`RequestShapeTest` 钉住两条关键契约:**未知字段被忽略**(前端会多发 `zip`/`price`/`isMerchant` 等,
+依赖 Spring Boot 关闭 `FAIL_ON_UNKNOWN_PROPERTIES`)、以及**数字→字符串不再 500**。
+
+#### 3d 文档对齐
+
+`backend-api.md`:§0 重写鉴权(默认拒绝 + 规则表)与错误模型;§2 标注「绝大多数遗留前缀已默认拒绝」并列出
+仍放行/已关闭清单;§3 纠正两行已过期说法。
+`API接口说明.md` **整体已过期**(仍写着「与 Java 后端不一致、需要网关映射」,而前端早已直连),
+故**显式标注为历史文档**并给出权威来源顺序,而不是零散打补丁留一份半真的文档。
+
+#### ⚠️ 输入校验缺口清单(记录在案,**未修**)
+
+以下都是"缺少校验"而非"形态"问题,修它们要么属新增约束、要么需前端配合,故**未擅自改**:
+
+| # | 端点 | 缺口 | 后果 |
+|---|---|---|---|
+| 1 | `POST /returns` | `orderId` 不校验归属;`refundAmount` 由客户端给、无上限、不按订单重算 | 可为**他人订单**伪造退货并虚报金额。**前端该字段是手输文本框、无订单选择器**(`Returns.vue:90` 的 `openReturnForm()` 不传参),补校验会改变用户可见行为 → **需前后端一起改** |
+| 2 | `POST /checkout/promo` | `subtotal` 缺失 | NPE → 500(`code` 的同类 NPE 已在 3c 修掉) |
+| 3 | `POST /chat/messages` | `receiverId` 缺失 | `conversation.user_id/shop_id` NOT NULL → insert 失败 → 500 |
+| 4 | `POST /stock-alerts` | `productId` 缺失 | `stock_alert.product_id` NOT NULL → 500 |
+| 5 | `POST /admin/merchants` | **一处校验都没有** | 可建出 name/username/email 全 null 的商家行;且 `username` 直接取 `email`、密码硬编码 `"123456"` |
+| 6 | `POST /checkout/summary` | `items` 缺失 | 静默按 `subtotal=0` 返回 200(不报错) |
+| 7 | `PUT /merchant/orders/{id}/status` | `status` 为**未知值** | 静默 no-op 返回 200(缺 `status` 已在 3c 改为 400) |
+
+> 其中 #1 是**安全**问题(§32 优先级最高)。但它与前端耦合:前端必须先提供订单选择器,否则用户手输
+> (哪怕只是打错)会从「提交成功」变成「报错」。**待用户决策后再动。**
 
 ### Phase 4 — 可维护性
 
