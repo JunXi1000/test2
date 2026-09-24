@@ -209,7 +209,10 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 `AuthorizationBaselineTest` B 段由「断言当前缺陷」翻转为「断言已收口」、
 `ChatControllerTest` 补齐正反例(4 → 10,删掉固化 IDOR 的 "works for any ID" 断言)。
 
-### Phase 2 — 数据一致性 🔄 进行中(2026-09-24)
+### Phase 2 — 数据一致性 ✅ 已完成(2026-09-24)
+
+**提交**:`62d9932` 代码修复(15 文件) + `bd7de05` schema 与迁移(6 文件)。
+**闸门**:`mvn -B clean test` → **121 个测试全绿**(Phase 1 后为 108)。
 
 **三项前置报告(对 `template_v3` 实测,决定迁移做法)**:
 
@@ -238,7 +241,29 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
   实测**收敛(库里已有 `notification(role,user_id)`、`message` 两个索引等,不重复建)。
 - `src/test/resources/schema-h2.sql` 同步这 6 个唯一约束,使测试库与生产库的约束一致(否则测试抓不到重复插入)。
 
-**待做**:2d 金额类型(无风险,单独提交)、V4 手工执行(按下方命令)、Phase 2 提交。
+**执行与验证(手工,V4/V5)**:
+
+- 执行前后各跑一次自检:V4 的四类重复、V5 的「会被舍入的行」**全部为 0** → 无需清理数据。
+- `V4__constraints_and_indexes.sql` 与 `V5__money_decimal_round2.sql` 已对 `template_v3` 手工执行成功。
+- 验证:`information_schema` 显示 `coupon.value/min_order/max_discount`、`return_request.refund_amount`
+  四列均为 `decimal(10,2)` 且**可空性与默认值原样保留**;6 个新唯一键与 3 个 `product_order` 新索引就位。
+- 迁移后**运行中的应用**健康:登录成功、`/admin/users` 200、`/products` 200,且 Phase 1a 的收口仍在
+  (`/slideshow/list`、`/shippingAddress/list` 均为 403)。
+
+**2d 金额类型**(随 `62d9932` 一并提交,未单独成提交 —— 见下方说明):
+
+`coupon.value/min_order/max_discount` 与 `ReturnRequest.refundAmount` 由 `Double` 改为 `BigDecimal`;
+`CouponServiceImpl.applyByCode` 改用精确小数运算(`setScale(2, HALF_UP)`),不再用 `Math.round(x*100)/100.0`。
+响应形态不变(BigDecimal 序列化为 JSON 数字)。
+
+> **提交拆分说明**:2b(`CouponServiceImpl.claim` 补 `@Transactional`)与 2d(`applyByCode` 改 BigDecimal)
+> 落在**同一个文件**且 import 行相邻,不做部分暂存就无法干净拆开;为拆提交而在金额计算方法上反复重写,
+> 风险大于收益。故最终按「**代码 / schema**」两分 —— schema 单独一步反而更有价值,因为它有独立的回滚路径
+> 且需要手工应用。
+
+**本轮撤回的一条假 finding**:曾判定「`applyByCode` 不校验 `status`/`expires_at`」,实为校验位于
+`CouponMapper.selectByCode` 的 `WHERE status='enabled' AND (expires_at IS NULL OR expires_at > NOW())`。
+行为本就正确,**未改代码**,只在测试里把这条机制钉住(`StorefrontPromoTest`)。
 
 - **2a. 重写 `cancelRows` 的退款语义与原子性(最高优先,一次改完两件事)**
   - 验收一(B0 造钱):退款去向按 `payment.channel` 分流。
