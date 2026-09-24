@@ -342,9 +342,58 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 > 其中 #1 是**安全**问题(§32 优先级最高)。但它与前端耦合:前端必须先提供订单选择器,否则用户手输
 > (哪怕只是打错)会从「提交成功」变成「报错」。**待用户决策后再动。**
 
-### Phase 4 — 可维护性
+### Phase 4 — 可维护性 ✅ 已完成(2026-09-24)
 
-重复暴露收敛(**API 变更,需逐个确认,不擅自删**);空实现端点明确表态(实现或标注为占位);硬编码假数据必须标注;命名统一(URL 变更 → **需前后端联动**,单独阶段且先出映射表)。
+**提交**:`97a4d34` 退货越权(安全项)、`a9bebb9` 删除 14 个遗留控制器、`a9b96c0` 占位标注与文档纠正。
+**闸门**:143 → **143 个测试全绿**(删除前后测试数不变,因为被删端点的断言都是 403,而拦截器的默认拒绝仍生效)。
+
+#### 4a `POST /returns` 越权(§32 最高优先级的安全项)
+
+`orderId` 不再被信任:经新增的 `ProductOrderService.listOwnedOrderRows` 解析并校验归属
+(接受 UI 可能展示的三种形态:分组 `orderNo`、`LEGACY-{id}`、纯数字行 id),走与其它订单接口同一套
+`AccessGuard` 规则 —— 不存在 404、非本人 403。
+`refundAmount` 改为**服务端以订单实付金额为上限**(正数则与实付取小、缺失则取实付):
+夹取而非忽略,既让部分退货仍可表达,又使虚报不可能。
+
+> **更正过我先前的一个说法**:我曾说这项"必须前端先加订单选择器才能用"。追查 `orders.ts` 后确认
+> **不成立** —— 前端 `id: raw.orderNo`、订单页展示的就是它,用户照抄即可通过校验。只有打错(以前静默成功)
+> 与填他人单号(以前也成功)会失败,这正是修复目标。表格里的 `placeholder="e.g. ORD-123456"` 是 mock 数据的
+> 形状、后端从未有过,改成"从订单页复制"属体验优化、**非阻塞**。
+
+#### 4b 物理删除 14 个遗留 CRUD 控制器
+
+Phase 1a 已把它们的约 90 个端点从放行表拿掉(403);本轮连同**孤儿 service/mapper/XML/entity** 一并删除:
+14 个控制器 + 6 对 service + 5 个 mapper + 5 个 mapper XML + 5 个 entity + 2 处死注入
+(`AdminApiController`/`MerchantApiController` 的 `statsService` 只声明未调用)。共 **36 个 Java 文件 + 5 个 XML**,
+Controller 33 → **19**。
+
+**保留的"非孤儿"**:`ProductTypeService`(店铺前台分类)、`ShippingAddressService`(`/addresses`)、
+`ProductOrderEvaluateService`(管理端评论)、以及 `ProductBrowsingHistoryMapper`/`ProductCollectMapper`
+—— 后者虽失去遗留控制器,但 `ProductServiceImpl.recommended()` 用它们算「为你推荐」的个性化权重
+(`/products/recommend/{size}` 是前端在用的放行端点)。
+
+> **删除过程中我犯的一个错,值得记下**:我用 `grep "\bProductCollect\b"` 找孤儿,那只匹配**类名**、
+> 漏掉了小写字段名 `productCollectMapper`,于是删掉了两个**正在被使用**的 mapper 与两个实体。
+> 编译器立刻报 `cannot find symbol`,我用 `git checkout` 恢复并用**大小写不敏感**的 grep 重查了全部被删名字,
+> 确认无其它残留。那两个字段现已加注释说明「不要随遗留 CRUD 一起删」。
+
+**外部表现不变**:这些路径现在没有处理器,但请求仍被 `LoginInterceptor` 的默认拒绝挡下(匿名 401 / 已登录 403)。
+
+#### 4c 占位与假数据:**只标注**
+
+`docs/MODULES.md` §2 的占位清单**本来就准确**(我逐条核对过),所以工作是**保持它为真**而非另写一份:
+- 纠正了它「已知 Bug」表里一条**假 finding**:`UserServiceImpl.check` 并未写成 `getId() != getId()`,
+  当前是**正确**的查重且 `insert`/`updateById` 都调用了它(原记载疑似描述早已被 `aa959c4` 修掉的旧版本)。
+  **留在文档里的假 bug 会诱导后人来"修"一个不存在的问题** —— 与我在本次工作中产生过两次假 finding 是同一类陷阱。
+- 修掉因 4b 而失真的行(收藏/浏览历史/评价/报表的端点是已删除的;wishlist 两行「未同步」→「已无后端可同步」)。
+- 给 admin/merchant 的**仪表盘统计**加代码标注 —— 那两个各 4 项硬编码数字、会被首页当真实指标渲染,是
+  最容易被误读的地方。其余站点由 `MODULES.md` 统一覆盖。
+
+#### 4d 命名统一:**无需动作**
+
+原计划里那处拼写缺尾的 URL(`/statisticalReportForms/productTypeProportionOfChar`)**随 4b 的删除消失了** ✓。
+其余 camelCase↔kebab 混用都在**前端在用的**路径上(`/common/*`、`/shoppingCart/*`),按用户决策推迟
+(改它们需前后端联动),已在计划中保留。
 
 ### Phase 5 — 可观测性与部署
 
