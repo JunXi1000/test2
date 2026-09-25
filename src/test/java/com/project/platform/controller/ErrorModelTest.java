@@ -94,6 +94,49 @@ class ErrorModelTest extends BaseControllerTest {
                 .andExpect(jsonPath("$.code").value(400));
     }
 
+    // ─────────────────────── 最后三处「缺字段 → 500」已收成 400 ───────────────────────
+
+    @Test
+    @DisplayName("优惠码缺 subtotal → 400(此前下游乘法 NPE → 500)")
+    void promoMissingSubtotalIsBadRequest() throws Exception {
+        post("/checkout/promo", "", Map.of("code", "WELCOME10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("到货订阅缺 productId → 400(此前 NOT NULL 违约 → 500)")
+    void stockAlertMissingProductIdIsBadRequest() throws Exception {
+        post("/stock-alerts", userToken(), Map.of("productTitle", "x"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("发消息缺 receiverId 且无会话 → 400(此前 NOT NULL 违约 → 500)")
+    void chatMissingReceiverIsBadRequest() throws Exception {
+        post("/chat/messages", userToken(), Map.of("content", "hi"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("但已有会话时缺 receiverId **仍应可用** —— 守卫不能伤到这条现在能用的调用")
+    void chatExistingConversationDoesNotNeedReceiver() throws Exception {
+        // 先建一个会话拿到 conversationId
+        int conversationId = JSONObject.parseObject(
+                        post("/chat/messages", userToken(), Map.of("receiverId", 1, "content", "first"))
+                                .andExpect(status().isOk()).andReturn()
+                                .getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .getJSONObject("data").getInteger("conversationId");
+
+        // 只带 conversationId、不带 receiverId:receiverId 在这条路径里本就不被使用,必须仍然成功
+        post("/chat/messages", userToken(), Map.of("conversationId", conversationId, "content", "second"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.content").value("second"));
+    }
+
     // ─────────────────────── 商家端订单状态:一个 500 与一个伪 404 ───────────────────────
 
     @Test

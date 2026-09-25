@@ -59,6 +59,12 @@ public class ChatServiceImpl implements ChatService {
         }
 
         if (conversation == null) {
+            // receiverId 只在**需要新建/查找会话**时才是必需的:若上面已按 conversationId 取到会话,
+            // 它在整个方法里都不被使用,无条件要求它会破坏"往已有会话发消息"这一现在可用且前端在用的调用。
+            // 缺它时下游会把 null 当 userId/shopId 去 insert,撞 conversation 的 NOT NULL → 500。
+            if (receiverId == null) {
+                throw new CustomException(HttpStatus.BAD_REQUEST, "缺少接收方:新会话必须提供 receiverId");
+            }
             // Determine user_id and shop_id from senderType
             if ("SHOP".equals(senderType)) {
                 userId = receiverId;

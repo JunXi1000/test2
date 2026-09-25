@@ -150,8 +150,8 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 
 ### 6.1 迁移怎么应用到**已存在的库**(重要)
 
-`docker/entrypoint.sh` **只在首次建库时**导入 `sql/migrations/*.sql`(靠 `/tmp/.schema-imported`
-标记文件判断),所以**新增的迁移对已有库不会自动生效,必须手工执行**:
+`docker/entrypoint.sh` **只在首次建库时**导入 `sql/migrations/*.sql`(靠 `${DATA_DIR}/.schema-imported`
+标记文件判断,**该文件在 MySQL 数据卷里,容器重建后依然存在**),所以**新增的迁移对已有库不会自动生效,必须手工执行**:
 
 ```bash
 # 容器内执行(口令取自容器环境变量,不回显)

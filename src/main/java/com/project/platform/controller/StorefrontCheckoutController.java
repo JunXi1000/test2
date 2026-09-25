@@ -89,6 +89,11 @@ public class StorefrontCheckoutController {
         if (code == null || code.isBlank()) {
             throw new CustomException(HttpStatus.BAD_REQUEST, "优惠码不能为空");
         }
+        // 同理:subtotal 缺失时下游(applyByCode 的乘法与回退分支)会 NPE → 500。
+        // 两条路径都要用它算折扣,故它是真正的必填项。
+        if (subtotal == null) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "结算金额不能为空");
+        }
 
         Map<String, Object> result = new HashMap<>();
         // 1) 优先从 coupon 表校验(Phase 1 后端化)
