@@ -1,7 +1,8 @@
 # 后端重构计划(Backend Refactor Plan)
 
 > 依据:`web/aiagant.md`(后端重构与重建 Agent 规范)。
-> 状态:**Phase 0 进行中**。已确认的决策与实测基线见下,未经确认不做大规模修改(规范 §28)。
+> 状态:**Phase 0–5 全部完成**(2026-09-24 起,2026-09-26 收尾)。各阶段的提交、证据与撤回记录见 §4;
+> 实测基线与规模见 §1。当前闸门 **155 个测试全绿**。
 > 起始日期:2026-09-24。
 
 ---
@@ -86,8 +87,9 @@
   发送侧的 60s/日 10 次限流挡不住猜测;现在两者合起来把 6 位码的暴力面压到「每日 10 次发送 × 5 次尝试」量级。
 - ✅ **已修(仅日志)**:`JwtUtils.verifyJwt` 区分「过期」与「校验失败」。此前一律 `catch (Exception)` 吞掉,
   导致「token 过期」与「伪造 token 试探」在日志里长得一样;对外文案与返回(null)不变。
-- 遗留(未动,属后续阶段):jjwt **0.9.1**、HS256、密钥有**硬编码兜底值**(生产须由 `JWT_SECRET` 注入)、
-  无 issuer/audience、**无 refresh、无吊销**(签了 `jti` 但无处存储/校验)。
+- 遗留(未动,属后续阶段):jjwt **0.9.1**、HS256、无 issuer/audience、**无 refresh、无吊销**。
+  ✅ 2026-09-26 更正:**密钥已无硬编码兜底值** —— 仓库内没有任何可用签名密钥;未提供 `JWT_SECRET` 时
+  非 prod 生成**一次性随机密钥**(重启后旧 token 失效),prod profile 下缺失直接拒绝启动。
 
 **A5. 配置与凭据**
 
@@ -141,7 +143,10 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 
 ### E. 可观测性
 
-- **无请求 ID / Trace ID / MDC**;实际 `log.*` 调用点仅 3 个类 7 处;无 `logback-spring.xml`;无 Actuator。
+- ✅ **已于 Phase 5 修**:~~无请求 ID / Trace ID / MDC;无 `logback-spring.xml`~~ —— 现有
+  `config/RequestIdFilter`(每请求 requestId → MDC + `X-Request-Id` 响应头,`finally` 清除)与
+  `logback-spring.xml`(日志行含 `%X{requestId}`)。**仍无 Actuator**(按用户决定不引入)。
+  实际 `log.*` 调用点仍只有 3 个类 7 处 ✓ 未变。
 - `spring.main.allow-circular-references: true` 开着,掩盖循环依赖。
 - (对照:prod profile **未**打印 SQL,这点是对的。)
 
@@ -170,7 +175,7 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 
 > 每阶段:独立提交 → 跑闸门 → 报告(改了什么/为什么/怎么验证的/风险)。
 
-### Phase 0 — 立闸门 ✅ 进行中
+### Phase 0 — 立闸门 ✅ 已完成(2026-09-24)
 
 照抄前端阶段 3 的成功做法:**先写特性化测试钉住重构前的真实行为,再动代码**。
 
@@ -325,7 +330,16 @@ ProductOrderServiceImpl.java:220-222   取消「待发货」行 → userService.
 `API接口说明.md` **整体已过期**(仍写着「与 Java 后端不一致、需要网关映射」,而前端早已直连),
 故**显式标注为历史文档**并给出权威来源顺序,而不是零散打补丁留一份半真的文档。
 
-#### ⚠️ 输入校验缺口清单(记录在案,**未修**)
+#### ✅ 输入校验缺口清单 —— **七项已全部修完**(2026-09-24 记录,2026-09-26 收口)
+
+> 下表是当时的记录。**现在七项都已处理**,不再是待办:
+> - #1 `POST /returns` 归属校验 + `refundAmount` 上限 → Phase 4a(`97a4d34`)
+> - #2 `promo` 缺 `subtotal`、#3 `chat/messages` 缺 `receiverId`、#4 `stock-alerts` 缺 `productId`
+>   → 500 改 400(`20faf92`)。**注:#3 的守卫放在 `ChatServiceImpl` 的 `conversation == null` 分支里,
+>   不在控制器** —— 因为已给定存在的 `conversationId` 时 `receiverId` 本就不被使用,无条件要求它会
+>   破坏现在能用的调用;`ErrorModelTest.chatExistingConversationDoesNotNeedReceiver` 专门钉住这一点。
+> - #5 `POST /admin/merchants` 零校验、#6 `summary` 空 items、#7 未知 `status` → 按常规做法改为明确 400
+>   (`0ae9945`);#5 的初始密码也不再硬编码,改走配置项 `resetPassword`。
 
 以下都是"缺少校验"而非"形态"问题,修它们要么属新增约束、要么需前端配合,故**未擅自改**:
 
@@ -395,9 +409,26 @@ Controller 33 → **19**。
 其余 camelCase↔kebab 混用都在**前端在用的**路径上(`/common/*`、`/shoppingCart/*`),按用户决策推迟
 (改它们需前后端联动),已在计划中保留。
 
-### Phase 5 — 可观测性与部署
+### Phase 5 — 可观测性与部署 ✅ 已完成(2026-09-26)
 
-请求 ID / MDC + `logback-spring.xml`;Actuator(属新增依赖 → **先问**);配置安全(A5);CI(当前完全没有,最小形态是容器内 `mvn -B clean test` + 前端 `npm test` 的闸门脚本,平台需你定)。
+**提交**:`aef75fc` 请求 ID/日志、`e01e3bf` 配置安全、`0ae9945` + 两条 docs 提交(本地默认值与三项收尾)。
+**闸门**:155 个测试全绿。
+
+- **请求 ID / MDC**:新增 `config/RequestIdFilter` —— 用 **Filter 而非拦截器**(拦截器对白名单路径不跑,
+  那些请求会没有 id);接受上游 `X-Request-Id`(限长)、否则生成 8 位十六进制;写 MDC 并在 `finally` 清除
+  (Tomcat 复用线程,残留会造成日志串号)。`logback-spring.xml` 输出 `%X{requestId}`。
+  dev 的 MyBatis 由 `StdOutImpl` 改 `Slf4jImpl`(StdOut 直写 stdout、绕过 logback,拿不到 id 也不受级别控制)。
+- **配置安全**:见 §「2.4 配置与密钥」的最终形态 —— **dev 有本地默认值、非 dev 必填**;
+  **JWT 密钥仓库内没有任何可用值**(开发生成一次性随机密钥)。
+  > ⚠️ **一次被安全审查纠正的设计**:我第一版保留了一把 dev 密钥、用「判断 profile 字符串」当守卫 ——
+  > 那是 **fail-open**(`SPRING_PROFILES_ACTIVE` 默认 `dev`,生产忘了设就会用公开密钥签发 token)。
+  > 已改为"开发生成随机密钥 + 仓库内无可用密钥",**不要退回 profile 判断那种写法**。
+- **Actuator**:**未引入**(属新增依赖,按 §23 先问;用户选择不做)。
+- **CI**:**未引入平台**(用户选择只文档化命令 —— 闸门命令见 `docs/DEVELOPMENT.md` §5)。
+- **收尾**:另修 `TemplateApplicationTests` 两处隐性问题(它此前跑在 **dev** profile 上、连的是真实开发库;
+  补 test profile 后又暴露 `schema-h2.sql` 种子**不幂等**导致的第二上下文冲突 —— 已用与 `BaseControllerTest`
+  相同的注解复用单一上下文);以及三处「静默成功」(`/admin/merchants` 零校验、`/checkout/summary` 空 items、
+  `/merchant/orders/{id}/status` 未知 status)按常规做法改为明确 400。
 
 ---
 

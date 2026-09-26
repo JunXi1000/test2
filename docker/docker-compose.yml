@@ -15,6 +15,13 @@
 #   docker push <你的registry>/nexus-dev-env:1.0
 #   他人: docker pull <你的registry>/nexus-dev-env:1.0
 # ─────────────────────────────────────────────────────────────────────────
+# ⚠️ 本文件**只用于本机开发环境** —— 唯一的服务就叫 `dev`(容器 nexus-dev),
+#    端口绑回环,里面所有默认值都是本地弱值(见下方 environment 段的说明)。
+#
+#    **不要把本文件用于生产部署。** 生产请另写一份 compose / 部署清单,全部由环境变量提供:
+#      · MYSQL_ROOT_PASSWORD / SPRING_DATASOURCE_PASSWORD / RESET_PASSWORD 均必填;
+#      · SPRING_PROFILES_ACTIVE=prod;
+#      · JWT_SECRET 必填(本应用在 prod profile 下缺失会**拒绝启动**,不会退化)。
 services:
   dev:
     build:
@@ -26,8 +33,12 @@ services:
       TZ: Asia/Shanghai
       # ── 下面四项都给了**本地默认值**,clone 下来 docker compose up 即可跑 ──
       # 想用真实口令:cp .env.example .env 填好即可覆盖(该文件已 gitignore)。
-      # 生产不要用这些默认值 —— 应用侧在 prod profile 下对 JWT_SECRET 会**拒绝兜底、直接启动失败**,
-      # 详见 docs/DEVELOPMENT.md §2.4。
+      #
+      # ⚠️ 这些默认值使本文件成为 **fail-open** 的:忘设环境变量就会静默用 123456。
+      #    对**本机开发**这是常见且可接受的(3306 只绑 127.0.0.1,见下方 ports)。
+      #    **生产部署必须显式提供这三项,并设 SPRING_PROFILES_ACTIVE=prod。**
+      #    最要紧的那一项(JWT 签名密钥)刻意**不给默认值**:未提供时应用只生成一次性随机密钥,
+      #    prod profile 下更会直接拒绝启动 —— 公开的签名密钥等于任何人都能伪造 token。
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: template_v3
       # 后端连的是本容器内的 MySQL,库口令与 root 同一个
