@@ -93,6 +93,8 @@ mvn test
 > `curl localhost:5173` 拿到 `Empty reply`(exit 52),容器内 `curl 127.0.0.1:5173` 却是 200,
 > 极易误判成"没启动"。`--host` 仍然监听回环,故容器内 Playwright 的
 > `baseURL: http://localhost:5173` 不受影响。`entrypoint.sh` 的 `AUTO_START` 走的就是 `dev:lan`。
+> ⚠️ 顺带一提:`--host` 会绑容器内所有网卡,而 `5173` 的映射又是裸的(绑 `0.0.0.0`),
+> 两条叠加 ⇒ **dev server 对局域网开放**。见文末「`1000` / `5173` 呢?」。
 
 ## 环境变量
 
@@ -117,5 +119,12 @@ mvn test
 - **找回密码验证码会被直接返回?** 仅演示模式(dev profile,容器默认)为了页面展示会回显 6 位验证码;生产/默认已关闭(`expose-reset-code: ${EXPOSE_RESET_CODE:false}`,prod profile 显式 `false`),接入真实短信/邮件后验证码应走下发。需要时可 `-e EXPOSE_RESET_CODE=true/false` 覆盖。
 - **改代码要重建镜像吗?** 不需要。代码是卷挂载的,容器内改动即生效;镜像只更新环境(`docker compose up -d --build`)。
 - **Docker VM 内存不足?** 本机 Docker Desktop VM 同时跑多个容器(ES/Kibana/多个 MySQL)会 OOM。开发本镜像时请停用无关容器。
-- **MySQL 端口为什么只绑回环?** MySQL 默认密码是弱口令 `123456`,compose 用 `127.0.0.1:3306:3306` 只暴露给宿主机(本机 Navicat 可连),不暴露到局域网。若需他人远程连库,请先用 `-e MYSQL_ROOT_PASSWORD=强密码` 覆盖再改映射;后端/前端端口 `1000/5173` 按需自行调整。
+- **MySQL 端口为什么只绑回环?** MySQL 默认密码是弱口令 `123456`,compose 用 `127.0.0.1:3306:3306` 只暴露给宿主机(本机 Navicat 可连),不暴露到局域网。若需他人远程连库,请先用 `-e MYSQL_ROOT_PASSWORD=强密码` 覆盖再改映射。
+- **`1000` / `5173` 呢?** ⚠️ **它们没有绑回环。** compose 里是裸的 `"1000:1000"` / `"5173:5173"`,
+  Docker 默认绑 `0.0.0.0` ⇒ **同一局域网的其它设备可以访问后端 API 与 Vite dev server**。
+  实测 `docker ps` 的端口列就是这样:`0.0.0.0:1000->1000/tcp`、`0.0.0.0:5173->5173/tcp`
+  (只有 3306 是 `127.0.0.1:3306->3306/tcp`)。这是本机开发环境一直以来的状态,**不是某次改动引入的**。
+  想收敛:给这两个映射加 `127.0.0.1:` 前缀,代价是**失去手机/其它机器访问 dev server 的能力**。
+  其中 **dev server 那条尤其值得权衡** —— 它会提供源码,且历史上有过文件读取类 CVE
+  (2025 年 `?raw` / `fs.deny` 绕过那一族);`server.fs.strict` 保持默认开启,但它挡不住那类绕过。
 - **已有数据的 MySQL 卷?** 删掉 `mysql-data` 卷并重启才会重新初始化导库:`docker compose down -v`(会清空数据库)。

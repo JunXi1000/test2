@@ -16,7 +16,11 @@
 #   他人: docker pull <你的registry>/nexus-dev-env:1.0
 # ─────────────────────────────────────────────────────────────────────────
 # ⚠️ 本文件**只用于本机开发环境** —— 唯一的服务就叫 `dev`(容器 nexus-dev),
-#    端口绑回环,里面所有默认值都是本地弱值(见下方 environment 段的说明)。
+#    里面所有默认值都是本地弱值(见下方 environment 段的说明)。
+#    ⚠️ 端口**并非全部绑回环**:只有 MySQL 是 `127.0.0.1:3306:3306`;
+#    后端 `1000` 与前端 `5173` 是裸映射,Docker 默认绑 `0.0.0.0` ⇒ **局域网内其它设备可访问**。
+#    不想要就给这两条加 `127.0.0.1:` 前缀(代价:手机/其它机器无法再访问 dev server)。
+#    详见 docker/README.md 的「1000 / 5173 呢?」一节。
 #
 #    **不要把本文件用于生产部署。** 生产请另写一份 compose / 部署清单,全部由环境变量提供:
 #      · MYSQL_ROOT_PASSWORD / SPRING_DATASOURCE_PASSWORD / RESET_PASSWORD 均必填;
@@ -51,9 +55,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-}
       # SPRING_DATASOURCE_URL / SPRING_DATASOURCE_USERNAME 保持默认(localhost:3306 / root)即可
     ports:
+      # 只有 MySQL 绑了回环。1000/5173 是裸映射 ⇒ 绑 0.0.0.0 ⇒ 局域网可达(见文件头说明)。
       - "127.0.0.1:3306:3306"    # MySQL:仅宿主机回环,不暴露到局域网
-      - "1000:1000"              # 后端 Spring Boot
-      - "5173:5173"              # 前端 Vite dev server
+      - "1000:1000"              # 后端 Spring Boot —— 局域网可达
+      - "5173:5173"              # 前端 Vite dev server —— 局域网可达(它会提供源码,留意)
     volumes:
       - ../:/workspace                          # 项目代码(不打包进镜像,运行挂载)
       - mysql-data:/var/lib/mysql               # MySQL 数据持久化
