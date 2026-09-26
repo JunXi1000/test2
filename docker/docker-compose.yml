@@ -24,17 +24,20 @@ services:
     container_name: nexus-dev
     environment:
       TZ: Asia/Shanghai
-      # ── 以下四项由 docker/.env 提供(模板见 docker/.env.example,该文件已 gitignore) ──
-      # 仓库里**不再有任何明文口令/密钥兜底**:缺任意一项,compose 直接拒绝启动并报出下面这句提示,
-      # 而不是静默用弱口令跑起来(§12/§25:敏感配置不得提交到仓库)。
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 docker/.env 里设置 MYSQL_ROOT_PASSWORD(参考 docker/.env.example)}
+      # ── 下面四项都给了**本地默认值**,clone 下来 docker compose up 即可跑 ──
+      # 想用真实口令:cp .env.example .env 填好即可覆盖(该文件已 gitignore)。
+      # 生产不要用这些默认值 —— 应用侧在 prod profile 下对 JWT_SECRET 会**拒绝兜底、直接启动失败**,
+      # 详见 docs/DEVELOPMENT.md §2.4。
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: template_v3
-      # 后端连的是本容器内的 MySQL,库口令与 root 同一个,故分别提供、便于将来拆分
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?请在 docker/.env 里设置 SPRING_DATASOURCE_PASSWORD}
+      # 后端连的是本容器内的 MySQL,库口令与 root 同一个
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-123456}
       # 重置密码接口的默认值
-      RESET_PASSWORD: ${RESET_PASSWORD:?请在 docker/.env 里设置 RESET_PASSWORD}
-      # JWT 签名密钥(应用侧已无兜底,未设置会启动失败)
-      JWT_SECRET: ${JWT_SECRET:?请在 docker/.env 里设置 JWT_SECRET}
+      RESET_PASSWORD: ${RESET_PASSWORD:-123456}
+      # 显式激活 dev profile:生产必须改成 prod(否则会落到 dev 的本地弱口令上)
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # JWT 签名密钥:留空则用应用内的本地兜底值(dev 可接受)
+      JWT_SECRET: ${JWT_SECRET:-}
       # SPRING_DATASOURCE_URL / SPRING_DATASOURCE_USERNAME 保持默认(localhost:3306 / root)即可
     ports:
       - "127.0.0.1:3306:3306"    # MySQL:仅宿主机回环,不暴露到局域网

@@ -41,7 +41,12 @@ public class StorefrontCheckoutController {
 
         BigDecimal subtotal = BigDecimal.ZERO;
         List<CheckoutSummaryDTO.Item> items = body.getItems();
-        if (items != null) {
+        // 空/缺 items 此前会静默按 subtotal=0 返回 200 —— 一个"合法"的零元结算摘要。
+        // 按常规做法:没有商品就没有结算可言,直接 400。
+        if (items == null || items.isEmpty()) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "结算商品不能为空");
+        }
+        {
             for (CheckoutSummaryDTO.Item item : items) {
                 // 兼容前端 CartItem:productId 优先,缺省回落 id(DTO 里 resolveProductId 封装同一规则)
                 Integer productId = item.resolveProductId();

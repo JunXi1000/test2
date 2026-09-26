@@ -10,6 +10,7 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.extern.slf4j.Slf4j;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
@@ -28,13 +29,15 @@ public class JwtUtils {
     private static final long TOKEN_EXPIRED_TIME = 24L * 60 * 60 * 1000;
 
     /**
-     * jwt 签名密钥。来源优先级:{@code -Djwt.secret}(测试/本地) → {@code JWT_SECRET} 环境变量。
+     * jwt 签名密钥。来源优先级:{@code -Djwt.secret}(测试) → {@code JWT_SECRET} 环境变量
+     * → **一次性随机密钥**(仅非生产 profile)。
      *
-     * <p><b>没有兜底值</b>:两者都没提供就抛异常让应用启动失败 —— 此前有一个硬编码的
-     * "仅限本地开发"密钥,但那串东西一旦进了仓库就等于公开(§12/§25),谁都能拿它伪造 token。
-     * "起不来"远好过"看起来正常但用着公开密钥"。
+     * <p><b>仓库里不放任何可用密钥。</b>开发便利用"随机生成一次性密钥"实现,而不是写一个固定兜底值:
+     * 固定值一旦进仓库就等于公开,而**用 profile 字符串当唯一屏障是 fail-open 的**
+     * (生产部署忘了设 {@code SPRING_PROFILES_ACTIVE=prod} 就会用上那把公开密钥)。
+     * 随机密钥没有这个问题 —— 它只存在于本进程内存里。
      *
-     * <p>测试由 {@code BaseControllerTest} 的静态块设 {@code jwt.secret} 提供,不依赖兜底。
+     * <p>代价:dev 重启后旧 token 失效(前端会按 401 跳登录,属预期)。生产必须注入 {@code JWT_SECRET}。
      */
     private static final String JWT_SECRET = resolveSecret();
 
@@ -47,9 +50,24 @@ public class JwtUtils {
         if (fromEnv != null && !fromEnv.isBlank()) {
             return fromEnv;
         }
-        throw new IllegalStateException(
-                "缺少 JWT 签名密钥:请设置环境变量 JWT_SECRET(或 -Djwt.secret=... 用于测试)。"
-                        + "本应用不再提供硬编码兜底值 —— 公开的密钥等于没有签名。");
+        if (isProductionProfile()) {
+            throw new IllegalStateException(
+                    "生产环境必须提供 JWT_SECRET(或 -Djwt.secret=...):本应用不会为生产生成临时密钥,"
+                            + "因为那样每次重启都会让所有 token 失效,且无从与其它实例共享会话。");
+        }
+        byte[] random = new byte[32];
+        new SecureRandom().nextBytes(random);
+        log.warn("未提供 JWT_SECRET,已生成本次运行的临时开发密钥(重启后旧 token 失效);生产请注入 JWT_SECRET。");
+        return Base64.getEncoder().encodeToString(random);
+    }
+
+    /** 当前是否生产 profile —— 只作为**辅助**提示,真正的屏障是"仓库里没有可用密钥" */
+    private static boolean isProductionProfile() {
+        String profiles = System.getProperty("spring.profiles.active");
+        if (profiles == null || profiles.isBlank()) {
+            profiles = System.getenv("SPRING_PROFILES_ACTIVE");
+        }
+        return profiles != null && profiles.toLowerCase().contains("prod");
     }
 
     /**

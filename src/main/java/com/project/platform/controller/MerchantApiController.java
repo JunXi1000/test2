@@ -158,6 +158,11 @@ public class MerchantApiController {
                 order.setTrackingNumber("");
             }
             case "delivered" -> order.setStatus("已完成");
+            default -> {
+                // 此前未知 status 会**静默 no-op**:switch 不匹配 → 原样回写订单 → 200,
+                // 调用方以为改成功了。按常规做法:未知枚举值直接拒绝,别假装成功。
+                throw new CustomException(HttpStatus.BAD_REQUEST, "不支持的 status: " + status);
+            }
             case "cancelled" -> {
                 // 取消必须走与前台同一套逻辑:回补库存 + 按支付渠道退款 + 推进支付单。
                 // 此前这里只把 status 改成「已取消」—— 库存永不回补、钱不退、支付单不动,

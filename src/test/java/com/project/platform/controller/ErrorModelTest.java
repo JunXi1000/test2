@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -92,6 +93,50 @@ class ErrorModelTest extends BaseControllerTest {
         post("/common/login", "", Map.of())
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400));
+    }
+
+    // ─────────────────────── 三处「静默成功」已按常规做法改为明确拒绝 ───────────────────────
+
+    @Test
+    @DisplayName("结算摘要缺/空 items → 400(此前静默返回 subtotal=0 的 200)")
+    void summaryEmptyItemsIsBadRequest() throws Exception {
+        post("/checkout/summary", "", Map.of())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+        post("/checkout/summary", "", Map.of("items", List.of()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("商家改订单状态传未知 status → 400(此前静默 no-op 返回 200)")
+    void merchantUnknownStatusIsBadRequest() throws Exception {
+        // 订单 1 在 H2 种子里属于 shop 1,故 shopToken 的归属校验通过;随后进入 switch 的 default
+        put("/merchant/orders/1/status", shopToken(), Map.of("status", "bogus-status"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("建商家缺必填/邮箱格式错 → 400(此前零校验,可建出字段全 null 的商家行)")
+    void createMerchantValidatesRequiredFields() throws Exception {
+        post("/admin/merchants", adminToken(), Map.of())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+
+        post("/admin/merchants", adminToken(), Map.of(
+                "storeName", "S", "ownerName", "O", "email", "not-an-email"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    @DisplayName("建商家字段齐全 → 200(初始密码走配置项 resetPassword,不再硬编码)")
+    void createMerchantWithValidFieldsSucceeds() throws Exception {
+        post("/admin/merchants", adminToken(), Map.of(
+                "storeName", "New Shop", "ownerName", "New Owner", "email", "newshop@test.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
     }
 
     // ─────────────────────── 最后三处「缺字段 → 500」已收成 400 ───────────────────────

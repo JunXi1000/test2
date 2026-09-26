@@ -1,4 +1,20 @@
 # 本地开发：打印 SQL，便于调试
+#
+# ── 本地默认值(2026-09-26) ────────────────────────────────────────────────
+# 按常见做法,dev profile **自带本地默认值**,使 clone 下来即可跑,不必先配环境变量。
+# 基配置(application.yaml)里这两项是**必填占位符**、无默认值,所以:
+#   · 激活 dev(默认) → 用下面这两个本地值;
+#   · 生产/其它 profile → 继承基配置的必填占位符,缺环境变量就**启动失败**。
+# 也就是"本地方便"与"生产不走弱口令"用 profile 分开,而不是靠一处默认值兼顾两边。
+# ⚠️ 因此**生产必须显式设置 SPRING_PROFILES_ACTIVE=prod**(或其它非 dev 值),
+#    否则会落到 dev 的本地弱口令上 —— 这一点在 docs/DEVELOPMENT.md §2.4 有记。
+spring:
+  datasource:
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+
+# 重置密码的默认新密码(本地值;生产必须由 RESET_PASSWORD 提供)
+resetPassword: ${RESET_PASSWORD:123456}
+
 mybatis:
   configuration:
     # 改走 Slf4jImpl(原为 StdOutImpl):StdOutImpl 把 SQL 直接写 stdout,不经过 logback,

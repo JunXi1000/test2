@@ -8,6 +8,7 @@ import com.project.platform.utils.CurrentUserThreadLocal;
 import com.project.platform.vo.PageVO;
 import com.project.platform.vo.ResponseVO;
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -166,14 +167,16 @@ public class AdminApiController {
     }
 
     @PostMapping("/merchants")
-    public ResponseVO<?> createMerchant(@RequestBody AdminMerchantUpsertDTO data) {
+    public ResponseVO<?> createMerchant(@Valid @RequestBody AdminMerchantUpsertDTO data) {
         Shop shop = new Shop();
-        // 既有行为如实保留:username 直接取 email,密码硬编码为 "123456"(属 Phase 4 的业务问题)
         shop.setName(data.getStoreName());
         shop.setNickname(data.getOwnerName());
         shop.setEmail(data.getEmail());
+        // 登录标识沿用 email(既有约定:商家用邮箱当用户名登录)
         shop.setUsername(data.getEmail());
-        shop.setPassword("123456");
+        // 不设密码:ShopServiceImpl.insert 在密码为 null 时会用**配置项** resetPassword 填充并加密。
+        // 此前这里硬编码 "123456" —— 硬编码口令会随仓库一起公开,且绕过了那条可配置的默认值。
+        // 商家首次登录后应自行改密;管理员也可用 /common/resetPassword(type=SHOP) 重置。
         shop.setStatus("启用");
         shop.setCreateTime(LocalDateTime.now());
         shopService.insert(shop);
