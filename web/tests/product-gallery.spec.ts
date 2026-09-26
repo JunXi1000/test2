@@ -48,18 +48,29 @@ test.describe('商品详情 · 图集', () => {
     }
   })
 
-  test('点缩略图切换主图，选中态跟着走', async ({ page }) => {
+  test('点缩略图切换选中项，且选中态是排他的', async ({ page }) => {
     await gotoGallery(page)
 
-    const mainImg = page.locator('.product-hero-card img').first()
-    const before = await mainImg.getAttribute('src')
+    // **刻意不断言主图 src 变化** —— 这条曾经这么写，是错的：
+    //   1. `api/modules/product.ts` 把 mock 的 images 注成 `[image, image, image]`（同一个 URL 三份），
+    //      所以「图片→图片」的切换在 src 上根本看不出来；
+    //   2. src 还会被外链图失败转移改写（`resolveImageSrc` 按 slot 的 cursor 取候选）。
+    // 两条合起来，那条断言只在「失败转移碰巧改了 src」时通过 —— 靠网络脸色，属假通过。
+    //
+    // 能确定性观测的是**选中态**：点谁谁高亮，且同一时刻只有一个是高亮的。
+    const activeCount = () =>
+      page
+        .locator('button[data-thumb-index]')
+        .evaluateAll((els) => els.filter((e) => e.className.includes('border-primary')).length)
 
-    // 选一个非当前的图片缩略图（跳过视频那条）
+    expect(await activeCount()).toBe(1)
+
     const imageThumb = page.locator('button[data-thumb-kind="image"][data-thumb-index="2"]')
     await imageThumb.click()
 
     await expect(imageThumb).toHaveClass(/border-primary/)
-    await expect.poll(async () => mainImg.getAttribute('src'), { timeout: 5000 }).not.toBe(before)
+    expect(await activeCount()).toBe(1)
+    await expect(page.locator('button[data-thumb-index="0"]')).not.toHaveClass(/border-primary/)
   })
 
   test('下一张/上一张按钮能切换，且可循环', async ({ page }) => {
