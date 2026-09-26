@@ -26,30 +26,31 @@
 
 演示账号(密码均 `123456`):管理员 `admin` / 买家 `user1` / 商家 `shop1`。
 
-### 2.4 配置与密钥(**必填环境变量**,2026-09-24 起)
+### 2.4 配置与密钥
 
-仓库里**不再有任何明文口令/密钥兜底**。以下四项必须由环境提供,缺任意一项会**明确报错停止**
-(compose 用 `${VAR:?...}` 拒绝启动,应用侧缺 `JWT_SECRET` 会抛异常)——而不是静默用弱口令跑起来:
+**默认即可跑**(2026-09-26 起):`application-dev.yaml` 与 `docker-compose.yml` 都带**本地默认值**,
+clone 下来 `docker compose up -d` 就能跑,不必先配环境变量。
 
-| 变量 | 用途 | 说明 |
-|------|------|------|
-| `SPRING_DATASOURCE_PASSWORD` | 后端连 MySQL 的口令 | `application.yaml` 里已无默认值 |
-| `RESET_PASSWORD` | 管理员重置用户密码时的默认新密码 | 同上,**不要**再用 `123456` |
-| `JWT_SECRET` | JWT 签名密钥 | `JwtUtils` 已无硬编码兜底:`-Djwt.secret`(测试) → `JWT_SECRET`(环境),都没有就启动失败 |
-| `MYSQL_ROOT_PASSWORD` | 容器内 MySQL 的 root 口令 | compose/Dockerfile 原有,现在由 `.env` 提供 |
+**生产必须显式配置**,靠 profile 而不是靠"改默认值"来区分:
 
-**容器里怎么配**(模板已备好):
+| 变量 | dev 默认 | 生产 |
+|------|----------|------|
+| `SPRING_DATASOURCE_PASSWORD` | `123456`(dev profile 内) | **必填**,基配置无默认值 → 缺了启动失败 |
+| `RESET_PASSWORD` | `123456`(dev profile 内) | **必填**,同上 |
+| `MYSQL_ROOT_PASSWORD` | `123456`(compose) | 必填 |
+| `SPRING_PROFILES_ACTIVE` | `dev`(compose 显式设置) | **必须设为 `prod`** |
+| `JWT_SECRET` | 不设则**生成本次运行的随机密钥** | **必填**,prod profile 下缺失直接启动失败 |
 
-```bash
-cp docker/.env.example docker/.env      # 首次;docker/.env 已被 gitignore
-$EDITOR docker/.env                     # 给四项填真实值(模板里有生成建议)
-cd docker && docker compose up -d       # ⚠️ env 变更需**重建**容器,restart 不生效
-```
+> ⚠️ **生产必须设 `SPRING_PROFILES_ACTIVE=prod`** —— 否则会落到 dev 的本地弱口令上。
+> 本应用只有 `dev` / `prod` 两个 profile。
 
-**为什么不再给默认值**:原先 `application.yaml` 写着 `${SPRING_DATASOURCE_PASSWORD:123456}`、
-`${RESET_PASSWORD:123456}`,JwtUtils 里还留了一个"仅限本地开发"的硬编码签名密钥。这些一旦进仓库
-就等于公开 —— **尤其 JWT 密钥:谁都能拿它伪造任意用户的 token**。改成必填后,"起不来"取代了
-"看起来正常但用着公开密钥",这是两种失败里明显更好的那种。
+**JWT 密钥为什么没有仓库内的默认值**:仓库里的固定密钥等于公开,任何人都能拿它伪造任意用户的 token。
+所以这里**不放任何可用密钥**:开发时**生成本次运行的一次性随机密钥**(代价:重启后旧 token 失效,
+前端会按 401 跳登录,属预期);生产必须注入 `JWT_SECRET`。
+> 注意:曾一度用"保留 dev 密钥 + 判断 profile 字符串"的做法 —— 那是 **fail-open** 的
+> (忘了设 profile 就会用上公开密钥),**不要退回那种写法**。
+
+覆盖方式:`cp docker/.env.example docker/.env` 填好后重建容器(`docker compose up -d`;`restart` 不生效)。
 
 > 测试不受影响:口令与 `resetPassword` 由 `application-test.yaml` 覆盖,`jwt.secret` 由
 > `BaseControllerTest` 的静态块提供(用 System property 而非环境变量,不污染容器环境)。
