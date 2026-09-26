@@ -4,11 +4,14 @@ const BASE = 'http://localhost:5173'
 
 async function gotoApp(page: any, path: string) {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 15000 })
-  await page.waitForFunction(() => {
-    const app = document.getElementById('app')
-    if (!app) return false
-    return app.children.length > 2 && (app.textContent?.length ?? 0) > 50
-  }, { timeout: 10000 })
+  await page.waitForFunction(
+    () => {
+      const app = document.getElementById('app')
+      if (!app) return false
+      return app.children.length > 2 && (app.textContent?.length ?? 0) > 50
+    },
+    { timeout: 10000 },
+  )
   await page.waitForTimeout(600)
 }
 
@@ -19,12 +22,20 @@ async function gotoApp(page: any, path: string) {
 async function loginAsUser(page: any) {
   await gotoApp(page, '/login')
   // Fill in login form
-  const emailInput = page.locator('[data-testid="login-username"], input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]').first()
+  const emailInput = page
+    .locator(
+      '[data-testid="login-username"], input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]',
+    )
+    .first()
   await emailInput.fill('test@example.com')
   const passwordInput = page.locator('input[type="password"]').first()
   await passwordInput.fill('password123')
   // Click sign in button
-  const loginBtn = page.locator('button:has-text("Sign in"), button:has-text("Log in"), button:has-text("Login"), button[type="submit"]').first()
+  const loginBtn = page
+    .locator(
+      'button:has-text("Sign in"), button:has-text("Log in"), button:has-text("Login"), button[type="submit"]',
+    )
+    .first()
   await loginBtn.click()
   // Wait for redirect to home or dashboard
   await page.waitForTimeout(2000)
@@ -34,21 +45,19 @@ async function loginAsUser(page: any) {
 }
 
 /**
- * 登录 + 清空积分 + 预填收货信息，回到购物车准备结账（Phase 2.1 起复用）。
+ * 登录 + 清空积分，回到购物车准备结账（Phase 2.1 起复用）。
+ *
+ * 收货信息**不再靠 localStorage 后门预填**：登录后结算页会走真实路径，从 mock 的资料与
+ * 默认地址（Alex Doe / alex.doe@example.com / 123 Innovation Dr / 94103）自动回填 ——
+ * 与真实用户进结算页时是同一条代码路径。后门 DEBUG_CHECKOUT_PREFILL 已在阶段 7 删除。
  */
 async function prepareCheckout(page: any) {
   await loginAsUser(page)
   await page.evaluate(() => {
-    localStorage.setItem('nexus_loyalty_uuser_123', JSON.stringify({ points: 0, lifetimeSpend: 0, redeemed: [] }))
-    localStorage.setItem('DEBUG_CHECKOUT_PREFILL', JSON.stringify({
-      email: 'test@example.com',
-      firstName: 'Alex',
-      lastName: 'Doe',
-      address: '1 Main St',
-      city: 'Springfield',
-      country: 'United States',
-      zip: '12345',
-    }))
+    localStorage.setItem(
+      'nexus_loyalty_uuser_123',
+      JSON.stringify({ points: 0, lifetimeSpend: 0, redeemed: [] }),
+    )
   })
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(1000)
@@ -103,7 +112,6 @@ async function goCheckout(page: any) {
 // 1. Search Enhancement — Real interaction test
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Search Enhancement', () => {
-
   test('Search returns product results matching query', async ({ page }) => {
     await gotoApp(page, '/search?q=phone')
     // Should show result count (e.g. "X results for phone")
@@ -114,16 +122,24 @@ test.describe('Search Enhancement', () => {
   test('Price filter narrows results', async ({ page }) => {
     await gotoApp(page, '/search?q=phone')
     await page.waitForTimeout(1000)
-    // Click a price range filter
-    const priceBtn = page.locator('button:has-text("$50 - $200")').first()
-    if (await priceBtn.isVisible()) {
-      const beforeText = await page.locator('text=/results for/i').first().textContent()
-      await priceBtn.click()
-      await page.waitForTimeout(1000)
-      // Results should update (count may change)
-      const afterText = await page.locator('text=/results for/i').first().textContent()
-      expect(afterText).toBeTruthy()
-    }
+
+    // 不要硬编码 "$50 - $200"：区间是按命中结果动态算 count 的，
+    // search.ts 只返回 count > 0 的区间（phone 命中的两个商品落在
+    // $200-$500 与 Over $1000），写死标签会随 mock 数据变化而假红。
+    // 取第一个真实渲染出来的区间，验的是「点了筛选必须有反应」。
+    const priceBtn = page.getByTestId('price-range-facet').first()
+    await expect(priceBtn).toBeVisible()
+
+    const resultsHeader = page.locator('text=/results for/i').first()
+    await expect(resultsHeader).toBeVisible()
+
+    const beforeText = (await resultsHeader.textContent()) ?? ''
+    await priceBtn.click()
+    await page.waitForTimeout(1500)
+
+    // 套用价格区间后结果摘要必须变化；不变就说明这个筛选没生效。
+    // 原来只断言 afterText 非空 —— 一个永远非空的字符串，等于没断言。
+    expect((await resultsHeader.textContent()) ?? '').not.toBe(beforeText)
   })
 
   test('Category filter chips work on homepage', async ({ page }) => {
@@ -152,10 +168,13 @@ test.describe('Search Enhancement', () => {
     await searchInput.click()
     await page.waitForTimeout(500)
     // History should contain "laptop"
-    const historyItem = page.locator('text=laptop').first()
-    const visible = await historyItem.isVisible().catch(() => false)
-    // History is stored in localStorage — may show in suggestions dropdown
-    expect(visible || true).toBeTruthy() // at minimum, page doesn't crash
+    // 原断言是 expect(visible || true).toBeTruthy() —— 恒真。
+    // 这条用例真正能确定的是「搜索历史被记下来了」，那就断言落盘结果。
+    const history = await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.startsWith('nexus_search_history'))
+      return key ? (JSON.parse(localStorage.getItem(key) || '[]') as string[]) : []
+    })
+    expect(history).toContain('laptop')
   })
 })
 
@@ -163,7 +182,6 @@ test.describe('Search Enhancement', () => {
 // 2. Wishlist — Real add/remove + persistence
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Wishlist Persistence', () => {
-
   test('Heart button toggles wishlist state visually', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
@@ -177,7 +195,9 @@ test.describe('Wishlist Persistence', () => {
     await page.waitForTimeout(800)
 
     // Toast notification should appear
-    await expect(page.locator('text=/Added to Wishlist|Wishlist/i').first()).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=/Added to Wishlist|Wishlist/i').first()).toBeVisible({
+      timeout: 3000,
+    })
 
     // Click again to remove
     await heartBtn.click()
@@ -214,7 +234,6 @@ test.describe('Wishlist Persistence', () => {
 // 3. Browsing History — Real tracking
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Browsing History', () => {
-
   test('Recently Viewed updates after visiting product', async ({ page }) => {
     // Visit a product detail
     await gotoApp(page, '/product/1')
@@ -251,7 +270,6 @@ test.describe('Browsing History', () => {
 // 4. Product Compare — Full flow
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Product Compare', () => {
-
   test('Selecting 2+ products shows floating compare bar', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
@@ -273,10 +291,8 @@ test.describe('Product Compare', () => {
     await page.waitForTimeout(500)
 
     // Floating compare bar should appear with "Compare" link
-    const compareBar = page.locator('text=Compare').first()
-    // It may or may not be visible depending on whether the floating bar appears
-    const isVisible = await compareBar.isVisible().catch(() => false)
-
+    // 下面的 localStorage 断言才是这条用例的实质内容（对比栏是否浮出
+    // 取决于悬停/布局，不适合做断言），原先多算了一个 isVisible 却从未使用。
     // At minimum, localStorage should have 2 items (compare key is user-scoped, e.g. _guest)
     const compareCount = await page.evaluate(() => {
       let total = 0
@@ -297,7 +313,6 @@ test.describe('Product Compare', () => {
 // 5. Breadcrumb — Real navigation context
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Breadcrumb Navigation', () => {
-
   test('Breadcrumb shows Home > category > product', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(2000)
@@ -319,7 +334,6 @@ test.describe('Breadcrumb Navigation', () => {
 // 6. Coupon Center — Real claim flow
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Coupon Center', () => {
-
   test('Login, claim coupon, verify coupon appears in My Coupons', async ({ page }) => {
     // Login first
     await loginAsUser(page)
@@ -339,7 +353,9 @@ test.describe('Coupon Center', () => {
       await page.waitForTimeout(800)
 
       // Button should change to "Claimed"
-      await expect(page.locator('button:has-text("Claimed")').first()).toBeVisible({ timeout: 3000 })
+      await expect(page.locator('button:has-text("Claimed")').first()).toBeVisible({
+        timeout: 3000,
+      })
 
       // Switch to "My Coupons" tab
       await page.locator('text=My Coupons').first().click()
@@ -356,7 +372,6 @@ test.describe('Coupon Center', () => {
 // 7. Returns — Submit + track
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Returns & Refunds', () => {
-
   test('Submit a return request and verify it appears', async ({ page }) => {
     await loginAsUser(page)
 
@@ -385,7 +400,9 @@ test.describe('Returns & Refunds', () => {
     await page.waitForTimeout(1000)
 
     // Should see toast confirmation
-    await expect(page.locator('text=/Return Requested|submitted/i').first()).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=/Return Requested|submitted/i').first()).toBeVisible({
+      timeout: 3000,
+    })
 
     // The return request should now appear in the list
     await expect(page.locator('text=ORD-123456').first()).toBeVisible({ timeout: 3000 })
@@ -396,7 +413,6 @@ test.describe('Returns & Refunds', () => {
 // 8. Q&A — Ask a question
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Product Q&A', () => {
-
   test('Q&A tab is functional — clicking reveals the Q&A content section', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(2000)
@@ -414,26 +430,16 @@ test.describe('Product Q&A', () => {
     await qaTab.click({ force: true })
     await page.waitForTimeout(3000)
 
-    // 3. Check if Q&A section appeared in DOM
-    const qaSectionInDOM = await page.evaluate(() => {
-      const el = document.getElementById('qa-section')
-      return el !== null
-    })
+    // 3. 这条用例的名字承诺的是「点击后展开 Q&A 内容」，那就必须验内容真的渲染出来。
+    //    原实现算了一个 qaSectionInDOM 却从不断言，再用「Vite 生产构建成功」当借口 ——
+    //    构建只证明模板语法合法，证明不了点击后 v-if 会展开。
+    const qaSection = page.locator('#qa-section')
+    await expect(qaSection).toBeVisible({ timeout: 10_000 })
+    await expect(qaSection.locator('text=Ask a Question')).toBeVisible()
 
-    // 4. If the section isn't in DOM, the v-if might not trigger from Playwright click.
-    // Verify by checking the tab IS selected (Vue reactivity works for aria-selected)
     const isSelected = await qaTab.getAttribute('aria-selected')
-
-    // At minimum, the tab button exists and is clickable —
-    // this validates the Q&A feature is properly wired up.
-    // The v-if rendering is verified by the build (vue-tsc confirms template validity).
     expect(qaTabExists).toBe(true)
     expect(isSelected).toBe('true')
-    // Note: `qaSectionInDOM` may be false due to Playwright/Vue interaction quirks
-    // but the feature is functionally complete as verified by:
-    // 1) Successful Vite production build
-    // 2) Button exists with correct data-tab attribute
-    // 3) Tab select state updates on click (Vue reactivity confirmed)
   })
 })
 
@@ -441,7 +447,6 @@ test.describe('Product Q&A', () => {
 // 9. Stock Alerts — Subscribe/unsubscribe
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Stock Alerts', () => {
-
   test('Notify Me button works for out-of-stock products', async ({ page }) => {
     // Product 3 might be out of stock depending on mock data calculation
     // (id * 7 + 13) % 100  =>  (3 * 7 + 13) % 100 = 34 > 20, so in stock
@@ -467,7 +472,6 @@ test.describe('Stock Alerts', () => {
 // 10. Cart — Real add/remove/quantity
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Cart Operations', () => {
-
   test('Add product to cart from homepage, verify in cart', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
@@ -506,7 +510,6 @@ test.describe('Cart Operations', () => {
 // 11. PWA — manifest + SW are real
 // ═══════════════════════════════════════════════════════════════════
 test.describe('PWA Readiness', () => {
-
   test('manifest.json has all required PWA fields', async ({ page }) => {
     const response = await page.request.get(BASE + '/manifest.json')
     expect(response.status()).toBe(200)
@@ -544,7 +547,6 @@ test.describe('PWA Readiness', () => {
 // 12. Recommendations — Phase 1.1
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Recommendations (Phase 1.1)', () => {
-
   test('Product detail shows "You May Also Like" related products', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(2500)
@@ -572,21 +574,24 @@ test.describe('Recommendations (Phase 1.1)', () => {
     const addBundleBtn = page.locator('button:has-text("Add Bundle to Cart")')
     await expect(addBundleBtn).toBeVisible({ timeout: 8000 })
     // Get cart count before (scan all scoped keys: guest / logged-in)
-    const getCartCount = () => page.evaluate(() => {
-      let total = 0
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)!
-        if (key.startsWith('nexus_cart_items')) {
-          total += JSON.parse(localStorage.getItem(key) || '[]').length
+    const getCartCount = () =>
+      page.evaluate(() => {
+        let total = 0
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)!
+          if (key.startsWith('nexus_cart_items')) {
+            total += JSON.parse(localStorage.getItem(key) || '[]').length
+          }
         }
-      }
-      return total
-    })
+        return total
+      })
     const before = await getCartCount()
     await addBundleBtn.click()
     await page.waitForTimeout(1200)
     // Toast confirmation
-    await expect(page.locator('text=/Bundle Added to Cart/i').first()).toBeVisible({ timeout: 4000 })
+    await expect(page.locator('text=/Bundle Added to Cart/i').first()).toBeVisible({
+      timeout: 4000,
+    })
     // Cart should have more items than before
     const after = await getCartCount()
     expect(after).toBeGreaterThan(before)
@@ -620,7 +625,9 @@ test.describe('Recommendations (Phase 1.1)', () => {
     await expect(addBtn).toHaveText(/Add to Order \(\d+\)/)
   })
 
-  test('Adding "Complete the Look" items to the order grows the cart by the shown count', async ({ page }) => {
+  test('Adding "Complete the Look" items to the order grows the cart by the shown count', async ({
+    page,
+  }) => {
     await prepareCheckout(page)
     await gotoReviewWithCard(page, '4242424242424242')
 
@@ -637,16 +644,17 @@ test.describe('Recommendations (Phase 1.1)', () => {
     expect(shownCount).toBeGreaterThanOrEqual(1)
 
     // 加购前购物车条目数（扫所有 scoped key）
-    const getCartCount = () => page.evaluate(() => {
-      let total = 0
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)!
-        if (key.startsWith('nexus_cart_items')) {
-          total += JSON.parse(localStorage.getItem(key) || '[]').length
+    const getCartCount = () =>
+      page.evaluate(() => {
+        let total = 0
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)!
+          if (key.startsWith('nexus_cart_items')) {
+            total += JSON.parse(localStorage.getItem(key) || '[]').length
+          }
         }
-      }
-      return total
-    })
+        return total
+      })
     const before = await getCartCount()
 
     await addBtn.click()
@@ -662,7 +670,6 @@ test.describe('Recommendations (Phase 1.1)', () => {
 // 3. Followed Stores (Phase 1.2) — real follow/unfollow + persistence
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Followed Stores (Phase 1.2)', () => {
-
   test('Store page Follow button follows and updates state', async ({ page }) => {
     // Clear any prior follow state for this scope
     await page.goto(BASE + '/store/m1', { waitUntil: 'domcontentloaded', timeout: 15000 })
@@ -697,7 +704,7 @@ test.describe('Followed Stores (Phase 1.2)', () => {
       }
       return found
     })
-    expect(persisted.some(s => s.id === 'm1')).toBeTruthy()
+    expect(persisted.some((s) => s.id === 'm1')).toBeTruthy()
     expect(persisted[0].storeName).toContain('Nike')
 
     // Click again to toggle back — button should revert to "Follow" and storage cleared
@@ -714,7 +721,7 @@ test.describe('Followed Stores (Phase 1.2)', () => {
       }
       return found
     })
-    expect(afterUnfollow.some(s => s.id === 'm1')).toBeFalsy()
+    expect(afterUnfollow.some((s) => s.id === 'm1')).toBeFalsy()
   })
 
   test('Followed store appears in dashboard Followed Stores list', async ({ page }) => {
@@ -747,14 +754,16 @@ test.describe('Followed Stores (Phase 1.2)', () => {
     const unfollowBtn = page.locator('button:has-text("Unfollow")').first()
     if (await unfollowBtn.isVisible()) {
       // Register dialog handler BEFORE clicking so confirm is accepted
-      page.once('dialog', d => d.accept())
+      page.once('dialog', (d) => d.accept())
       await unfollowBtn.click()
       await page.waitForTimeout(1200)
       // Store card should be gone
-      await expect(unfollowBtn).not.toBeVisible({ timeout: 5000 }).catch(() => {})
+      await expect(unfollowBtn)
+        .not.toBeVisible({ timeout: 5000 })
+        .catch(() => {})
     }
     // Empty state should show when nothing follows
-    const emptyState = page.locator('text=/You\'re not following any stores yet/i')
+    const emptyState = page.locator("text=/You're not following any stores yet/i")
     const visible = await emptyState.isVisible().catch(() => false)
     expect(visible).toBeTruthy()
   })
@@ -764,21 +773,21 @@ test.describe('Followed Stores (Phase 1.2)', () => {
 // 4. Tiered Discounts (Phase 3.2) — 满减自动匹配 + 优惠码叠加
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Tiered Discounts (Phase 3.2)', () => {
-
   // 读取 scoped 购物车 key 中的 subtotal 总和
-  const readCartSubtotal = (page: any) => page.evaluate(() => {
-    let total = 0
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)!
-      if (key.startsWith('nexus_cart_items')) {
-        const items = JSON.parse(localStorage.getItem(key) || '[]')
-        if (Array.isArray(items)) {
-          total += items.reduce((s: number, it: any) => s + it.price * it.quantity, 0)
+  const readCartSubtotal = (page: any) =>
+    page.evaluate(() => {
+      let total = 0
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)!
+        if (key.startsWith('nexus_cart_items')) {
+          const items = JSON.parse(localStorage.getItem(key) || '[]')
+          if (Array.isArray(items)) {
+            total += items.reduce((s: number, it: any) => s + it.price * it.quantity, 0)
+          }
         }
       }
-    }
-    return total
-  })
+      return total
+    })
 
   // 从首页真实加购直到 subtotal 达到门槛
   const addUntilSubtotal = async (page: any, target: number) => {
@@ -808,7 +817,9 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
     await expect(hint).toBeVisible({ timeout: 6000 })
 
     // Discount amount displayed should be > 0 (value span next to the label)
-    const discountValue = page.locator('xpath=//span[normalize-space(text())="Tiered discount"]/following-sibling::span').first()
+    const discountValue = page
+      .locator('xpath=//span[normalize-space(text())="Tiered discount"]/following-sibling::span')
+      .first()
     await expect(discountValue).toBeVisible({ timeout: 5000 })
     const discountText = (await discountValue.textContent()) || ''
     expect(discountText).toContain('- $')
@@ -824,7 +835,10 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
 
     // Capture total before promo
     await expect(page.locator('text=/Tiered discount/i').first()).toBeVisible({ timeout: 6000 })
-    const totalBeforeText = await page.locator('xpath=//span[text()="Total"]/following-sibling::span').first().textContent()
+    const totalBeforeText = await page
+      .locator('xpath=//span[text()="Total"]/following-sibling::span')
+      .first()
+      .textContent()
     const totalBefore = parseFloat((totalBeforeText || '').replace(/[^0-9.]/g, ''))
 
     // Apply SAVE10 promo code
@@ -838,7 +852,10 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
     await expect(page.locator('text=/Promo code/i').first()).toBeVisible({ timeout: 5000 })
 
     // Total should have dropped further
-    const totalAfterText = await page.locator('xpath=//span[text()="Total"]/following-sibling::span').first().textContent()
+    const totalAfterText = await page
+      .locator('xpath=//span[text()="Total"]/following-sibling::span')
+      .first()
+      .textContent()
     const totalAfter = parseFloat((totalAfterText || '').replace(/[^0-9.]/g, ''))
     expect(totalAfter).toBeLessThan(totalBefore)
   })
@@ -848,26 +865,32 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
 // Phase 5.1 — Loyalty points & membership
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Loyalty Points & Membership (Phase 5.1)', () => {
-
   // 关闭 CSS 动画/过渡时长：结算步骤入场动画等场景下防止 Playwright 稳定性检查误判。
   // （此前 step 按钮 "not stable" 的真正根因是 DefaultLayout 表头 y>24 阈值在短页面触发
   //  无限紧凑/完整切换反馈循环，已在布局层修复；此禁用仅为防御性测试实践。）
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const style = document.createElement('style')
-      style.textContent = '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
+      style.textContent =
+        '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
       document.head.appendChild(style)
     })
   })
 
   // 登录后 seed 用户作用域下的 loyalty 状态（mock 登录用户 id 为 user_123）
-  async function seedLoyalty(page: any, data: { points: number; lifetimeSpend: number; redeemed?: string[] }) {
-    await page.evaluate((d) => {
-      localStorage.setItem('nexus_loyalty_uuser_123', JSON.stringify({
-        points: d.points,
-        lifetimeSpend: d.lifetimeSpend,
-        redeemed: d.redeemed || [],
-      }))
+  async function seedLoyalty(
+    page: any,
+    data: { points: number; lifetimeSpend: number; redeemed?: string[] },
+  ) {
+    await page.evaluate((d: { points: number; lifetimeSpend: number; redeemed?: string[] }) => {
+      localStorage.setItem(
+        'nexus_loyalty_uuser_123',
+        JSON.stringify({
+          points: d.points,
+          lifetimeSpend: d.lifetimeSpend,
+          redeemed: d.redeemed || [],
+        }),
+      )
     }, data)
     // 重新加载应用，让 store 从 localStorage 重新初始化
     await page.reload({ waitUntil: 'domcontentloaded' })
@@ -877,19 +900,8 @@ test.describe('Loyalty Points & Membership (Phase 5.1)', () => {
   test('Earn points after an order completes and see them in Loyalty', async ({ page }) => {
     await loginAsUser(page)
 
-    // 基线：清空积分；并用应用自带的 DEBUG_CHECKOUT_PREFILL 预填收货信息
+    // 基线：清空积分。收货信息由结算页从 mock 资料与默认地址自动回填（见 prepareCheckout 的注释）
     await seedLoyalty(page, { points: 0, lifetimeSpend: 0 })
-    await page.evaluate(() => {
-      localStorage.setItem('DEBUG_CHECKOUT_PREFILL', JSON.stringify({
-        email: 'test@example.com',
-        firstName: 'Alex',
-        lastName: 'Doe',
-        address: '1 Main St',
-        city: 'Springfield',
-        country: 'United States',
-        zip: '12345',
-      }))
-    })
 
     // 首页真实加购
     await gotoApp(page, '/')
@@ -979,7 +991,8 @@ test.describe('Payment Gateway (Phase 2.1)', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const style = document.createElement('style')
-      style.textContent = '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
+      style.textContent =
+        '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
       document.head.appendChild(style)
     })
   })
@@ -993,14 +1006,20 @@ test.describe('Payment Gateway (Phase 2.1)', () => {
     await expect(page.locator('text=Thank You!').first()).toBeVisible({ timeout: 5000 })
   })
 
-  test('Declined card shows error on the payment step and retry with a good card succeeds', async ({ page }) => {
+  test('Declined card shows error on the payment step and retry with a good card succeeds', async ({
+    page,
+  }) => {
     await prepareCheckout(page)
     await gotoReviewWithCard(page, '4000000000009995') // insufficient funds
 
     // 提交支付 → 拒付：回到支付信息步 + 错误提示，订单未创建
     await page.locator('button:has-text("Pay")').first().click()
-    await expect(page.locator('text=Your card has insufficient funds.').first()).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=Your card has insufficient funds.').first()).toBeVisible({
+      timeout: 10000,
+    })
+    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]').first()).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page).toHaveURL(/checkout/)
 
     // 换 4242 成功卡重试 → 支付成功
@@ -1011,7 +1030,9 @@ test.describe('Payment Gateway (Phase 2.1)', () => {
     await expect(page).toHaveURL(/thank-you/, { timeout: 12000 })
   })
 
-  test('3DS card opens the bank verification modal and completes after authentication', async ({ page }) => {
+  test('3DS card opens the bank verification modal and completes after authentication', async ({
+    page,
+  }) => {
     await prepareCheckout(page)
     await gotoReviewWithCard(page, '4000002500003155')
 
@@ -1036,8 +1057,12 @@ test.describe('Payment Gateway (Phase 2.1)', () => {
 
     // 模拟银行拒绝认证 → 弹窗关闭，回到支付信息步并提示认证失败
     await page.locator('button:has-text("Simulate authentication failure")').first().click()
-    await expect(page.locator('text=Bank declined the authentication.').first()).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=Bank declined the authentication.').first()).toBeVisible({
+      timeout: 10000,
+    })
+    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]').first()).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page).toHaveURL(/checkout/)
   })
 })
@@ -1049,12 +1074,15 @@ test.describe('Product Video (Phase 4.1)', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const style = document.createElement('style')
-      style.textContent = '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
+      style.textContent =
+        '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
       document.head.appendChild(style)
     })
   })
 
-  test('Product detail shows a mixed image/video gallery that can play, pause, and has fullscreen controls', async ({ page }) => {
+  test('Product detail shows a mixed image/video gallery that can play, pause, and has fullscreen controls', async ({
+    page,
+  }) => {
     // id 12（Action Camera）在 mock 中被注入本地演示视频 /videos/demo.webm
     await gotoApp(page, '/product/12')
     await page.waitForTimeout(1500)
@@ -1074,11 +1102,17 @@ test.describe('Product Video (Phase 4.1)', () => {
     expect(hasControls).toBe(true)
 
     // 播放 → paused === false
-    await video.evaluate((el: any) => { el.muted = true; return el.play() })
-    await page.waitForFunction(() => {
-      const v = document.querySelector('.product-hero-card video') as HTMLVideoElement | null
-      return v ? v.readyState >= 2 : false
-    }, { timeout: 8000 })
+    await video.evaluate((el: any) => {
+      el.muted = true
+      return el.play()
+    })
+    await page.waitForFunction(
+      () => {
+        const v = document.querySelector('.product-hero-card video') as HTMLVideoElement | null
+        return v ? v.readyState >= 2 : false
+      },
+      { timeout: 8000 },
+    )
     const pausedAfterPlay = await video.evaluate((el: any) => el.paused)
     expect(pausedAfterPlay).toBe(false)
 
@@ -1088,16 +1122,28 @@ test.describe('Product Video (Phase 4.1)', () => {
     expect(pausedAfterPause).toBe(true)
 
     // 全屏能力（原生控件按钮 + 标准全屏 API）
-    const hasFullscreenApi = await video.evaluate((el: any) => typeof el.requestFullscreen === 'function')
+    const hasFullscreenApi = await video.evaluate(
+      (el: any) => typeof el.requestFullscreen === 'function',
+    )
     expect(hasFullscreenApi).toBe(true)
   })
 
   test('Merchant can attach a demo video URL when adding a product', async ({ page }) => {
     // 商家后台登录（/merchant/login 由路由 meta 指定 loginPortal='merchant'）
     await gotoApp(page, '/merchant/login')
-    await page.locator('[data-testid="login-username"], input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]').first().fill('store@nexus.com')
+    await page
+      .locator(
+        '[data-testid="login-username"], input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]',
+      )
+      .first()
+      .fill('store@nexus.com')
     await page.locator('input[type="password"]').first().fill('password123')
-    await page.locator('button:has-text("Sign in"), button:has-text("Log in"), button:has-text("Login"), button[type="submit"]').first().click()
+    await page
+      .locator(
+        'button:has-text("Sign in"), button:has-text("Log in"), button:has-text("Login"), button[type="submit"]',
+      )
+      .first()
+      .click()
     // 轮询等待脱离登录页（首次进入 merchant 路由需冷编译懒加载 chunk，固定等待不够稳健）
     await expect(page).not.toHaveURL(/\/login/, { timeout: 15000 })
 
@@ -1109,7 +1155,10 @@ test.describe('Product Video (Phase 4.1)', () => {
     await page.waitForTimeout(800)
 
     // 填写基础信息
-    await page.locator('.merchant-product-dialog input[placeholder="e.g. Nexus VR Pro"]').first().fill('Test Video Product')
+    await page
+      .locator('.merchant-product-dialog input[placeholder="e.g. Nexus VR Pro"]')
+      .first()
+      .fill('Test Video Product')
     await page.locator('.merchant-product-dialog .el-input-number input').first().fill('100')
     await page.locator('.merchant-product-dialog .el-input-number input').nth(1).fill('20')
 
@@ -1127,8 +1176,16 @@ test.describe('Product Video (Phase 4.1)', () => {
     await page.waitForTimeout(400)
 
     // 封面图 URL + 演示视频 URL
-    await page.locator('.merchant-product-dialog textarea').first().fill('https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=200&auto=format&fit=crop')
-    await page.locator('.merchant-product-dialog textarea').nth(1).fill('http://localhost:5173/videos/demo.webm')
+    await page
+      .locator('.merchant-product-dialog textarea')
+      .first()
+      .fill(
+        'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=200&auto=format&fit=crop',
+      )
+    await page
+      .locator('.merchant-product-dialog textarea')
+      .nth(1)
+      .fill('http://localhost:5173/videos/demo.webm')
 
     await page.locator('button:has-text("Create product")').first().click()
     await page.waitForTimeout(1500)
@@ -1147,12 +1204,15 @@ test.describe('Size Guide (Phase 4.2)', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const style = document.createElement('style')
-      style.textContent = '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
+      style.textContent =
+        '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
       document.head.appendChild(style)
     })
   })
 
-  test('Apparel product shows the Size Guide modal, recommends a size, and selecting it highlights the size', async ({ page }) => {
+  test('Apparel product shows the Size Guide modal, recommends a size, and selecting it highlights the size', async ({
+    page,
+  }) => {
     // id 36 = Tech Fleece Hoodie（Apparel 品类，mock 注入 hasSizeGuide）
     await gotoApp(page, '/product/36')
     await page.waitForTimeout(1500)
@@ -1174,7 +1234,9 @@ test.describe('Size Guide (Phase 4.2)', () => {
     const recommendedRow = dialog.locator('tr[data-recommended="true"]')
     await expect(recommendedRow).toHaveCount(1, { timeout: 5000 })
     await expect(recommendedRow.locator('text=L').first()).toBeVisible({ timeout: 5000 })
-    await expect(dialog.locator('button:has-text("Select L")').first()).toBeVisible({ timeout: 5000 })
+    await expect(dialog.locator('button:has-text("Select L")').first()).toBeVisible({
+      timeout: 5000,
+    })
 
     // 一键选码 → 弹窗关闭，详情页选中 L（标签 + 尺码按钮高亮）
     await dialog.locator('button:has-text("Select L")').first().click()
@@ -1203,12 +1265,15 @@ test.describe('One-Click Pay / Saved Cards (Phase 2.2)', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       const style = document.createElement('style')
-      style.textContent = '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
+      style.textContent =
+        '*, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }'
       document.head.appendChild(style)
     })
   })
 
-  test('Saving a card after a successful payment makes it visible on the next checkout', async ({ page }) => {
+  test('Saving a card after a successful payment makes it visible on the next checkout', async ({
+    page,
+  }) => {
     // 干净起点：清掉该用户已保存卡（gotoApp 先渲染首页，预热 Home chunk，避免登录后冷编译卡顿）
     await gotoApp(page, '/')
     await page.evaluate(() => localStorage.removeItem('nexus_saved_cards_user_123'))
@@ -1230,13 +1295,25 @@ test.describe('One-Click Pay / Saved Cards (Phase 2.2)', () => {
     await expect(savedCard.locator('text=4242').first()).toBeVisible({ timeout: 5000 })
   })
 
-  test('One-click payment with a saved card skips the card form and reaches Thank You', async ({ page }) => {
+  test('One-click payment with a saved card skips the card form and reaches Thank You', async ({
+    page,
+  }) => {
     // 预置一张已保存卡（token 化：仅品牌/末四位/有效期）
     await gotoApp(page, '/')
     await page.evaluate(() => {
-      localStorage.setItem('nexus_saved_cards_user_123', JSON.stringify([
-        { id: 'pm_mock_4242_1', brand: 'Visa', last4: '4242', expMonth: '12', expYear: '30', createdAt: 1 },
-      ]))
+      localStorage.setItem(
+        'nexus_saved_cards_user_123',
+        JSON.stringify([
+          {
+            id: 'pm_mock_4242_1',
+            brand: 'Visa',
+            last4: '4242',
+            expMonth: '12',
+            expYear: '30',
+            createdAt: 1,
+          },
+        ]),
+      )
     })
     await prepareCheckout(page)
 
@@ -1245,7 +1322,9 @@ test.describe('One-Click Pay / Saved Cards (Phase 2.2)', () => {
     await page.waitForTimeout(800)
     await page.locator('[data-saved-card]').first().click()
     await page.waitForTimeout(500)
-    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]')).toHaveCount(0, { timeout: 5000 })
+    await expect(page.locator('input[placeholder="0000 0000 0000 0000"]')).toHaveCount(0, {
+      timeout: 5000,
+    })
     await expect(page.locator('[data-use-new-card]').first()).toBeVisible({ timeout: 5000 })
 
     // 无需重填卡号 → Review 展示保存卡标识 → 一键扣款成功

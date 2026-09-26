@@ -31,7 +31,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
       'Absolutely amazing quality. The build is solid and it feels premium in hand. Exceeded all my expectations.',
     createdAt: '2026-03-25T14:20:00Z',
     status: 'visible',
-    verifiedPurchase: true
+    verifiedPurchase: true,
   },
   {
     id: 'rev-002',
@@ -43,7 +43,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     content: 'Great product overall, though shipping took a day longer than expected.',
     createdAt: '2026-03-20T09:15:00Z',
     status: 'visible',
-    verifiedPurchase: true
+    verifiedPurchase: true,
   },
   {
     id: 'rev-003',
@@ -54,7 +54,9 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     content: 'Best purchase this year. Highly recommend.',
     createdAt: '2026-03-18T11:00:00Z',
     status: 'visible',
-    images: ['https://images.unsplash.com/photo-1623998021446-45cd9b269056?q=80&w=400&auto=format&fit=crop']
+    images: [
+      'https://images.unsplash.com/photo-1623998021446-45cd9b269056?q=80&w=400&auto=format&fit=crop',
+    ],
   },
   {
     id: 'rev-004',
@@ -65,7 +67,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     rating: 1,
     content: 'CLICK HERE FOR FREE PRIZES!!! http://evil.example',
     createdAt: '2026-03-17T08:00:00Z',
-    status: 'hidden'
+    status: 'hidden',
   },
   {
     id: 'rev-005',
@@ -76,7 +78,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     content: 'Not what I expected from the photos. Minor scratch on arrival.',
     createdAt: '2026-03-10T16:45:00Z',
     status: 'visible',
-    verifiedPurchase: true
+    verifiedPurchase: true,
   },
   {
     id: 'rev-006',
@@ -86,7 +88,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     rating: 4,
     content: 'Solid build. Manual was hard to follow.',
     createdAt: '2026-03-01T12:30:00Z',
-    status: 'visible'
+    status: 'visible',
   },
   {
     id: 'rev-007',
@@ -97,7 +99,7 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     content: 'Stopped working after two weeks. Very disappointing.',
     createdAt: '2026-02-20T10:00:00Z',
     status: 'visible',
-    verifiedPurchase: true
+    verifiedPurchase: true,
   },
   {
     id: 'rev-008',
@@ -107,8 +109,8 @@ const DEFAULT_MOCK_REVIEWS: AdminReview[] = [
     rating: 5,
     content: 'Perfect fit and great battery life.',
     createdAt: '2026-02-15T19:22:00Z',
-    status: 'visible'
-  }
+    status: 'visible',
+  },
 ]
 
 function getMockData(): AdminReview[] {
@@ -150,7 +152,7 @@ export async function getAdminReviews(params?: AdminReviewQuery): Promise<AdminR
           (r.userEmail && r.userEmail.toLowerCase().includes(q)) ||
           r.productTitle.toLowerCase().includes(q) ||
           r.content.toLowerCase().includes(q) ||
-          String(r.productId).includes(q)
+          String(r.productId).includes(q),
       )
     }
     data.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -159,7 +161,10 @@ export async function getAdminReviews(params?: AdminReviewQuery): Promise<AdminR
   return get<AdminReview[]>('/admin/reviews', { params })
 }
 
-export async function updateAdminReviewStatus(id: string, status: AdminReviewStatus): Promise<void> {
+export async function updateAdminReviewStatus(
+  id: string,
+  status: AdminReviewStatus,
+): Promise<void> {
   if (RUNTIME_USE_MOCK.value) {
     const list = getMockData()
     const row = list.find((r) => r.id === id)

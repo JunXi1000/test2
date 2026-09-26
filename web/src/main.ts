@@ -7,6 +7,10 @@ import './assets/css/tailwind.css'
 // Programmatic APIs (ElMessageBox / ElMessage) are not tied to SFC auto-import — include their styles or overlays render unpositioned (top-left).
 import 'element-plus/es/components/message-box/style/css'
 import 'element-plus/es/components/message/style/css'
+// Element Plus 的暗色变量。storefront/dashboard 走 DefaultLayout 的 useDark()，会给 <html> 挂 .dark，
+// 但 EP 自己的 --el-bg-color/--el-text-color-primary 不跟 Tailwind 令牌联动：不引这个文件，
+// 暗色页面上每个 el-* 组件仍是白底（#fff）——只有这一个文件能修，且它自身就是 .dark 作用域。
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import { useAuthStore } from '@/stores/auth'
 import { AUTH_USER_KEY, AUTH_TOKEN_KEY } from '@/auth/session'
 import { loginPathFromAppPath } from '@/utils/loginRoutes'

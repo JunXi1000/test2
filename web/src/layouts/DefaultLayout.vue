@@ -1,6 +1,21 @@
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import { ShoppingCart, User, Menu, Sun, Moon, X, Twitter, Instagram, Facebook, MessageSquare, ArrowUp, Search, RefreshCw, GitCompare } from 'lucide-vue-next'
+import {
+  ShoppingCart,
+  User,
+  Menu,
+  Sun,
+  Moon,
+  X,
+  Twitter,
+  Instagram,
+  Facebook,
+  MessageSquare,
+  ArrowUp,
+  Search,
+  RefreshCw,
+  GitCompare,
+} from 'lucide-vue-next'
 import { useCartStore } from '@/stores/cart'
 import { useCompareStore } from '@/stores/compare'
 import { useAuthStore } from '@/stores/auth'
@@ -65,10 +80,13 @@ function updateHeaderOffsetVar() {
 }
 
 // Close mobile menu when route changes
-watch(() => route.path, () => {
-  isMobileMenuOpen.value = false
-  updateHeaderOffsetVar()
-})
+watch(
+  () => route.path,
+  () => {
+    isMobileMenuOpen.value = false
+    updateHeaderOffsetVar()
+  },
+)
 
 onMounted(() => {
   updateHeaderOffsetVar()
@@ -102,7 +120,11 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
           <router-link to="/" class="text-xl font-bold tracking-tighter flex items-center gap-2">
             <div
               class="bg-primary rounded-lg flex items-center justify-center text-white font-bold transition-all duration-300"
-              :class="isHeaderCompact ? 'w-7 h-7 md:w-8 md:h-8 text-xs md:text-sm' : 'w-8 h-8 md:w-9 md:h-9 text-sm md:text-base'"
+              :class="
+                isHeaderCompact
+                  ? 'w-7 h-7 md:w-8 md:h-8 text-xs md:text-sm'
+                  : 'w-8 h-8 md:w-9 md:h-9 text-sm md:text-base'
+              "
             >
               N
             </div>
@@ -121,35 +143,76 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
         </nav>
 
         <!-- Actions -->
-        <div class="flex items-center transition-all duration-300" :class="isHeaderCompact ? 'gap-2 sm:gap-3' : 'gap-2 sm:gap-4'">
-          <button @click="toggleDark()" class="h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors" aria-label="Toggle theme">
+        <div
+          class="flex items-center transition-all duration-300"
+          :class="isHeaderCompact ? 'gap-2 sm:gap-3' : 'gap-2 sm:gap-4'"
+        >
+          <button
+            class="h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors"
+            aria-label="Toggle theme"
+            @click="toggleDark()"
+          >
             <Sun v-if="isDark" class="h-5 w-5" />
             <Moon v-else class="h-5 w-5" />
           </button>
 
-          <router-link to="/cart" @mouseenter="preloadRoute('/cart')" @focus="preloadRoute('/cart')">
-            <button class="relative h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors" title="Cart" aria-label="Cart">
+          <router-link
+            to="/cart"
+            @mouseenter="preloadRoute('/cart')"
+            @focus="preloadRoute('/cart')"
+          >
+            <button
+              class="relative h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors"
+              title="Cart"
+              aria-label="Cart"
+            >
               <ShoppingCart class="h-5 w-5" />
-              <span v-if="cartStore.totalItems > 0" class="absolute top-0 right-0 h-4 w-4 text-[10px] flex items-center justify-center rounded-full bg-primary text-white font-bold border border-background">
+              <span
+                v-if="cartStore.totalItems > 0"
+                class="absolute top-0 right-0 h-4 w-4 text-[10px] flex items-center justify-center rounded-full bg-primary text-white font-bold border border-background"
+              >
                 {{ cartStore.totalItems }}
               </span>
             </button>
           </router-link>
 
           <!-- Messages (Logged In) -->
-          <router-link v-if="authStore.isAuthenticated" to="/dashboard/messages" @mouseenter="preloadRoute('/dashboard/messages')" @focus="preloadRoute('/dashboard/messages')">
-            <button class="relative h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors" title="Messages" aria-label="Messages">
+          <router-link
+            v-if="authStore.isAuthenticated"
+            to="/dashboard/messages"
+            @mouseenter="preloadRoute('/dashboard/messages')"
+            @focus="preloadRoute('/dashboard/messages')"
+          >
+            <button
+              class="relative h-9 w-9 inline-flex items-center justify-center hover:bg-secondary rounded-lg transition-colors"
+              title="Messages"
+              aria-label="Messages"
+            >
               <MessageSquare class="h-5 w-5" />
-              <span class="absolute -top-1 -right-1 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold leading-none">
+              <span
+                class="absolute -top-1 -right-1 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold leading-none"
+              >
                 1
               </span>
             </button>
           </router-link>
 
           <!-- User Menu (Logged In) -->
-          <router-link v-if="authStore.isAuthenticated" to="/dashboard" @mouseenter="preloadRoute('/dashboard')" @focus="preloadRoute('/dashboard')">
-            <button class="h-9 px-2 hover:bg-secondary rounded-lg transition-colors flex items-center gap-2" title="Dashboard" aria-label="Dashboard">
-              <div v-if="authStore.user?.avatar" class="w-6 h-6 rounded-full overflow-hidden border border-border">
+          <router-link
+            v-if="authStore.isAuthenticated"
+            to="/dashboard"
+            @mouseenter="preloadRoute('/dashboard')"
+            @focus="preloadRoute('/dashboard')"
+          >
+            <button
+              class="h-9 px-2 hover:bg-secondary rounded-lg transition-colors flex items-center gap-2"
+              title="Dashboard"
+              aria-label="Dashboard"
+            >
+              <div
+                v-if="authStore.user?.avatar"
+                class="w-6 h-6 rounded-full overflow-hidden border border-border"
+              >
                 <img :src="authStore.user.avatar" alt="Avatar" class="w-full h-full object-cover" />
               </div>
               <User v-else class="h-5 w-5" />
@@ -158,15 +221,34 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
 
           <!-- Guest Menu (Not Logged In) -->
           <div v-else class="hidden md:flex items-center gap-1">
-            <router-link to="/login" @mouseenter="preloadRoute('/login')" @focus="preloadRoute('/login')">
-              <button class="h-9 px-3 text-sm font-medium text-foreground/80 hover:text-primary hover:bg-secondary rounded-lg transition-colors">{{ $t('header.logIn') }}</button>
+            <router-link
+              to="/login"
+              @mouseenter="preloadRoute('/login')"
+              @focus="preloadRoute('/login')"
+            >
+              <button
+                class="h-9 px-3 text-sm font-medium text-foreground/80 hover:text-primary hover:bg-secondary rounded-lg transition-colors"
+              >
+                {{ $t('header.logIn') }}
+              </button>
             </router-link>
-            <router-link to="/signup" @mouseenter="preloadRoute('/signup')" @focus="preloadRoute('/signup')">
-              <button class="h-9 px-4 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm">{{ $t('header.signUp') }}</button>
+            <router-link
+              to="/signup"
+              @mouseenter="preloadRoute('/signup')"
+              @focus="preloadRoute('/signup')"
+            >
+              <button
+                class="h-9 px-4 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm"
+              >
+                {{ $t('header.signUp') }}
+              </button>
             </router-link>
           </div>
 
-          <button @click="isMobileMenuOpen = !isMobileMenuOpen" class="md:hidden p-2 hover:bg-secondary rounded-lg transition-colors relative z-50">
+          <button
+            class="md:hidden p-2 hover:bg-secondary rounded-lg transition-colors relative z-50"
+            @click="isMobileMenuOpen = !isMobileMenuOpen"
+          >
             <X v-if="isMobileMenuOpen" class="h-5 w-5" />
             <Menu v-else class="h-5 w-5" />
           </button>
@@ -182,43 +264,91 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-2"
       >
-        <div v-if="isMobileMenuOpen" class="absolute top-16 left-0 w-full bg-background border-b border-border shadow-lg md:hidden z-40 p-4">
+        <div
+          v-if="isMobileMenuOpen"
+          class="absolute top-16 left-0 w-full bg-background border-b border-border shadow-lg md:hidden z-40 p-4"
+        >
           <nav class="flex flex-col gap-4 text-base font-medium">
-             <!-- Mobile Search -->
+            <!-- Mobile Search -->
             <div class="relative mb-2">
-               <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-               <input
+              <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input
                 v-model="mobileSearchQuery"
                 type="search"
                 placeholder="Search products..."
                 class="w-full h-10 rounded-lg bg-secondary pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary"
-                @keyup.enter="mobileSearchQuery.trim() && (isMobileMenuOpen = false, router.push({ name: 'SearchResults', query: { q: mobileSearchQuery.trim() } }))"
+                @keyup.enter="
+                  mobileSearchQuery.trim() &&
+                  ((isMobileMenuOpen = false),
+                  router.push({ name: 'SearchResults', query: { q: mobileSearchQuery.trim() } }))
+                "
               />
             </div>
 
-            <router-link to="/" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary" @mouseenter="preloadRoute('/')" @focus="preloadRoute('/')">
+            <router-link
+              to="/"
+              class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+              active-class="bg-secondary"
+              @mouseenter="preloadRoute('/')"
+              @focus="preloadRoute('/')"
+            >
               {{ $t('header.home') }}
             </router-link>
-            <router-link to="/products" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary">
+            <router-link
+              to="/products"
+              class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+              active-class="bg-secondary"
+            >
               {{ $t('common.products') }}
             </router-link>
-            <router-link to="/about" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" active-class="bg-secondary">
+            <router-link
+              to="/about"
+              class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+              active-class="bg-secondary"
+            >
               {{ $t('header.about') }}
             </router-link>
 
             <div class="h-px bg-border my-2"></div>
 
-            <router-link to="/cart" class="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/cart')" @focus="preloadRoute('/cart')">
+            <router-link
+              to="/cart"
+              class="flex items-center justify-between px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+              @mouseenter="preloadRoute('/cart')"
+              @focus="preloadRoute('/cart')"
+            >
               <span>{{ $t('header.cart') }}</span>
-              <span v-if="cartStore.totalItems > 0" class="bg-primary text-white text-xs px-2 py-0.5 rounded-full">{{ cartStore.totalItems }}</span>
+              <span
+                v-if="cartStore.totalItems > 0"
+                class="bg-primary text-white text-xs px-2 py-0.5 rounded-full"
+                >{{ cartStore.totalItems }}</span
+              >
             </router-link>
 
             <template v-if="authStore.isAuthenticated">
-              <router-link to="/dashboard" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/dashboard')" @focus="preloadRoute('/dashboard')">{{ $t('header.myAccount') }}</router-link>
+              <router-link
+                to="/dashboard"
+                class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+                @mouseenter="preloadRoute('/dashboard')"
+                @focus="preloadRoute('/dashboard')"
+                >{{ $t('header.myAccount') }}</router-link
+              >
             </template>
             <template v-else>
-              <router-link to="/login" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors" @mouseenter="preloadRoute('/login')" @focus="preloadRoute('/login')">{{ $t('header.logIn') }}</router-link>
-              <router-link to="/signup" class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-primary font-medium" @mouseenter="preloadRoute('/signup')" @focus="preloadRoute('/signup')">{{ $t('header.signUp') }}</router-link>
+              <router-link
+                to="/login"
+                class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors"
+                @mouseenter="preloadRoute('/login')"
+                @focus="preloadRoute('/login')"
+                >{{ $t('header.logIn') }}</router-link
+              >
+              <router-link
+                to="/signup"
+                class="px-4 py-2 rounded-lg hover:bg-secondary transition-colors text-primary font-medium"
+                @mouseenter="preloadRoute('/signup')"
+                @focus="preloadRoute('/signup')"
+                >{{ $t('header.signUp') }}</router-link
+              >
             </template>
           </nav>
         </div>
@@ -245,7 +375,9 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
             <component
               :is="Component"
               :key="routerViewComponentKey"
-              :class="isUserDashboardRoute ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0 flex-1'"
+              :class="
+                isUserDashboardRoute ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'min-w-0 flex-1'
+              "
             />
           </Transition>
         </RouterView>
@@ -258,40 +390,62 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
         <div class="grid grid-cols-1 md:grid-cols-5 gap-8">
           <div class="md:col-span-2">
             <div class="flex items-center gap-2 mb-4">
-               <div class="w-6 h-6 bg-primary rounded flex items-center justify-center text-white text-xs font-bold">N</div>
-               <span class="font-bold text-lg">NEXUS STORE</span>
+              <div
+                class="w-6 h-6 bg-primary rounded flex items-center justify-center text-white text-xs font-bold"
+              >
+                N
+              </div>
+              <span class="font-bold text-lg">NEXUS STORE</span>
             </div>
             <p class="text-sm text-muted-foreground mb-6 max-w-sm">
               {{ $t('footer.tagline') }}
             </p>
             <div class="flex gap-4">
-              <button class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors">
+              <button
+                class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+              >
                 <Twitter class="w-4 h-4" />
               </button>
-              <button class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors">
+              <button
+                class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+              >
                 <Instagram class="w-4 h-4" />
               </button>
-              <button class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors">
+              <button
+                class="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
+              >
                 <Facebook class="w-4 h-4" />
               </button>
             </div>
           </div>
-          
+
           <div>
             <h4 class="font-bold mb-4">{{ $t('footer.shop') }}</h4>
             <ul class="space-y-2 text-sm text-muted-foreground">
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.allProducts') }}</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.newArrivals') }}</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.bestSellers') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.allProducts') }}
+              </li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.newArrivals') }}
+              </li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.bestSellers') }}
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 class="font-bold mb-4">{{ $t('footer.company') }}</h4>
             <ul class="space-y-2 text-sm text-muted-foreground">
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.aboutUs') }}</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.careers') }}</li>
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.press') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.aboutUs') }}
+              </li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.careers') }}
+              </li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.press') }}
+              </li>
             </ul>
           </div>
 
@@ -318,12 +472,16 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
                   {{ $t('footer.adminPortal') }}
                 </router-link>
               </li>
-              <li class="hover:text-primary transition-colors cursor-pointer">{{ $t('footer.affiliateProgram') }}</li>
+              <li class="hover:text-primary transition-colors cursor-pointer">
+                {{ $t('footer.affiliateProgram') }}
+              </li>
             </ul>
           </div>
         </div>
 
-        <div class="border-t border-border/40 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
+        <div
+          class="border-t border-border/40 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground"
+        >
           <p>{{ $t('footer.rights') }}</p>
           <div class="flex gap-6">
             <span class="hover:text-foreground cursor-pointer">{{ $t('footer.privacy') }}</span>
@@ -352,19 +510,19 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
         <button
           v-if="isHomeRoute"
           type="button"
-          @click="refreshPage"
           class="h-10 w-10 rounded-full bg-secondary text-foreground border border-border shadow-lg hover:bg-secondary/80 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center"
           title="Refresh"
           aria-label="Refresh page"
+          @click="refreshPage"
         >
           <RefreshCw class="w-5 h-5" />
         </button>
         <button
           type="button"
-          @click="scrollToTop"
           class="h-10 w-10 rounded-full bg-secondary text-foreground border border-border shadow-lg hover:bg-secondary/80 hover:-translate-y-1 transition-all duration-300 flex items-center justify-center"
           title="Back to Top"
           aria-label="Back to top"
+          @click="scrollToTop"
         >
           <ArrowUp class="w-5 h-5" />
         </button>
@@ -404,8 +562,8 @@ watch([isHeaderCompact, isMobileMenuOpen], () => {
           Compare
         </router-link>
         <button
-          @click="compareStore.clearAll()"
           class="text-xs text-muted-foreground hover:text-destructive transition-colors ml-1"
+          @click="compareStore.clearAll()"
         >
           Clear
         </button>

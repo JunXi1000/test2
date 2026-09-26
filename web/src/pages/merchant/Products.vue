@@ -1,7 +1,10 @@
 <template>
   <div class="merchant-page w-full max-w-full space-y-4">
     <!-- Toolbar + table in one panel: better horizontal space use, no orphan action row -->
-    <el-card shadow="never" class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm">
+    <el-card
+      shadow="never"
+      class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm"
+    >
       <div class="merchant-data-panel-toolbar border-b border-gray-100 bg-white">
         <div class="min-w-0 max-sm:overflow-x-auto max-sm:pb-0.5 filter-row-scroll">
           <div class="flex w-full min-w-0 flex-nowrap items-center gap-4">
@@ -44,7 +47,11 @@
               Refresh
             </el-button>
 
-            <el-button type="primary" class="shrink-0 !rounded-lg px-4 shadow-sm" @click="openCreateDialog">
+            <el-button
+              type="primary"
+              class="shrink-0 !rounded-lg px-4 shadow-sm"
+              @click="openCreateDialog"
+            >
               <plus-icon class="mr-1.5 h-[18px] w-[18px]" />
               Add Product
             </el-button>
@@ -52,7 +59,11 @@
         </div>
       </div>
 
+      <!-- 取数失败与表格互斥：错误时整块换成 ErrorState，而不是照常渲染成空表 -->
+      <ErrorState v-if="errorRef" :message="errorRef" class="m-4" @retry="fetchProducts" />
+
       <el-table
+        v-else
         v-loading="loading"
         :data="products"
         row-key="id"
@@ -72,16 +83,22 @@
                 fit="cover"
               >
                 <template #error>
-                  <div class="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400">
+                  <div
+                    class="flex h-full w-full items-center justify-center bg-gray-50 text-gray-400"
+                  >
                     <image-icon class="h-7 w-7" />
                   </div>
                 </template>
               </el-image>
               <div class="min-w-0">
-                <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">{{ row.title }}</div>
+                <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">
+                  {{ row.title }}
+                </div>
                 <div class="mt-0.5 flex items-center gap-1.5">
                   <span class="text-sm text-gray-500">{{ row.category }}</span>
-                  <el-tag v-if="row.video" size="small" effect="plain" type="primary" class="!h-5">Video</el-tag>
+                  <el-tag v-if="row.video" size="small" effect="plain" type="primary" class="!h-5"
+                    >Video</el-tag
+                  >
                 </div>
               </div>
             </div>
@@ -90,16 +107,15 @@
 
         <el-table-column prop="price" label="Price" width="128" sortable align="left">
           <template #default="{ row }">
-            <span class="text-[15px] font-bold tabular-nums text-gray-900">${{ row.price.toFixed(2) }}</span>
+            <span class="text-[15px] font-bold tabular-nums text-gray-900"
+              >${{ row.price.toFixed(2) }}</span
+            >
           </template>
         </el-table-column>
 
         <el-table-column prop="stock" label="Stock" width="104" sortable align="left">
           <template #default="{ row }">
-            <span
-              class="text-[15px] font-bold tabular-nums"
-              :class="stockTextClass(row.stock)"
-            >
+            <span class="text-[15px] font-bold tabular-nums" :class="stockTextClass(row.stock)">
               {{ row.stock }}
             </span>
           </template>
@@ -142,6 +158,17 @@
             </div>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="PackageIcon"
+            title="No products found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </el-card>
 
@@ -216,7 +243,8 @@
               />
             </el-select>
             <p class="mt-1.5 text-xs text-gray-500">
-              Same taxonomy as the storefront product detail page (filters, specs, and variants use this value in mock mode).
+              Same taxonomy as the storefront product detail page (filters, specs, and variants use
+              this value in mock mode).
             </p>
           </el-form-item>
           <el-form-item label="Status" prop="status">
@@ -302,7 +330,12 @@
               <div class="cover-preview-card">
                 <div class="cover-preview-card__head">
                   <span class="text-xs font-medium text-gray-600">Preview</span>
-                  <el-tag v-if="effectiveCoverSrc && imagePreviewError" type="warning" size="small" effect="plain">
+                  <el-tag
+                    v-if="effectiveCoverSrc && imagePreviewError"
+                    type="warning"
+                    size="small"
+                    effect="plain"
+                  >
                     Failed
                   </el-tag>
                 </div>
@@ -318,9 +351,13 @@
                       @load="imagePreviewError = false"
                     >
                       <template #error>
-                        <div class="flex flex-col items-center justify-center gap-2 px-2 py-6 text-center text-gray-400">
+                        <div
+                          class="flex flex-col items-center justify-center gap-2 px-2 py-6 text-center text-gray-400"
+                        >
                           <image-icon class="h-8 w-8 shrink-0" />
-                          <span class="text-xs leading-snug">Could not load. Check URL or file.</span>
+                          <span class="text-xs leading-snug"
+                            >Could not load. Check URL or file.</span
+                          >
                         </div>
                       </template>
                     </el-image>
@@ -330,7 +367,9 @@
                     class="flex h-full flex-col items-center justify-center gap-2 px-3 py-6 text-center text-gray-400"
                   >
                     <image-icon class="h-8 w-8 opacity-60" />
-                    <span class="text-xs leading-snug">Preview appears here after you add an image.</span>
+                    <span class="text-xs leading-snug"
+                      >Preview appears here after you add an image.</span
+                    >
                   </div>
                 </div>
               </div>
@@ -349,7 +388,8 @@
             clearable
           />
           <p class="mt-1.5 text-xs text-gray-500">
-            Shown in the product detail gallery alongside images. A local path like /videos/demo.webm works in mock mode.
+            Shown in the product detail gallery alongside images. A local path like
+            /videos/demo.webm works in mock mode.
           </p>
         </el-form-item>
       </el-form>
@@ -368,30 +408,36 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
-import { 
-  Plus as PlusIcon, 
-  Search as SearchIcon, 
+import {
+  Plus as PlusIcon,
+  Search as SearchIcon,
   RefreshCw as RefreshCwIcon,
   Image as ImageIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Package as PackageIcon,
 } from 'lucide-vue-next'
 import { debounce } from 'lodash-es'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { 
-  getMerchantProducts, 
-  createMerchantProduct, 
-  updateMerchantProduct, 
+import { ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import {
+  getMerchantProducts,
+  createMerchantProduct,
+  updateMerchantProduct,
   deleteMerchantProduct,
-  type MerchantProduct 
+  type MerchantProduct,
 } from '@/api/modules/merchantProducts'
 import { PRODUCT_STORE_CATEGORIES } from '@/api/modules/product'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
+import { useToast } from '@/composables/useToast'
 
 /** Legacy values that may still exist in localStorage mock data */
 const LEGACY_MERCHANT_CATEGORIES = ['Home'] as const
 
 const merchantCategoryOptions = [
   ...PRODUCT_STORE_CATEGORIES,
-  ...LEGACY_MERCHANT_CATEGORIES.filter((c) => !PRODUCT_STORE_CATEGORIES.includes(c))
+  ...LEGACY_MERCHANT_CATEGORIES.filter((c) => !PRODUCT_STORE_CATEGORIES.includes(c)),
 ]
 
 const COVER_IMAGE_MAX_BYTES = Math.floor(2.5 * 1024 * 1024)
@@ -411,7 +457,17 @@ function isValidImageFieldValue(raw: string): boolean {
 }
 
 // State
-const loading = ref(false)
+const { toast } = useToast()
+// 取数失败由 ErrorState 承担持久态（原先 reportError:false + 一个瞬时 toast，表格照常
+// 渲染成空表 —— 用户看到的是「没有商品」而不是「加载失败」，toast 消失后也没有任何重试
+// 入口）；保存/删除等操作类 catch 仍用 toast。
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load products',
+})
 const submitting = ref(false)
 const products = ref<MerchantProduct[]>([])
 const searchQuery = ref('')
@@ -428,7 +484,7 @@ const formData = reactive<Omit<MerchantProduct, 'id' | 'sales'>>({
   category: '',
   status: 'draft',
   image: '',
-  video: ''
+  video: '',
 })
 
 const editingId = ref<number | null>(null)
@@ -438,9 +494,7 @@ const coverDragOver = ref(false)
 const lastLocalCoverName = ref('')
 const coverPreviewKey = ref(0)
 
-const isDataImageCover = computed(() =>
-  /^data:image\//i.test(formData.image?.trim() ?? '')
-)
+const isDataImageCover = computed(() => /^data:image\//i.test(formData.image?.trim() ?? ''))
 
 const effectiveCoverSrc = computed(() => {
   const s = formData.image?.trim() ?? ''
@@ -460,14 +514,14 @@ watch(
   () => {
     imagePreviewError.value = false
     coverPreviewKey.value += 1
-  }
+  },
 )
 
 // Validation Rules
 const formRules = reactive<FormRules>({
   title: [
     { required: true, message: 'Please enter product title', trigger: 'blur' },
-    { min: 3, max: 120, message: 'Use 3–120 characters', trigger: 'blur' }
+    { min: 3, max: 120, message: 'Use 3–120 characters', trigger: 'blur' },
   ],
   price: [
     { required: true, message: 'Price is required', trigger: 'blur' },
@@ -476,8 +530,8 @@ const formRules = reactive<FormRules>({
       min: 0,
       max: 999999.99,
       message: 'Price must be between 0 and 999,999.99',
-      trigger: 'blur'
-    }
+      trigger: 'blur',
+    },
   ],
   stock: [
     { required: true, message: 'Stock is required', trigger: 'blur' },
@@ -486,15 +540,11 @@ const formRules = reactive<FormRules>({
       min: 0,
       max: 999999,
       message: 'Stock must be an integer from 0 to 999,999',
-      trigger: 'blur'
-    }
+      trigger: 'blur',
+    },
   ],
-  category: [
-    { required: true, message: 'Please select a category', trigger: 'change' }
-  ],
-  status: [
-    { required: true, message: 'Please select a status', trigger: 'change' }
-  ],
+  category: [{ required: true, message: 'Please select a category', trigger: 'change' }],
+  status: [{ required: true, message: 'Please select a status', trigger: 'change' }],
   image: [
     { required: true, message: 'Add a cover image (file or URL)', trigger: 'change' },
     {
@@ -505,8 +555,8 @@ const formRules = reactive<FormRules>({
         }
         callback()
       },
-      trigger: 'blur'
-    }
+      trigger: 'blur',
+    },
   ],
   video: [
     {
@@ -522,32 +572,39 @@ const formRules = reactive<FormRules>({
             callback()
             return
           }
-        } catch { /* fallthrough */ }
+        } catch {
+          /* fallthrough */
+        }
         callback(new Error('Use a valid http(s) video URL, or leave empty'))
       },
-      trigger: 'blur'
-    }
-  ]
+      trigger: 'blur',
+    },
+  ],
 })
 
 // Methods — 首次进入可全屏 loading；搜索防抖用 silent 避免闪烁；点「Refresh」须 showLoading 才有反馈
 const loadData = async (options?: { silent?: boolean; showLoading?: boolean }) => {
   const useOverlay =
-    options?.showLoading === true ||
-    (!options?.silent && products.value.length === 0)
-  if (useOverlay) loading.value = true
-  try {
-    const data = await getMerchantProducts({
-      q: searchQuery.value,
-      status: statusFilter.value
-    })
-    products.value = data
-  } catch (error) {
-    console.error('Failed to load products:', error)
-    ElMessage.error('Failed to load products')
-  } finally {
-    if (useOverlay) loading.value = false
+    options?.showLoading === true || (!options?.silent && products.value.length === 0)
+
+  // 原 `if (useOverlay)` 控制 loading 翻转,对应 run 的 silent —— 不改动 loading 但照常走请求
+  const result = await run(
+    () =>
+      getMerchantProducts({
+        q: searchQuery.value,
+        status: statusFilter.value,
+      }),
+    { silent: !useOverlay },
+  )
+
+  if (result.ok) {
+    products.value = result.value
+    return
   }
+
+  // 控制台保留原始抛出物（含堆栈）；用户可见文案由 ErrorState 渲染 errorRef。
+  // 迁移前这里打的就是原始 error 对象，run 之后只剩字符串，故取 cause。
+  console.error('Failed to load products:', result.cause)
 }
 
 const debouncedSearch = debounce(() => {
@@ -589,28 +646,22 @@ function stockTextClass(stock: number) {
   return 'text-emerald-600'
 }
 
-function applyCoverFile(file: File) {
+async function applyCoverFile(file: File) {
   if (!COVER_ACCEPT_MIME.has(file.type)) {
-    ElMessage.error('Please choose a JPG, PNG, WebP, or GIF image')
+    toast({ title: 'Please choose a JPG, PNG, WebP, or GIF image', variant: 'destructive' })
     return
   }
   if (file.size > COVER_IMAGE_MAX_BYTES) {
-    ElMessage.error(`Image must be ${COVER_IMAGE_MAX_LABEL} or smaller`)
+    toast({ title: `Image must be ${COVER_IMAGE_MAX_LABEL} or smaller`, variant: 'destructive' })
     return
   }
-  const reader = new FileReader()
-  reader.onload = () => {
-    const result = reader.result
-    if (typeof result === 'string') {
-      formData.image = result
-      lastLocalCoverName.value = file.name
-      formRef.value?.validateField('image').catch(() => {})
-    }
+  try {
+    formData.image = await readFileAsDataUrl(file)
+    lastLocalCoverName.value = file.name
+    formRef.value?.validateField('image').catch(() => {})
+  } catch {
+    toast({ title: 'Could not read this file', variant: 'destructive' })
   }
-  reader.onerror = () => {
-    ElMessage.error('Could not read this file')
-  }
-  reader.readAsDataURL(file)
 }
 
 function triggerCoverFilePick() {
@@ -697,7 +748,7 @@ function normalizeProductPayload(): Omit<MerchantProduct, 'id' | 'sales'> {
     category: formData.category,
     status: formData.status,
     image: formData.image.trim(),
-    video: (formData.video ?? '').trim() || undefined
+    video: (formData.video ?? '').trim() || undefined,
   }
 }
 
@@ -719,8 +770,8 @@ const submitForm = async () => {
         {
           confirmButtonText: 'Save anyway',
           cancelButtonText: 'Go back',
-          type: 'warning'
-        }
+          type: 'warning',
+        },
       )
     } catch {
       return
@@ -731,16 +782,19 @@ const submitForm = async () => {
   try {
     if (isEditMode.value && editingId.value) {
       await updateMerchantProduct(editingId.value, payload)
-      ElMessage.success('Product updated successfully')
+      toast({ title: 'Product updated successfully', variant: 'success' })
     } else {
       await createMerchantProduct(payload)
-      ElMessage.success('Product created successfully')
+      toast({ title: 'Product created successfully', variant: 'success' })
     }
     dialogVisible.value = false
     loadData({ silent: true })
   } catch (error) {
     console.error(error)
-    ElMessage.error(isEditMode.value ? 'Failed to update product' : 'Failed to create product')
+    toast({
+      title: isEditMode.value ? 'Failed to update product' : 'Failed to create product',
+      variant: 'destructive',
+    })
   } finally {
     submitting.value = false
   }
@@ -754,14 +808,14 @@ const handleDelete = (row: MerchantProduct) => {
       confirmButtonText: 'Delete',
       cancelButtonText: 'Cancel',
       type: 'warning',
-    }
+    },
   ).then(async () => {
     try {
       await deleteMerchantProduct(row.id)
-      ElMessage.success('Product deleted')
+      toast({ title: 'Product deleted', variant: 'success' })
       loadData({ silent: true })
-    } catch (error) {
-      ElMessage.error('Failed to delete product')
+    } catch {
+      toast({ title: 'Failed to delete product', variant: 'destructive' })
     }
   })
 }

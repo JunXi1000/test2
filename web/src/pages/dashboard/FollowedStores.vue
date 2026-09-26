@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { Store, Users, ArrowRight, Bell } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { useFollowedStores } from '@/stores/followedStores'
 import { useToast } from '@/composables/useToast'
 
@@ -12,7 +13,9 @@ const { toast } = useToast()
 const isLoadingRef = ref(true)
 
 onMounted(() => {
-  setTimeout(() => { isLoadingRef.value = false }, 300)
+  setTimeout(() => {
+    isLoadingRef.value = false
+  }, 300)
 })
 
 const count = computed(() => followedStores.items.length)
@@ -45,7 +48,11 @@ function unfollow(id: string, storeName: string) {
 
     <!-- Loading -->
     <div v-if="isLoadingRef" class="space-y-4">
-      <div v-for="i in 3" :key="i" class="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
+      <div
+        v-for="i in 3"
+        :key="i"
+        class="rounded-xl border border-border bg-card p-4 flex items-center gap-4"
+      >
         <Skeleton class="w-14 h-14 rounded-2xl" />
         <div class="flex-1 space-y-2">
           <Skeleton class="h-5 w-40" />
@@ -65,8 +72,16 @@ function unfollow(id: string, storeName: string) {
         <!-- Avatar -->
         <router-link :to="`/store/${store.id}`" class="flex-shrink-0">
           <div class="w-14 h-14 rounded-2xl overflow-hidden border border-border bg-secondary">
-            <img v-if="store.avatar" :src="store.avatar" :alt="store.storeName" class="w-full h-full object-cover" />
-            <div v-else class="w-full h-full flex items-center justify-center text-muted-foreground">
+            <img
+              v-if="store.avatar"
+              :src="store.avatar"
+              :alt="store.storeName"
+              class="w-full h-full object-cover"
+            />
+            <div
+              v-else
+              class="w-full h-full flex items-center justify-center text-muted-foreground"
+            >
               <Store class="w-6 h-6" />
             </div>
           </div>
@@ -99,18 +114,19 @@ function unfollow(id: string, storeName: string) {
     </div>
 
     <!-- Empty -->
-    <div v-else class="py-20 text-center border border-dashed border-border rounded-xl">
-      <div class="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4 text-muted-foreground">
-        <Bell class="w-8 h-8" />
-      </div>
-      <h3 class="text-lg font-medium mb-2">You're not following any stores yet</h3>
-      <p class="text-muted-foreground mb-6">Follow stores to get updates on their new products and deals.</p>
+    <EmptyState
+      v-else
+      :icon="Bell"
+      title="You're not following any stores yet"
+      description="Follow stores to get updates on their new products and deals."
+      class="py-20"
+    >
       <router-link to="/">
         <Button>
           Browse Stores
           <ArrowRight class="w-4 h-4 ml-2" />
         </Button>
       </router-link>
-    </div>
+    </EmptyState>
   </div>
 </template>

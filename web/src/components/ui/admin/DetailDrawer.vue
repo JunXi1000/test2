@@ -6,7 +6,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  size: '500px'
+  size: '500px',
 })
 
 const emit = defineEmits(['update:modelValue', 'close'])
@@ -20,12 +20,12 @@ const handleClose = () => {
 <template>
   <el-drawer
     :model-value="modelValue"
-    @update:model-value="emit('update:modelValue', $event)"
     :title="title"
     direction="rtl"
     :size="size"
     destroy-on-close
     class="dark-drawer"
+    @update:model-value="emit('update:modelValue', $event)"
     @close="handleClose"
   >
     <slot></slot>
@@ -49,7 +49,7 @@ const handleClose = () => {
   color: #a1a1aa;
 }
 .dark-desc .el-descriptions__label {
-  background-color: rgba(255,255,255,0.02) !important;
+  background-color: rgba(255, 255, 255, 0.02) !important;
   color: #a1a1aa !important;
 }
 .dark-desc .el-descriptions__content {

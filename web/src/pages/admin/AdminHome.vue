@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { getAdminDashboardStats, getRecentUsers, getRevenueChartData, type AdminStat } from '@/api/modules/adminDashboard'
+import {
+  getAdminDashboardStats,
+  getRecentUsers,
+  getRevenueChartData,
+  type AdminStat,
+} from '@/api/modules/adminDashboard'
+import { useAsyncTask } from '@/composables/useAsyncTask'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
 import StatCard from '@/components/ui/admin/StatCard.vue'
 import { use, init, graphic, type ECharts } from 'echarts/core'
@@ -11,42 +17,42 @@ import { CanvasRenderer } from 'echarts/renderers'
 
 use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
-const isLoadingRef = ref<boolean>(true)
+const {
+  isLoading: isLoadingRef,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load admin stats',
+  initialLoading: true,
+})
 const stats = ref<AdminStat[]>([])
-const errorRef = ref<string>('')
 const recentUsers = ref<{ name: string; email: string; joinedAt: string }[]>([])
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: ECharts | null = null
 
 async function fetchStats() {
-  try {
-    isLoadingRef.value = true
-    errorRef.value = ''
+  await run(async () => {
     const [data, users, chartData] = await Promise.all([
-      getAdminDashboardStats(), 
+      getAdminDashboardStats(),
       getRecentUsers(),
-      getRevenueChartData()
+      getRevenueChartData(),
     ])
-    
+
     stats.value = data
     recentUsers.value = users
-    
+
     // Initialize Chart
     if (chartData && chartRef.value) {
       await nextTick()
       initChart(chartData)
     }
-  } catch (e: any) {
-    errorRef.value = e?.message || 'Failed to load admin stats'
-  } finally {
-    isLoadingRef.value = false
-  }
+  })
 }
 
 function initChart(data: { date: string; value: number }[]) {
   if (!chartRef.value) return
   if (chartInstance) chartInstance.dispose()
-  
+
   chartInstance = init(chartRef.value, 'dark')
   const option = {
     backgroundColor: 'transparent',
@@ -54,43 +60,43 @@ function initChart(data: { date: string; value: number }[]) {
       trigger: 'axis',
       backgroundColor: 'rgba(0,0,0,0.8)',
       borderColor: '#333',
-      textStyle: { color: '#fff' }
+      textStyle: { color: '#fff' },
     },
     grid: {
       left: '3%',
       right: '4%',
       bottom: '3%',
-      containLabel: true
+      containLabel: true,
     },
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: data.map(item => item.date),
+      data: data.map((item) => item.date),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#71717a' }
+      axisLabel: { color: '#71717a' },
     },
     yAxis: {
       type: 'value',
       splitLine: { lineStyle: { color: '#27272a' } },
-      axisLabel: { color: '#71717a' }
+      axisLabel: { color: '#71717a' },
     },
     series: [
       {
         name: 'Revenue',
         type: 'line',
         smooth: true,
-        data: data.map(item => item.value),
+        data: data.map((item) => item.value),
         symbol: 'none',
         lineStyle: { color: '#10b981', width: 3 },
         areaStyle: {
           color: new graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
-            { offset: 1, color: 'rgba(16, 185, 129, 0)' }
-          ])
-        }
-      }
-    ]
+            { offset: 1, color: 'rgba(16, 185, 129, 0)' },
+          ]),
+        },
+      },
+    ],
   }
   chartInstance.setOption(option)
 }
@@ -123,9 +129,9 @@ onUnmounted(() => {
     </div>
     <ErrorState v-else-if="errorRef" :message="errorRef" @retry="fetchStats" />
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <StatCard 
-        v-for="stat in stats" 
-        :key="stat.label" 
+      <StatCard
+        v-for="stat in stats"
+        :key="stat.label"
         :label="stat.label"
         :value="stat.value"
         :change="stat.change"
@@ -151,7 +157,9 @@ onUnmounted(() => {
             class="flex items-center justify-between rounded-xl border border-zinc-700/40 bg-zinc-950/40 p-3 transition-colors hover:border-zinc-600/50 hover:bg-zinc-800/40"
           >
             <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">
+              <div
+                class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400"
+              >
                 {{ u.name.charAt(0) }}
               </div>
               <div>

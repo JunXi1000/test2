@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
@@ -10,7 +11,7 @@ import {
   Bell,
   Store,
   ShoppingCart,
-  Star
+  Star,
 } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
@@ -21,6 +22,19 @@ const route = useRoute()
 const { toast } = useToast()
 const authStore = useAuthStore()
 
+// admin 是恒定暗色域：页面靠**无前缀的** bg-zinc-950 / text-zinc-200 撑着（全 admin 零个 dark: 变体），
+// 但 `.dark` 此前从未挂到 <html>，于是 EP 的 --el-* 一直是亮色值 —— 实测暗色工具栏上的
+// el-input / el-select 是纯白 (#fff)，el-table 的空态文案也是亮色。
+//
+// 为什么必须挂到 documentElement、不能挂在下面那个 min-h-screen 的根 div 上：
+// el-select 的下拉、el-dialog、el-popover 都会 teleport 到 <body>，只有当变量定义在
+// <html>（EP 暗色变量文件的作用域是 `html.dark`）时它们才吃得到。
+//
+// 为什么不直接用 useDark()：那个跟随用户主题偏好，而 admin 没有亮色形态，恒定暗色。
+// 退出时摘掉，交还给下一层布局（storefront 的 DefaultLayout 会在 setup 时按偏好重新设好）。
+onMounted(() => document.documentElement.classList.add('dark'))
+onBeforeUnmount(() => document.documentElement.classList.remove('dark'))
+
 const navItems = [
   { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
   { name: 'Users', path: '/admin/dashboard/users', icon: Users },
@@ -28,7 +42,7 @@ const navItems = [
   { name: 'Products', path: '/admin/dashboard/products', icon: ShoppingBag },
   { name: 'Orders', path: '/admin/dashboard/orders', icon: ShoppingCart },
   { name: 'Reviews', path: '/admin/dashboard/reviews', icon: Star },
-  { name: 'Settings', path: '/admin/dashboard/settings', icon: Settings }
+  { name: 'Settings', path: '/admin/dashboard/settings', icon: Settings },
 ]
 
 function isNavActive(path: string) {
@@ -75,28 +89,30 @@ const preloadRoute = (path: string) => {
             v-for="item in navItems"
             :key="item.name"
             :to="item.path"
-            @mouseenter="preloadRoute(item.path)"
-            @focus="preloadRoute(item.path)"
             class="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap"
             :class="[
               isNavActive(item.path)
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                : 'text-zinc-400 hover:bg-white/5 hover:text-white',
             ]"
+            @mouseenter="preloadRoute(item.path)"
+            @focus="preloadRoute(item.path)"
           >
             <component :is="item.icon" class="w-4 h-4 shrink-0" />
             {{ item.name }}
           </router-link>
         </nav>
 
-        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-white/5 pt-2 lg:border-0 lg:pt-0">
+        <div
+          class="flex shrink-0 items-center justify-end gap-2 border-t border-white/5 pt-2 lg:border-0 lg:pt-0"
+        >
           <button
             type="button"
+            class="relative rounded-lg p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
+            aria-label="Notifications"
             @click="router.push('/admin/dashboard/notifications')"
             @mouseenter="preloadRoute('/admin/dashboard/notifications')"
             @focus="preloadRoute('/admin/dashboard/notifications')"
-            class="relative rounded-lg p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-white"
-            aria-label="Notifications"
           >
             <Bell class="w-5 h-5" />
             <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
@@ -109,8 +125,8 @@ const preloadRoute = (path: string) => {
           </div>
           <button
             type="button"
-            @click="handleLogout"
             class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10"
+            @click="handleLogout"
           >
             <LogOut class="w-4 h-4" />
             <span class="hidden sm:inline">Sign Out</span>

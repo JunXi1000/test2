@@ -73,22 +73,35 @@ http.interceptors.response.use(
       if (msg) error.message = msg
     }
     return Promise.reject(error)
-  }
+  },
 )
 
-export function get<T = any>(url: string, config?: AxiosRequestConfig) {
+/**
+ * 四个动词的 T 默认 `unknown` 而不是 `any`。
+ *
+ * `any` 会**静默传染**：`const data = await get('/x')` 拿到 any，再漏进组件 prop，
+ * 编译器全程不响 —— 这是 CLAUDE.md「接口数据不默认 any」要堵的口子。
+ * 换成 `unknown` 后，**没写注解的调用点会在编译期报错**，逼调用方写明期望的形状。
+ *
+ * 为什么改了默认值却没动任何调用点：TypeScript 会用**上下文类型反推泛型**。
+ * `const t: string = await post(...)` 会把 T 推成 `string`；`Promise<void>` 里的
+ * `return del(...)` 会推成 `void`（已用 `vue-tsc` + LSP hover 验证：hover 显示
+ * `get<string>(...): Promise<string>`）。所以存量调用点因注解/声明返回类型而全部保住，
+ * 收益完整落在将来新写的、忘了声明的调用点上 —— 那才是 `any` 原来真正伤人的地方。
+ */
+export function get<T = unknown>(url: string, config?: AxiosRequestConfig) {
   return http.get<any, T>(url, config)
 }
 
-export function post<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+export function post<T = unknown>(url: string, data?: any, config?: AxiosRequestConfig) {
   return http.post<any, T>(url, data, config)
 }
 
-export function put<T = any>(url: string, data?: any, config?: AxiosRequestConfig) {
+export function put<T = unknown>(url: string, data?: any, config?: AxiosRequestConfig) {
   return http.put<any, T>(url, data, config)
 }
 
-export function del<T = any>(url: string, config?: AxiosRequestConfig) {
+export function del<T = unknown>(url: string, config?: AxiosRequestConfig) {
   return http.delete<any, T>(url, config)
 }
 

@@ -46,7 +46,7 @@ export const useCartStore = defineStore('cart', () => {
   const initialItems: CartItem[] = loadFromStorage()
 
   // Data Migration: Ensure all items have a cartItemId
-  initialItems.forEach(item => {
+  initialItems.forEach((item) => {
     if (!item.cartItemId) {
       item.cartItemId = `${item.id}-${item.color}-${item.size}`
     }
@@ -55,7 +55,9 @@ export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>(initialItems)
   const directBuyItem = ref<CartItem | null>(null)
 
-  const subtotal = computed(() => items.value.reduce((sum, item) => sum + item.price * item.quantity, 0))
+  const subtotal = computed(() =>
+    items.value.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  )
   const totalItems = computed(() => items.value.reduce((sum, item) => sum + item.quantity, 0))
 
   /**
@@ -77,7 +79,10 @@ export const useCartStore = defineStore('cart', () => {
     mutation.then(syncFromServer).catch(syncFromServer)
   }
 
-  function setDirectBuyItem(product: any, options: { color: string, size: string, quantity: number }) {
+  function setDirectBuyItem(
+    product: any,
+    options: { color: string; size: string; quantity: number },
+  ) {
     directBuyItem.value = {
       id: Number(product.id),
       cartItemId: 'direct-buy',
@@ -86,7 +91,7 @@ export const useCartStore = defineStore('cart', () => {
       image: product.image ?? product.images?.[0] ?? '',
       color: options.color || '',
       size: options.size || '',
-      quantity: options.quantity || 1
+      quantity: options.quantity || 1,
     }
   }
 
@@ -96,9 +101,9 @@ export const useCartStore = defineStore('cart', () => {
 
   const MAX_QUANTITY = 99
 
-  function addItem(product: any, options: { color: string, size: string, quantity: number }) {
+  function addItem(product: any, options: { color: string; size: string; quantity: number }) {
     const uniqueKey = `${product.id}-${options.color}-${options.size}`
-    const existingItem = items.value.find(item => item.cartItemId === uniqueKey)
+    const existingItem = items.value.find((item) => item.cartItemId === uniqueKey)
 
     if (existingItem) {
       existingItem.quantity = Math.min(existingItem.quantity + options.quantity, MAX_QUANTITY)
@@ -111,7 +116,7 @@ export const useCartStore = defineStore('cart', () => {
         image: product.image ?? product.images?.[0] ?? '',
         color: options.color || '',
         size: options.size || '',
-        quantity: Math.min(options.quantity || 1, MAX_QUANTITY)
+        quantity: Math.min(options.quantity || 1, MAX_QUANTITY),
       })
     }
 
@@ -122,15 +127,15 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   function removeItem(cartItemId: string) {
-    const item = items.value.find(item => item.cartItemId === cartItemId)
-    items.value = items.value.filter(item => item.cartItemId !== cartItemId)
+    const item = items.value.find((item) => item.cartItemId === cartItemId)
+    items.value = items.value.filter((item) => item.cartItemId !== cartItemId)
     if (serverEnabled && isLoggedIn() && item?.serverId) {
       syncAfterMutation(removeCartItems([item.serverId]))
     }
   }
 
   function updateQuantity(cartItemId: string, delta: number) {
-    const item = items.value.find(item => item.cartItemId === cartItemId)
+    const item = items.value.find((item) => item.cartItemId === cartItemId)
     if (!item) return
     const newQty = item.quantity + delta
     if (newQty > MAX_QUANTITY) {
@@ -146,15 +151,18 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
-  function updateItemOptions(oldCartItemId: string, newOptions: { color: string, size: string, image?: string }) {
-    const itemIndex = items.value.findIndex(item => item.cartItemId === oldCartItemId)
+  function updateItemOptions(
+    oldCartItemId: string,
+    newOptions: { color: string; size: string; image?: string },
+  ) {
+    const itemIndex = items.value.findIndex((item) => item.cartItemId === oldCartItemId)
     if (itemIndex === -1) return
 
     const item = items.value[itemIndex]
     const newCartItemId = `${item.id}-${newOptions.color}-${newOptions.size}`
 
     // Check if an item with the new options already exists (and is not the current item)
-    const existingItemIndex = items.value.findIndex(i => i.cartItemId === newCartItemId)
+    const existingItemIndex = items.value.findIndex((i) => i.cartItemId === newCartItemId)
 
     if (existingItemIndex !== -1 && existingItemIndex !== itemIndex) {
       // Merge: Add quantity to existing item and remove the old one
@@ -177,7 +185,7 @@ export const useCartStore = defineStore('cart', () => {
 
   function clearCart() {
     if (serverEnabled && isLoggedIn()) {
-      const ids = items.value.map(i => i.serverId).filter((x): x is number => !!x)
+      const ids = items.value.map((i) => i.serverId).filter((x): x is number => !!x)
       items.value = []
       if (ids.length) {
         syncAfterMutation(removeCartItems(ids))
@@ -189,12 +197,20 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
-  watch(items, (val) => {
-    // 登录态以服务端为准,不写本地(避免陈旧快照在下次登录时误载入)
-    if (getStorageScope() === 'guest') {
-      localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(val))
-    }
-  }, { deep: true })
+  watch(
+    items,
+    (val) => {
+      // 走服务端时以服务端为准,不写本地(避免陈旧快照在下次登录时误载入);
+      // 反过来,服务端未启用(mock)时本地是唯一权威 —— 此时若还不写,
+      // 登录态的购物车就两头不落地,刷新即丢。
+      // 条件与 syncFromServer/syncAfterMutation 的守卫保持一致:
+      // 非 mock 下 serverEnabled 为 true,行为与改动前完全相同。
+      if (!(serverEnabled && isLoggedIn())) {
+        localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(val))
+      }
+    },
+    { deep: true },
+  )
 
   // 登录/登出切换用户后:guest 读本地,登录态拉取服务端权威购物车
   onUserScopeChange(() => {
@@ -211,5 +227,17 @@ export const useCartStore = defineStore('cart', () => {
     syncFromServer()
   }
 
-  return { items, directBuyItem, subtotal, totalItems, addItem, removeItem, updateQuantity, updateItemOptions, clearCart, setDirectBuyItem, clearDirectBuyItem }
+  return {
+    items,
+    directBuyItem,
+    subtotal,
+    totalItems,
+    addItem,
+    removeItem,
+    updateQuantity,
+    updateItemOptions,
+    clearCart,
+    setDirectBuyItem,
+    clearDirectBuyItem,
+  }
 })

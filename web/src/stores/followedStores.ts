@@ -35,15 +35,22 @@ export const useFollowedStores = defineStore('followedStores', () => {
   function persist() {
     try {
       localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(items.value))
-    } catch { /* storage full / unavailable */ }
+    } catch {
+      /* storage full / unavailable */
+    }
   }
 
   function isFollowing(id: string): boolean {
-    return items.value.some(s => s.id === id)
+    return items.value.some((s) => s.id === id)
   }
 
   /** 关注店铺，返回是否为新关注（用于 toast 文案） */
-  function follow(store: { id: string; storeName: string; avatar?: string; followers?: number }): boolean {
+  function follow(store: {
+    id: string
+    storeName: string
+    avatar?: string
+    followers?: number
+  }): boolean {
     if (isFollowing(store.id)) return false
     items.value.push({
       id: store.id,
@@ -58,12 +65,17 @@ export const useFollowedStores = defineStore('followedStores', () => {
 
   function unfollow(id: string): boolean {
     const existed = isFollowing(id)
-    items.value = items.value.filter(s => s.id !== id)
+    items.value = items.value.filter((s) => s.id !== id)
     if (existed) persist()
     return existed
   }
 
-  function toggle(store: { id: string; storeName: string; avatar?: string; followers?: number }): boolean {
+  function toggle(store: {
+    id: string
+    storeName: string
+    avatar?: string
+    followers?: number
+  }): boolean {
     return isFollowing(store.id) ? unfollow(store.id) : follow(store)
   }
 

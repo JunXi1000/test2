@@ -27,7 +27,7 @@ const MOCK_NOTIFICATIONS: MerchantNotificationItem[] = [
     message: 'Order ORD-2023-001 is awaiting fulfillment.',
     type: 'info',
     time: '5 min ago',
-    read: false
+    read: false,
   },
   {
     id: 2,
@@ -35,7 +35,7 @@ const MOCK_NOTIFICATIONS: MerchantNotificationItem[] = [
     message: 'Your withdrawal of $250.00 has been processed.',
     type: 'success',
     time: '1 hour ago',
-    read: false
+    read: false,
   },
   {
     id: 3,
@@ -43,7 +43,7 @@ const MOCK_NOTIFICATIONS: MerchantNotificationItem[] = [
     message: 'You have a new reply in Messages.',
     type: 'info',
     time: '3 hours ago',
-    read: true
+    read: true,
   },
   {
     id: 4,
@@ -51,8 +51,8 @@ const MOCK_NOTIFICATIONS: MerchantNotificationItem[] = [
     message: 'Audio Pods X is down to 2 units.',
     type: 'warning',
     time: 'Yesterday',
-    read: true
-  }
+    read: true,
+  },
 ]
 
 const notifications = ref<MerchantNotificationItem[]>(USE_MOCK ? MOCK_NOTIFICATIONS : [])
@@ -62,7 +62,7 @@ async function load() {
   if (USE_MOCK) return
   try {
     const items: AppNotification[] = await getNotifications()
-    notifications.value = items.map(n => ({
+    notifications.value = items.map((n) => ({
       id: n.id,
       title: n.title,
       message: n.message,

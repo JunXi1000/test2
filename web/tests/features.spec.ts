@@ -5,11 +5,14 @@ const BASE = 'http://localhost:5173'
 // ── Helper: wait for app to mount ──────────────────────────────────
 async function gotoApp(page: any, path: string) {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 15000 })
-  await page.waitForFunction(() => {
-    const app = document.getElementById('app')
-    if (!app) return false
-    return app.children.length > 2 && app.textContent && app.textContent.length > 50
-  }, { timeout: 10000 })
+  await page.waitForFunction(
+    () => {
+      const app = document.getElementById('app')
+      if (!app) return false
+      return app.children.length > 2 && app.textContent && app.textContent.length > 50
+    },
+    { timeout: 10000 },
+  )
   await page.waitForTimeout(800)
 }
 
@@ -17,10 +20,11 @@ async function gotoApp(page: any, path: string) {
 // Phase 1: Search Enhancement
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 1: Search Enhancement', () => {
-
   test('Homepage has search input and category chips', async ({ page }) => {
     await gotoApp(page, '/')
-    await expect(page.locator('input[placeholder*="Search"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('input[placeholder*="Search"]').first()).toBeVisible({
+      timeout: 5000,
+    })
     await expect(page.locator('button:has-text("All")').first()).toBeVisible()
   })
 
@@ -54,7 +58,6 @@ test.describe('Phase 1: Search Enhancement', () => {
 // Phase 2: Wishlist
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 2: Wishlist Persistence', () => {
-
   test('Wishlist page redirects to login when unauthenticated', async ({ page }) => {
     await gotoApp(page, '/dashboard/wishlist')
     await page.waitForTimeout(2000)
@@ -73,11 +76,15 @@ test.describe('Phase 2: Wishlist Persistence', () => {
   test('Click heart toggles wishlist', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(1500)
+    // 上面那条用例已断言 count > 0，所以这里不该再写 if 守卫 ——
+    // 守卫会让「按钮压根不存在」也判为通过。
     const heartBtn = page.locator('button[title*="wishlist"], button[title*="Wishlist"]').first()
-    if (await heartBtn.isVisible()) {
-      await heartBtn.click()
-      await expect(page.locator('text=Wishlist').first()).toBeVisible({ timeout: 3000 })
-    }
+    await expect(heartBtn).toBeVisible()
+
+    // 收藏状态由 title 文案体现（ProductCard 依据 wishlistStore 切换）
+    await expect(heartBtn).toHaveAttribute('title', /Add to wishlist/i)
+    await heartBtn.click()
+    await expect(heartBtn).toHaveAttribute('title', /Remove from wishlist/i)
   })
 })
 
@@ -85,7 +92,6 @@ test.describe('Phase 2: Wishlist Persistence', () => {
 // Phase 3: Browsing History
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 3: Browsing History', () => {
-
   test('Visiting product records browsing history', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(1500)
@@ -100,7 +106,6 @@ test.describe('Phase 3: Browsing History', () => {
 // Phase 4: Product Compare
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 4: Product Compare', () => {
-
   test('Compare checkbox appears on product cards (hover)', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(1500)
@@ -122,7 +127,6 @@ test.describe('Phase 4: Product Compare', () => {
 // Phase 5: Breadcrumb
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 5: Breadcrumb Navigation', () => {
-
   test('Product detail has breadcrumb with Home link', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(1500)
@@ -141,7 +145,6 @@ test.describe('Phase 5: Breadcrumb Navigation', () => {
 // Phase 6: Coupon Center
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 6: Coupon Center', () => {
-
   test('Coupon page redirects to login when unauthenticated', async ({ page }) => {
     await gotoApp(page, '/dashboard/coupons')
     await page.waitForTimeout(2000)
@@ -162,7 +165,6 @@ test.describe('Phase 6: Coupon Center', () => {
 // Phase 7: Returns & Refunds
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 7: Returns & Refunds', () => {
-
   test('Returns page redirects to login when unauthenticated', async ({ page }) => {
     await gotoApp(page, '/dashboard/returns')
     await page.waitForTimeout(2000)
@@ -181,7 +183,6 @@ test.describe('Phase 7: Returns & Refunds', () => {
 // Phase 8: Q&A
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 8: Product Q&A', () => {
-
   test('Q&A tab visible in product detail', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(1500)
@@ -216,7 +217,6 @@ test.describe('Phase 8: Product Q&A', () => {
 // Phase 9: Stock Alerts
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 9: Stock Alerts', () => {
-
   test('Stock status visible on product detail', async ({ page }) => {
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(1500)
@@ -229,7 +229,6 @@ test.describe('Phase 9: Stock Alerts', () => {
 // Phase 10: Lazy Loading
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 10: Image Lazy Loading', () => {
-
   test('Images use lazy loading on homepage', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
@@ -237,17 +236,12 @@ test.describe('Phase 10: Image Lazy Loading', () => {
     const count = await lazyImages.count()
     expect(count).toBeGreaterThan(0)
   })
-
-  test('useLazyImage composable file exists', async () => {
-    expect(true).toBe(true)
-  })
 })
 
 // ═══════════════════════════════════════════════════════════════════
 // Phase 11: PWA
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Phase 11: PWA Support', () => {
-
   test('manifest.json accessible with correct fields', async ({ page }) => {
     const response = await page.request.get(BASE + '/manifest.json')
     expect(response.status()).toBe(200)
@@ -283,12 +277,13 @@ test.describe('Phase 11: PWA Support', () => {
 // Core Pages
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Core Pages', () => {
-
   test('Cart page renders', async ({ page }) => {
     await gotoApp(page, '/cart')
     await page.waitForTimeout(1000)
     // Cart page should show cart-related content or empty cart message
-    await expect(page.locator('text=/Cart|Shopping|bag|empty|subtotal/i').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/Cart|Shopping|bag|empty|subtotal/i').first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 
   test('Checkout page redirects to cart when empty', async ({ page }) => {
@@ -302,27 +297,37 @@ test.describe('Core Pages', () => {
   test('Login page renders', async ({ page }) => {
     await gotoApp(page, '/login')
     await page.waitForTimeout(1000)
-    await expect(page.locator('input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]').first()).toBeVisible({ timeout: 5000 })
+    await expect(
+      page
+        .locator('input[type="email"], input[placeholder*="email"], input[placeholder*="Email"]')
+        .first(),
+    ).toBeVisible({ timeout: 5000 })
   })
 
   test('Signup page renders', async ({ page }) => {
     await gotoApp(page, '/signup')
     await page.waitForTimeout(1000)
-    await expect(page.locator('text=/sign up|create account|register|Sign up/i').first()).toBeVisible({ timeout: 5000 })
+    await expect(
+      page.locator('text=/sign up|create account|register|Sign up/i').first(),
+    ).toBeVisible({ timeout: 5000 })
   })
 
   test('Store page renders', async ({ page }) => {
     await gotoApp(page, '/store/1')
     await page.waitForTimeout(1500)
     // Store page should have products or store info
-    await expect(page.locator('text=/Store|products|product/i').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/Store|products|product/i').first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 
   test('404 page renders for unknown routes', async ({ page }) => {
     await gotoApp(page, '/this-page-does-not-exist-12345')
     await page.waitForTimeout(1000)
     // 404 page should show some not-found indicator
-    await expect(page.locator('text=/not found|404|doesn.t exist|exist/i').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/not found|404|doesn.t exist|exist/i').first()).toBeVisible({
+      timeout: 5000,
+    })
   })
 })
 
@@ -330,7 +335,6 @@ test.describe('Core Pages', () => {
 // Dashboard Pages (require auth — check redirect)
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Dashboard Auth Guards', () => {
-
   const protectedRoutes = [
     ['Dashboard', '/dashboard'],
     ['Orders', '/dashboard/orders'],
@@ -355,7 +359,6 @@ test.describe('Dashboard Auth Guards', () => {
 // Admin & Merchant Pages
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Admin & Merchant Portals', () => {
-
   test('Admin login renders', async ({ page }) => {
     await gotoApp(page, '/admin/login')
     await page.waitForTimeout(1000)
@@ -385,7 +388,6 @@ test.describe('Admin & Merchant Portals', () => {
 // Floating UI
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Floating UI Elements', () => {
-
   test('Back to top button appears after scrolling', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(1000)
@@ -396,12 +398,17 @@ test.describe('Floating UI Elements', () => {
   })
 
   test('Chat widget loaded on homepage', async ({ page }) => {
+    // 原来的断言是 expect(count).toBeGreaterThanOrEqual(0) —— 恒真，等于没测。
+    // 这条用例想验的是「异步组件加载不会把首页搞崩」，那就真的去验它：
+    // 收集未捕获异常，并确认应用确实渲染出了内容。
+    const pageErrors: string[] = []
+    page.on('pageerror', (e) => pageErrors.push(e.message))
+
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
-    // ChatWidget component is loaded (async component)
-    const chatElement = page.locator('button[title*="Chat" i], [class*="chat" i]')
-    const count = await chatElement.count()
-    // May be 0 if chat is collapsed/hidden, that's ok — test verifies no crash
-    expect(count).toBeGreaterThanOrEqual(0)
+
+    expect(pageErrors).toEqual([])
+    const appText = await page.locator('#app').innerText()
+    expect(appText.length).toBeGreaterThan(50)
   })
 })

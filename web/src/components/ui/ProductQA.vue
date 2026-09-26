@@ -39,7 +39,8 @@ const qaList = ref<QAItem[]>([
   {
     id: 2,
     question: 'What is the actual battery life for heavy use?',
-    answer: 'With heavy usage (gaming, video streaming), you can expect about 6-7 hours. For normal use, it lasts a full day.',
+    answer:
+      'With heavy usage (gaming, video streaming), you can expect about 6-7 hours. For normal use, it lasts a full day.',
     asker: 'Sarah K.',
     answeredBy: 'Verified Buyer',
     askedAt: Date.now() - 14 * 24 * 3600 * 1000,
@@ -88,7 +89,11 @@ function submitQuestion() {
   const q = newQuestion.value.trim()
   if (!q) return
   if (!authStore.isAuthenticated) {
-    toast({ title: 'Please log in', description: 'You need to be logged in to ask a question.', variant: 'destructive' })
+    toast({
+      title: 'Please log in',
+      description: 'You need to be logged in to ask a question.',
+      variant: 'destructive',
+    })
     return
   }
   submitting.value = true
@@ -104,7 +109,11 @@ function submitQuestion() {
     })
     newQuestion.value = ''
     submitting.value = false
-    toast({ title: 'Question submitted!', description: 'The seller will answer soon.', variant: 'success' })
+    toast({
+      title: 'Question submitted!',
+      description: 'The seller will answer soon.',
+      variant: 'success',
+    })
   }, 500)
 }
 
@@ -148,7 +157,9 @@ function timeAgo(ts: number): string {
         class="border border-border rounded-xl p-4 bg-card/50"
       >
         <div class="flex gap-3">
-          <div class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-0.5">
+          <div
+            class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0 mt-0.5"
+          >
             <User class="w-4 h-4 text-muted-foreground" />
           </div>
           <div class="flex-1 min-w-0">
@@ -167,11 +178,16 @@ function timeAgo(ts: number): string {
                 · {{ qa.answeredAt ? timeAgo(qa.answeredAt) : '' }}
               </p>
             </div>
-            <div v-else class="mt-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 dark:text-amber-400 rounded-lg px-2 py-1 inline-block">
+            <div
+              v-else
+              class="mt-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 dark:text-amber-400 rounded-lg px-2 py-1 inline-block"
+            >
               Awaiting answer...
             </div>
 
-            <button class="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+            <button
+              class="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
               <ThumbsUp class="w-3 h-3" /> Helpful ({{ qa.helpful }})
             </button>
           </div>
@@ -182,8 +198,8 @@ function timeAgo(ts: number): string {
     <!-- Show more -->
     <button
       v-if="qaList.length > visibleCount"
-      @click="showAll = !showAll"
       class="w-full py-2 text-sm text-primary hover:underline flex items-center justify-center gap-1"
+      @click="showAll = !showAll"
     >
       {{ showAll ? 'Show Less' : `See all ${qaList.length} questions` }}
       <ChevronDown v-if="!showAll" class="w-4 h-4" />

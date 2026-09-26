@@ -1,16 +1,23 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel
+      :error="errorRef"
+      :loading="loading"
+      shell-class="admin-grid-shell [--el-loading-spinner-size:42px] [--el-mask-color:rgb(24_24_27/0.72)]"
+      @retry="reloadNow"
+    >
+      <template #toolbar>
         <div class="admin-toolbar-search">
+          <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
+               @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
+               —— 清空搜索实打实发两个请求）。回车改走 reloadNow：它先取消挂起的
+               debounce，所以「刚打完字就回车」也只发一次。 -->
           <el-input
             v-model="searchQuery"
             placeholder="Search by name or merchant..."
             clearable
             class="!w-full"
-            @input="debouncedLoadData"
-            @clear="loadData()"
-            @keyup.enter="loadData()"
+            @keyup.enter="reloadNow"
           >
             <template #prefix>
               <el-icon><SearchIcon /></el-icon>
@@ -19,7 +26,13 @@
         </div>
 
         <div class="admin-toolbar-select">
-          <el-select v-model="statusFilter" placeholder="All Status" class="!w-full" @change="loadData">
+          <el-select
+            v-model="statusFilter"
+            data-testid="list-status-filter"
+            placeholder="All Status"
+            class="!w-full"
+            @change="reloadNow"
+          >
             <el-option label="All Status" value="all" />
             <el-option label="Active" value="active" />
             <el-option label="Draft" value="draft" />
@@ -32,63 +45,69 @@
           <RefreshCw v-if="!loading" class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
-      </div>
-    </div>
+      </template>
+      <!-- 本页是网格不是 el-table，没有 #empty 插槽可挂，空态得自己写。
+           加 !loading 是必要的：网格不同于 EP 表格，加载中它什么都不渲染，
+           若只看 products.length 就会在遮罩下先闪一屏「没有商品」。
+           遮罩只有 0.72 不透明度，文字会透出来。 -->
+      <EmptyState
+        v-if="!loading && products.length === 0"
+        :icon="PackageIcon"
+        title="No products found"
+        description="Try a different search or filter."
+        class="py-16"
+      />
 
-    <div
-      v-loading="loading"
-      class="admin-grid-shell [--el-loading-spinner-size:42px] [--el-mask-color:rgb(24_24_27/0.72)]"
-      element-loading-background="transparent"
-    >
-      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div v-else class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <div
           v-for="product in products"
           :key="product.id"
           class="admin-list-item-card group flex cursor-pointer flex-col overflow-hidden hover:border-violet-500/35"
           @click="openDrawer(product)"
         >
-        <div class="relative aspect-video bg-black/40">
-          <img
-            :key="`${product.id}-${mediaReloadKey}`"
-            :src="product.image"
-            class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-            loading="lazy"
-            decoding="async"
-            referrerpolicy="no-referrer"
-            @error="onImgError"
-          />
-          <div class="absolute top-2 right-2">
-             <span 
-              class="px-2 py-1 rounded-md text-xs font-medium shadow-sm backdrop-blur-md"
-              :class="{
-                'bg-emerald-500/20 text-emerald-400': product.status === 'active',
-                'bg-rose-500/20 text-rose-400': product.status === 'banned',
-                'bg-zinc-500/20 text-zinc-400': product.status === 'draft' || product.status === 'archived'
-              }"
-            >
-              {{ product.status.toUpperCase() }}
-            </span>
+          <div class="relative aspect-video bg-black/40">
+            <img
+              :key="`${product.id}-${mediaReloadKey}`"
+              :src="product.image"
+              class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+              @error="onImgError"
+            />
+            <div class="absolute top-2 right-2">
+              <span
+                class="px-2 py-1 rounded-md text-xs font-medium shadow-sm backdrop-blur-md"
+                :class="{
+                  'bg-emerald-500/20 text-emerald-400': product.status === 'active',
+                  'bg-rose-500/20 text-rose-400': product.status === 'banned',
+                  'bg-zinc-500/20 text-zinc-400':
+                    product.status === 'draft' || product.status === 'archived',
+                }"
+              >
+                {{ product.status.toUpperCase() }}
+              </span>
+            </div>
           </div>
-        </div>
-        <div class="p-4 flex-1 flex flex-col">
-          <h3 class="font-semibold text-zinc-200 truncate">{{ product.title }}</h3>
-          <div class="text-sm text-zinc-500 mb-2">{{ product.merchant }}</div>
-          <div class="flex items-center justify-between mt-auto">
-            <span class="text-purple-400 font-bold">${{ product.price }}</span>
-            <el-button 
-              v-if="product.status !== 'banned'" 
-              size="small" 
-              type="danger" 
-              plain
-              @click.stop="handleBan(product)"
-            >
-              Ban Item
-            </el-button>
+          <div class="p-4 flex-1 flex flex-col">
+            <h3 class="font-semibold text-zinc-200 truncate">{{ product.title }}</h3>
+            <div class="text-sm text-zinc-500 mb-2">{{ product.merchant }}</div>
+            <div class="flex items-center justify-between mt-auto">
+              <span class="text-purple-400 font-bold">${{ product.price }}</span>
+              <el-button
+                v-if="product.status !== 'banned'"
+                size="small"
+                type="danger"
+                plain
+                @click.stop="handleBan(product)"
+              >
+                Ban Item
+              </el-button>
+            </div>
           </div>
-        </div>
         </div>
       </div>
-    </div>
+    </DataTablePanel>
 
     <!-- Product Details Drawer -->
     <DetailDrawer v-model="drawerVisible" title="Product Inspection" size="500px">
@@ -112,32 +131,55 @@
           </div>
           <div class="text-3xl font-bold text-white mb-4">${{ selectedProduct.price }}</div>
           <p class="text-zinc-400 leading-relaxed">
-            This is a placeholder description for the admin view. In a real app, we would fetch the full product description here to check for prohibited content or policy violations.
+            This is a placeholder description for the admin view. In a real app, we would fetch the
+            full product description here to check for prohibited content or policy violations.
           </p>
         </div>
 
         <el-descriptions :column="1" border class="dark-desc">
           <el-descriptions-item label="Product ID">{{ selectedProduct.id }}</el-descriptions-item>
           <el-descriptions-item label="Status">
-             <el-tag :type="selectedProduct.status === 'active' ? 'success' : selectedProduct.status === 'banned' ? 'danger' : 'info'" size="small">
+            <el-tag
+              :type="
+                selectedProduct.status === 'active'
+                  ? 'success'
+                  : selectedProduct.status === 'banned'
+                    ? 'danger'
+                    : 'info'
+              "
+              size="small"
+            >
               {{ selectedProduct.status.toUpperCase() }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="Category">Electronics</el-descriptions-item>
           <el-descriptions-item label="Stock">45 units</el-descriptions-item>
           <el-descriptions-item label="Reports">
-            <span class="text-rose-400 font-bold" v-if="selectedProduct.id === 99">3 User Reports</span>
-            <span class="text-emerald-400" v-else>Clean</span>
+            <span v-if="selectedProduct.id === 99" class="text-rose-400 font-bold"
+              >3 User Reports</span
+            >
+            <span v-else class="text-emerald-400">Clean</span>
           </el-descriptions-item>
         </el-descriptions>
 
-        <div class="pt-4 border-t border-white/10" v-if="selectedProduct.status !== 'banned'">
+        <div v-if="selectedProduct.status !== 'banned'" class="pt-4 border-t border-white/10">
           <h4 class="font-medium text-white mb-3">Moderation Actions</h4>
-          <el-button type="danger" class="w-full" @click="handleBan(selectedProduct); drawerVisible = false">
+          <el-button
+            type="danger"
+            class="w-full"
+            @click="
+              () => {
+                // 包成箭头函数后 TS 收窄不再跨进闭包（selectedProduct 是 ref 取值），
+                // 显式守一次；原先的内联语句由外层 v-if 保证非空。行为不变。
+                if (selectedProduct) handleBan(selectedProduct)
+                drawerVisible = false
+              }
+            "
+          >
             Ban Product (Violation of Terms)
           </el-button>
         </div>
-         <div class="pt-4 border-t border-white/10" v-else>
+        <div v-else class="pt-4 border-t border-white/10">
           <h4 class="font-medium text-white mb-3">Moderation Actions</h4>
           <el-button type="success" plain class="w-full" disabled>
             Unban Product (Requires Appeal)
@@ -149,47 +191,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { RefreshCw, Search as SearchIcon } from 'lucide-vue-next'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref } from 'vue'
+import { RefreshCw, Search as SearchIcon, Package as PackageIcon } from 'lucide-vue-next'
+import { ElMessageBox } from 'element-plus'
 import { getAdminProducts, banProduct, type AdminProduct } from '@/api/modules/adminProducts'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
-import { debounce } from 'lodash-es'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import { useListQuery } from '@/composables/useListQuery'
+import { useToast } from '@/composables/useToast'
 
-const loading = ref(false)
-const products = ref<AdminProduct[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
+const { toast } = useToast()
 const drawerVisible = ref(false)
 const selectedProduct = ref<AdminProduct | null>(null)
-/** 刷新后递增，强制 <img>  remount 以重试加载外链图 */
+/** 刷新后递增，强制 <img> remount 以重试加载外链图 */
 const mediaReloadKey = ref(0)
+/** 下一次取数是否算「刷新」：只有点刷新按钮才 bump 媒体 key 并要求至少转够 spinner */
+let bumpNext = false
 
-const loadData = async (options?: { bumpMediaKey?: boolean; minSpinnerMs?: number }) => {
-  loading.value = true
-  const started = Date.now()
-  try {
-    const data = await getAdminProducts({
-      q: searchQuery.value,
-      status: statusFilter.value
-    })
-    products.value = data
-    if (options?.bumpMediaKey) mediaReloadKey.value += 1
-  } catch (error) {
-    ElMessage.error('Failed to load products')
-  } finally {
-    const minMs = options?.minSpinnerMs ?? 0
-    const elapsed = Date.now() - started
-    if (minMs > 0 && elapsed < minMs) {
-      await new Promise((r) => setTimeout(r, minMs - elapsed))
+// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，网格照常渲染成空态 —— 用户看到的
+// 是「没有商品」而不是「加载失败」，且无重试入口）；审核等操作类 catch 仍用 toast。
+const {
+  items: products,
+  searchQuery,
+  filter: statusFilter,
+  isLoading: loading,
+  error: errorRef,
+  reloadNow,
+} = useListQuery<AdminProduct>({
+  fallbackMessage: 'Failed to load products',
+  task: async ({ q, filter, commit }) => {
+    const started = Date.now()
+    try {
+      commit(await getAdminProducts({ q, status: filter }))
+      if (bumpNext) mediaReloadKey.value += 1
+    } finally {
+      // 「至少转够 spinner」的等待必须落在 run 回调的 finally 里：它要发生在 useAsyncTask
+      // 复位 loading **之前**，否则 spinner 早就没了，等于没等。放 finally 而不是 try 末尾，
+      // 是为了失败时也照样等够（与迁移前一致）。
+      const minMs = bumpNext ? 280 : 0
+      const elapsed = Date.now() - started
+      if (minMs > 0 && elapsed < minMs) {
+        await new Promise((r) => setTimeout(r, minMs - elapsed))
+      }
+      bumpNext = false
     }
-    loading.value = false
-  }
-}
+  },
+})
 
 function refreshList() {
   // Mock 接口可能瞬间返回，保证至少短暂显示 loading，避免「点了没反应」
-  loadData({ bumpMediaKey: true, minSpinnerMs: 280 })
+  bumpNext = true
+  reloadNow()
 }
 
 function onImgError(e: Event) {
@@ -197,25 +250,19 @@ function onImgError(e: Event) {
   el.style.opacity = '0.35'
 }
 
-// Debounce search（输入时不反复 bump 媒体 key，避免列表闪动）
-const debouncedLoadData = debounce(() => loadData(), 300)
-watch(searchQuery, () => {
-  debouncedLoadData()
-})
-
 const handleBan = (product: AdminProduct) => {
   ElMessageBox.prompt('Reason for banning:', 'Ban Product', {
     confirmButtonText: 'Ban',
     cancelButtonText: 'Cancel',
     inputPattern: /.+/,
-    inputErrorMessage: 'Reason is required'
+    inputErrorMessage: 'Reason is required',
   }).then(async ({ value }) => {
     try {
       await banProduct(product.id)
       product.status = 'banned'
-      ElMessage.success(`Product banned: ${value}`)
-    } catch (error) {
-      ElMessage.error('Failed to ban product')
+      toast({ title: `Product banned: ${value}`, variant: 'success' })
+    } catch {
+      toast({ title: 'Failed to ban product', variant: 'destructive' })
     }
   })
 }
@@ -224,8 +271,6 @@ const openDrawer = (product: AdminProduct) => {
   selectedProduct.value = product
   drawerVisible.value = true
 }
-
-onMounted(loadData)
 </script>
 
 <style>

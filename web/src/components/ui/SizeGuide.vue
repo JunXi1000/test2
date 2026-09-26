@@ -19,7 +19,7 @@ const props = withDefaults(
     /** 当前已在详情页选中的尺码（用于表格高亮） */
     selectedSize?: string
   }>(),
-  { selectedSize: '' }
+  { selectedSize: '' },
 )
 
 const emit = defineEmits<{
@@ -61,7 +61,15 @@ const SIZE_ANCHORS = [
 const chartRows = computed<ChartRow[]>(() => {
   const present = SIZE_GUIDE_CHART.filter((r) => props.sizes.includes(r.size))
   const missing = props.sizes.filter((s) => !SIZE_GUIDE_CHART.some((r) => r.size === s))
-  const placeholders = missing.map<ChartRow>((s) => ({ size: s, us: '—', uk: '—', eu: '—', chestIn: null, waistIn: null, hipIn: null }))
+  const placeholders = missing.map<ChartRow>((s) => ({
+    size: s,
+    us: '—',
+    uk: '—',
+    eu: '—',
+    chestIn: null,
+    waistIn: null,
+    hipIn: null,
+  }))
   return [...present, ...placeholders]
 })
 
@@ -117,7 +125,7 @@ watch(
       height.value = ''
       weight.value = ''
     }
-  }
+  },
 )
 </script>
 
@@ -131,11 +139,17 @@ watch(
       aria-label="Size Guide"
     >
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="close" />
-      <div class="relative w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+      <div
+        class="relative w-full max-w-lg rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+      >
         <!-- 头部 -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-border bg-secondary/30 shrink-0">
+        <div
+          class="flex items-center justify-between px-5 py-4 border-b border-border bg-secondary/30 shrink-0"
+        >
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <div
+              class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center"
+            >
               <Ruler class="w-5 h-5" />
             </div>
             <div>
@@ -143,7 +157,11 @@ watch(
               <p class="text-xs text-muted-foreground">Measurements in cm (inches)</p>
             </div>
           </div>
-          <button class="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground" aria-label="Close" @click="close">
+          <button
+            class="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground"
+            aria-label="Close"
+            @click="close"
+          >
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -151,7 +169,9 @@ watch(
         <div class="p-5 space-y-5 overflow-y-auto">
           <!-- 对照表 -->
           <div>
-            <p class="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Size conversion chart</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+              Size conversion chart
+            </p>
             <div class="overflow-x-auto rounded-xl border border-border">
               <table class="w-full text-xs">
                 <thead>
@@ -170,18 +190,23 @@ watch(
                     v-for="row in chartRows"
                     :key="row.size"
                     class="border-t border-border"
-                    :class="row.size === recommendedSize
-                      ? 'bg-primary/10'
-                      : row.size === selectedSize
-                        ? 'bg-primary/5'
-                        : 'hover:bg-secondary/40'"
+                    :class="
+                      row.size === recommendedSize
+                        ? 'bg-primary/10'
+                        : row.size === selectedSize
+                          ? 'bg-primary/5'
+                          : 'hover:bg-secondary/40'
+                    "
                     :data-recommended="row.size === recommendedSize ? 'true' : undefined"
                     :data-selected="row.size === selectedSize ? 'true' : undefined"
                   >
                     <td class="px-3 py-2 font-bold">
                       <span class="inline-flex items-center gap-1.5">
                         {{ row.size }}
-                        <span v-if="row.size === recommendedSize" class="inline-flex items-center gap-0.5 text-[10px] font-bold text-primary">
+                        <span
+                          v-if="row.size === recommendedSize"
+                          class="inline-flex items-center gap-0.5 text-[10px] font-bold text-primary"
+                        >
                           <Sparkles class="w-3 h-3" />
                           Recommended
                         </span>
@@ -199,7 +224,8 @@ watch(
               </table>
             </div>
             <p class="text-[11px] text-muted-foreground mt-2">
-              Body measurements, not garment measurements. When between sizes, size up for a relaxed fit.
+              Body measurements, not garment measurements. When between sizes, size up for a relaxed
+              fit.
             </p>
           </div>
 
@@ -238,12 +264,10 @@ watch(
               <p v-if="recommendedSize" class="text-sm">
                 Recommended size: <span class="font-bold text-primary">{{ recommendedSize }}</span>
               </p>
-              <p v-else class="text-sm text-muted-foreground">Enter your height and weight to get a recommendation.</p>
-              <Button
-                size="sm"
-                :disabled="!recommendedSize"
-                @click="selectRecommended"
-              >
+              <p v-else class="text-sm text-muted-foreground">
+                Enter your height and weight to get a recommendation.
+              </p>
+              <Button size="sm" :disabled="!recommendedSize" @click="selectRecommended">
                 Select {{ recommendedSize || 'size' }}
               </Button>
             </div>

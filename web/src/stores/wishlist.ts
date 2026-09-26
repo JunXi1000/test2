@@ -36,7 +36,7 @@ export const useWishlistStore = defineStore('wishlist', () => {
   })
 
   const count = computed(() => items.value.length)
-  const ids = computed(() => new Set(items.value.map(i => i.id)))
+  const ids = computed(() => new Set(items.value.map((i) => i.id)))
 
   function isInWishlist(productId: number): boolean {
     return ids.value.has(productId)
@@ -66,7 +66,7 @@ export const useWishlistStore = defineStore('wishlist', () => {
   }
 
   function removeItem(productId: number) {
-    items.value = items.value.filter(i => i.id !== productId)
+    items.value = items.value.filter((i) => i.id !== productId)
     saveToStorage(items.value)
   }
 

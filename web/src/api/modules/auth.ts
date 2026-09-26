@@ -6,13 +6,13 @@ import type { User } from '@/stores/auth'
 const ROLE_TO_TYPE: Record<string, string> = {
   user: 'USER',
   merchant: 'SHOP',
-  admin: 'ADMIN'
+  admin: 'ADMIN',
 }
 
 const TYPE_TO_ROLE: Record<string, User['role']> = {
   USER: 'user',
   SHOP: 'merchant',
-  ADMIN: 'admin'
+  ADMIN: 'admin',
 }
 
 // ── JWT payload decoding (no signature verification — just reading claims) ──
@@ -47,7 +47,7 @@ function userFromBackendDto(dto: {
     name: dto.nickname || dto.username || '',
     email: dto.email || '',
     role,
-    avatar: dto.avatarUrl
+    avatar: dto.avatarUrl,
   }
 }
 
@@ -72,27 +72,26 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
         name: role === 'admin' ? 'System Admin' : role === 'merchant' ? 'Nike Store' : 'Alex Doe',
         email: payload.email,
         role,
-        avatar: ''
+        avatar: '',
       },
-      token: `mock_${role}_token`
+      token: `mock_${role}_token`,
     }
   }
 
   // Backend expects { username, password, type } at POST /common/login
   const type = ROLE_TO_TYPE[payload.role || 'user'] || 'USER'
   const token: string = await post('/common/login', {
-    username: payload.email,   // frontend uses email field, backend uses username
+    username: payload.email, // frontend uses email field, backend uses username
     password: payload.password,
-    type
+    type,
   })
 
   // Decode JWT payload to extract user info
   const claims = decodeJwtPayload(token)
   let user: User
   if (claims?.currentUser) {
-    const dto = typeof claims.currentUser === 'string'
-      ? JSON.parse(claims.currentUser)
-      : claims.currentUser
+    const dto =
+      typeof claims.currentUser === 'string' ? JSON.parse(claims.currentUser) : claims.currentUser
     user = userFromBackendDto(dto)
   } else {
     // Fallback: make a separate call to get current user
@@ -106,9 +105,9 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
 // ── Register ─────────────────────────────────────────────────────────
 export interface RegisterPayload {
   role: 'user' | 'merchant'
-  email: string        // becomes username on backend
+  email: string // becomes username on backend
   password: string
-  nickname: string     // display name
+  nickname: string // display name
   /** Merchant-only: store name */
   storeName?: string
   /** Merchant-only: qualification image URLs (comma-separated or JSON array) */
@@ -128,7 +127,7 @@ export async function register(payload: RegisterPayload): Promise<void> {
     password: payload.password,
     nickname: payload.nickname,
     // 邮箱必须同时以 email 字段传给后端,否则后端 email 列落空,管理端用户列表显示为空
-    email: payload.email
+    email: payload.email,
   }
 
   if (type === 'SHOP') {
@@ -153,7 +152,7 @@ export async function requestPasswordReset(email: string): Promise<string> {
   // 真实分支:POST /common/sendResetCode { type, tel }
   return post<string>('/common/sendResetCode', {
     type: 'USER',
-    tel: email
+    tel: email,
   })
 }
 
@@ -161,7 +160,11 @@ export async function requestPasswordReset(email: string): Promise<string> {
  * 第二步:用验证码 + 手机号 + 新密码完成改密。
  * 后端校验验证码(不存在/过期/不匹配均拒绝)后才写入新密码。
  */
-export async function resetPasswordWithToken(code: string, email: string, newPassword: string): Promise<void> {
+export async function resetPasswordWithToken(
+  code: string,
+  email: string,
+  newPassword: string,
+): Promise<void> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 800))
     if (!code.trim()) throw new Error('无效的重置验证码。')
@@ -172,6 +175,6 @@ export async function resetPasswordWithToken(code: string, email: string, newPas
     type: 'USER',
     tel: email,
     code,
-    password: newPassword
+    password: newPassword,
   })
 }

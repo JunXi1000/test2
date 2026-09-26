@@ -6,5 +6,7 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true
   },
-  "include": ["vite.config.ts"]
+  // 根目录的构建/测试配置文件：显式纳入，否则它们不属于任何 TS 项目，
+  // 编辑器会按推断配置报 import.meta / process 之类的假错。
+  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts"]
 }

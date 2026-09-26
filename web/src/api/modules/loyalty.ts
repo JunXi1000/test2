@@ -85,13 +85,13 @@ export function getTier(spend: number): LoyaltyTier {
 
 /** 下一等级信息；已达最高等级返回 null */
 export function getNextTier(spend: number): { tier: LoyaltyTier; minSpend: number } | null {
-  const next = TIER_CONFIG.find(t => spend < t.minSpend)
+  const next = TIER_CONFIG.find((t) => spend < t.minSpend)
   return next ? { tier: next.tier, minSpend: next.minSpend } : null
 }
 
 /** 距下一等级的进度 0-100（已达最高等级恒为 100） */
 export function getTierProgress(spend: number): number {
-  const idx = TIER_CONFIG.findIndex(t => spend < t.minSpend)
+  const idx = TIER_CONFIG.findIndex((t) => spend < t.minSpend)
   if (idx === -1) return 100
   const lower = TIER_CONFIG[idx - 1] || TIER_CONFIG[0]
   const upper = TIER_CONFIG[idx]

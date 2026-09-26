@@ -12,7 +12,7 @@ const MOCK_ADMIN_SETTINGS: AdminSettings = {
   siteName: 'Nexus Market',
   maintenanceMode: false,
   allowRegistrations: true,
-  commissionRate: 5.0
+  commissionRate: 5.0,
 }
 
 export async function getAdminSettings(): Promise<AdminSettings> {

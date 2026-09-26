@@ -16,7 +16,7 @@ const props = withDefaults(
   {
     cardLast4: '****',
     bankName: 'YourBank',
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -34,13 +34,24 @@ function close() {
 
 <template>
   <Teleport to="body">
-    <div v-if="modelValue" class="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div
+      v-if="modelValue"
+      class="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="close" />
-      <div class="relative w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div
+        class="relative w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+      >
         <!-- 银行头部 -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-secondary/30">
+        <div
+          class="flex items-center justify-between px-6 py-4 border-b border-border bg-secondary/30"
+        >
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <div
+              class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center"
+            >
               <ShieldCheck class="w-5 h-5" />
             </div>
             <div>
@@ -48,7 +59,11 @@ function close() {
               <p class="text-xs text-muted-foreground">3-D Secure</p>
             </div>
           </div>
-          <button class="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground" aria-label="Close" @click="close">
+          <button
+            class="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground"
+            aria-label="Close"
+            @click="close"
+          >
             <X class="w-4 h-4" />
           </button>
         </div>
@@ -64,7 +79,10 @@ function close() {
             <p class="text-sm">Confirm this purchase with your bank to complete the payment.</p>
             <div class="flex items-center gap-2 text-xs text-muted-foreground">
               <ShieldCheck class="w-4 h-4 flex-shrink-0" />
-              <span>Your bank will approve this transaction securely. This is a simulated verification step.</span>
+              <span
+                >Your bank will approve this transaction securely. This is a simulated verification
+                step.</span
+              >
             </div>
           </div>
 

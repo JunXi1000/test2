@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory, type RouteRecordRaw, type LocationQueryRaw } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type RouteRecordRaw,
+  type LocationQueryRaw,
+} from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { loginRouteNameFromAppPath } from '@/utils/loginRoutes'
@@ -24,44 +29,44 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'AdminHome',
-        component: () => import('@/pages/admin/AdminHome.vue')
+        component: () => import('@/pages/admin/AdminHome.vue'),
       },
       {
         path: 'users',
         name: 'AdminUsers',
-        component: () => import('@/pages/admin/Users.vue')
+        component: () => import('@/pages/admin/Users.vue'),
       },
       {
         path: 'merchants',
         name: 'AdminMerchants',
-        component: () => import('@/pages/admin/Merchants.vue')
+        component: () => import('@/pages/admin/Merchants.vue'),
       },
       {
         path: 'products',
         name: 'AdminProducts',
-        component: () => import('@/pages/admin/Products.vue')
+        component: () => import('@/pages/admin/Products.vue'),
       },
       {
         path: 'orders',
         name: 'AdminOrders',
-        component: () => import('@/pages/admin/Orders.vue')
+        component: () => import('@/pages/admin/Orders.vue'),
       },
       {
         path: 'reviews',
         name: 'AdminReviews',
-        component: () => import('@/pages/admin/Reviews.vue')
+        component: () => import('@/pages/admin/Reviews.vue'),
       },
       {
         path: 'settings',
         name: 'AdminSettings',
-        component: () => import('@/pages/admin/Settings.vue')
+        component: () => import('@/pages/admin/Settings.vue'),
       },
       {
         path: 'notifications',
         name: 'AdminNotifications',
-        component: () => import('@/pages/admin/Notifications.vue')
-      }
-    ]
+        component: () => import('@/pages/admin/Notifications.vue'),
+      },
+    ],
   },
   {
     path: '/merchant/dashboard',
@@ -72,65 +77,65 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'MerchantHome',
         meta: { title: 'Store Overview' },
-        component: () => import('@/pages/merchant/MerchantHome.vue')
+        component: () => import('@/pages/merchant/MerchantHome.vue'),
       },
       {
         path: 'products',
         name: 'MerchantProducts',
         meta: { title: 'Product Management' },
-        component: () => import('@/pages/merchant/Products.vue')
+        component: () => import('@/pages/merchant/Products.vue'),
       },
       {
         path: 'orders',
         name: 'MerchantOrders',
         meta: { title: 'Order Management' },
-        component: () => import('@/pages/merchant/Orders.vue')
+        component: () => import('@/pages/merchant/Orders.vue'),
       },
       {
         path: 'wallet',
         name: 'MerchantWallet',
         meta: { title: 'Wallet & Payouts' },
-        component: () => import('@/pages/merchant/Wallet.vue')
+        component: () => import('@/pages/merchant/Wallet.vue'),
       },
       {
         path: 'settings',
         name: 'MerchantSettings',
         meta: { title: 'Store Settings' },
-        component: () => import('@/pages/merchant/Settings.vue')
+        component: () => import('@/pages/merchant/Settings.vue'),
       },
       {
         path: 'messages',
         name: 'MerchantMessages',
         meta: { title: 'Messages' },
-        component: () => import('@/pages/merchant/Messages.vue')
-      }
-    ]
+        component: () => import('@/pages/merchant/Messages.vue'),
+      },
+    ],
   },
   {
     path: '/admin/login',
     name: 'AdminLogin',
     component: () => import('@/pages/Login.vue'),
-    meta: { guestOnly: true, loginPortal: 'admin' }
+    meta: { guestOnly: true, loginPortal: 'admin' },
   },
   {
     path: '/merchant/login',
     name: 'MerchantLogin',
     component: () => import('@/pages/Login.vue'),
-    meta: { guestOnly: true, loginPortal: 'merchant' }
+    meta: { guestOnly: true, loginPortal: 'merchant' },
   },
   {
     path: '/admin',
-    redirect: '/admin/login'
+    redirect: '/admin/login',
   },
   {
     path: '/merchant',
-    redirect: '/merchant/login'
+    redirect: '/merchant/login',
   },
   {
     path: '/login',
     name: 'Login',
     component: () => import('@/pages/Login.vue'),
-    meta: { guestOnly: true, loginPortal: 'user' }
+    meta: { guestOnly: true, loginPortal: 'user' },
   },
   {
     path: '/',
@@ -139,43 +144,43 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'Home',
-        component: () => import('@/pages/Home.vue')
+        component: () => import('@/pages/Home.vue'),
       },
       {
         path: 'product/:id',
         name: 'ProductDetail',
-        component: () => import('@/pages/ProductDetail.vue')
+        component: () => import('@/pages/ProductDetail.vue'),
       },
       {
         path: 'search',
         name: 'SearchResults',
-        component: () => import('@/pages/SearchResults.vue')
+        component: () => import('@/pages/SearchResults.vue'),
       },
       {
         path: 'compare',
         name: 'Compare',
-        component: () => import('@/pages/Compare.vue')
+        component: () => import('@/pages/Compare.vue'),
       },
       {
         path: 'store/:id',
         name: 'StorePage',
-        component: () => import('@/pages/StorePage.vue')
+        component: () => import('@/pages/StorePage.vue'),
       },
       {
         path: 'cart',
         name: 'Cart',
-        component: () => import('@/pages/Cart.vue')
+        component: () => import('@/pages/Cart.vue'),
       },
       {
         path: 'checkout',
         name: 'Checkout',
-        component: () => import('@/pages/Checkout.vue')
+        component: () => import('@/pages/Checkout.vue'),
       },
       {
         path: 'signup',
         name: 'Signup',
         component: () => import('@/pages/Signup.vue'),
-        meta: { guestOnly: true }
+        meta: { guestOnly: true },
       },
       {
         path: 'dashboard',
@@ -185,77 +190,77 @@ const routes: RouteRecordRaw[] = [
           {
             path: '',
             name: 'DashboardHome',
-            component: () => import('@/pages/dashboard/DashboardHome.vue')
+            component: () => import('@/pages/dashboard/DashboardHome.vue'),
           },
           {
             path: 'orders',
             name: 'DashboardOrders',
-            component: () => import('@/pages/dashboard/Orders.vue')
+            component: () => import('@/pages/dashboard/Orders.vue'),
           },
           {
             path: 'wishlist',
             name: 'DashboardWishlist',
-            component: () => import('@/pages/dashboard/Wishlist.vue')
+            component: () => import('@/pages/dashboard/Wishlist.vue'),
           },
           {
             path: 'addresses',
             name: 'Addresses',
-            component: () => import('@/pages/dashboard/Addresses.vue')
+            component: () => import('@/pages/dashboard/Addresses.vue'),
           },
           {
             path: 'returns',
             name: 'DashboardReturns',
-            component: () => import('@/pages/dashboard/Returns.vue')
+            component: () => import('@/pages/dashboard/Returns.vue'),
           },
           {
             path: 'coupons',
             name: 'DashboardCoupons',
-            component: () => import('@/pages/dashboard/Coupons.vue')
+            component: () => import('@/pages/dashboard/Coupons.vue'),
           },
           {
             path: 'loyalty',
             name: 'DashboardLoyalty',
-            component: () => import('@/pages/dashboard/Loyalty.vue')
+            component: () => import('@/pages/dashboard/Loyalty.vue'),
           },
           {
             path: 'settings',
             name: 'AccountSettings',
-            component: () => import('@/pages/dashboard/Settings.vue')
+            component: () => import('@/pages/dashboard/Settings.vue'),
           },
           {
             path: 'messages',
             name: 'UserMessages',
-            component: () => import('@/pages/dashboard/Messages.vue')
+            component: () => import('@/pages/dashboard/Messages.vue'),
           },
           {
             path: 'followed-stores',
             name: 'FollowedStores',
-            component: () => import('@/pages/dashboard/FollowedStores.vue')
-          }
-        ]
+            component: () => import('@/pages/dashboard/FollowedStores.vue'),
+          },
+        ],
       },
       {
         path: 'forgot-password',
         name: 'ForgotPassword',
-        component: () => import('@/pages/ForgotPassword.vue')
+        component: () => import('@/pages/ForgotPassword.vue'),
       },
       {
         path: 'reset-password',
         name: 'ResetPassword',
-        component: () => import('@/pages/ResetPassword.vue')
+        component: () => import('@/pages/ResetPassword.vue'),
       },
       {
         path: 'thank-you',
         name: 'ThankYou',
-        component: () => import('@/pages/ThankYou.vue')
+        component: () => import('@/pages/ThankYou.vue'),
       },
       {
         path: '/:pathMatch(.*)*',
         name: 'NotFound',
-        component: () => import('@/pages/NotFound.vue')
-      }
-    ]
-  }
+        component: () => import('@/pages/NotFound.vue'),
+      },
+    ],
+  },
 ]
 
 const router = createRouter({
@@ -263,7 +268,7 @@ const router = createRouter({
   routes,
   scrollBehavior() {
     return { top: 0 }
-  }
+  },
 })
 
 router.beforeEach((to, _from, next) => {
@@ -282,9 +287,10 @@ router.beforeEach((to, _from, next) => {
   const isAuthed = auth.isAuthenticated
   const role = auth.user?.role
 
-  const requiresAuth = to.matched.some(r => r.meta?.requiresAuth)
-  const guestOnly = to.matched.some(r => r.meta?.guestOnly)
-  const targetRole = to.matched.find(r => r.meta?.role)?.meta?.role as 'user' | 'admin' | 'merchant' | undefined
+  const requiresAuth = to.matched.some((r) => r.meta?.requiresAuth)
+  const guestOnly = to.matched.some((r) => r.meta?.guestOnly)
+  const targetRole = to.matched.find((r) => r.meta?.role)?.meta?.role as
+    'user' | 'admin' | 'merchant' | undefined
 
   const allowedRoles = new Set(['user', 'admin', 'merchant'])
   if (isAuthed && (!role || !allowedRoles.has(role))) {
@@ -294,7 +300,7 @@ router.beforeEach((to, _from, next) => {
     auth.logout()
     return next({
       name: loginRouteNameFromAppPath(to.path),
-      query: { redirect: to.fullPath }
+      query: { redirect: to.fullPath },
     })
   }
 
@@ -309,7 +315,7 @@ router.beforeEach((to, _from, next) => {
   if (requiresAuth && !isAuthed) {
     return next({
       name: loginRouteNameFromAppPath(to.path),
-      query: { redirect: to.fullPath }
+      query: { redirect: to.fullPath },
     })
   }
 

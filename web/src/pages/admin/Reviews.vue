@@ -1,16 +1,18 @@
 <template>
   <div class="p-6">
-    <div class="admin-toolbar-shell">
-      <div class="admin-toolbar-inner">
+    <DataTablePanel :error="errorRef" @retry="reloadNow">
+      <template #toolbar>
         <div class="admin-toolbar-search">
+          <!-- 搜索只走 watch(searchQuery) → debounce 这一条路。原先还挂着
+               @input（与 watch 重复）和 @clear（立即发一次，watch 随后又补发一次
+               —— 清空搜索实打实发两个请求）。回车改走 reloadNow：它先取消挂起的
+               debounce，所以「刚打完字就回车」也只发一次。 -->
           <el-input
             v-model="searchQuery"
             placeholder="Search reviews, users, or products..."
             clearable
             class="!w-full"
-            @input="debouncedLoad"
-            @clear="loadData"
-            @keyup.enter="loadData"
+            @keyup.enter="reloadNow"
           >
             <template #prefix>
               <el-icon><SearchIcon /></el-icon>
@@ -19,22 +21,30 @@
         </div>
 
         <div class="admin-toolbar-select">
-          <el-select v-model="statusFilter" placeholder="All Status" class="!w-full" @change="loadData">
+          <el-select
+            v-model="statusFilter"
+            data-testid="list-status-filter"
+            placeholder="All Status"
+            class="!w-full"
+            @change="reloadNow"
+          >
             <el-option label="All Status" value="all" />
             <el-option label="Visible" value="visible" />
             <el-option label="Hidden" value="hidden" />
           </el-select>
         </div>
 
-        <el-button class="admin-toolbar-refresh-btn" @click="loadData">
+        <el-button class="admin-toolbar-refresh-btn" @click="reloadNow">
           <RefreshCw class="mr-1.5 inline h-4 w-4" />
           Refresh
         </el-button>
-      </div>
-    </div>
-
-    <div class="admin-table-shell">
-      <el-table v-loading="loading" :data="pagedReviews" stripe class="admin-data-table min-w-[960px]">
+      </template>
+      <el-table
+        v-loading="loading"
+        :data="pagedReviews"
+        stripe
+        class="admin-data-table min-w-[960px]"
+      >
         <el-table-column prop="id" label="ID" width="108">
           <template #default="{ row }">
             <span class="font-mono text-zinc-400 text-xs">{{ row.id }}</span>
@@ -73,7 +83,12 @@
         <el-table-column prop="content" label="Content" min-width="200">
           <template #default="{ row }">
             <p class="text-zinc-300 text-sm line-clamp-2 m-0">{{ row.content }}</p>
-            <el-button link type="primary" class="!p-0 !h-auto mt-1" @click="openDrawer(row as AdminReview)">
+            <el-button
+              link
+              type="primary"
+              class="!p-0 !h-auto mt-1"
+              @click="openDrawer(row as AdminReview)"
+            >
               View full
             </el-button>
           </template>
@@ -129,6 +144,17 @@
             </div>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="StarIcon"
+            title="No reviews found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
 
       <div
@@ -144,7 +170,7 @@
           background
         />
       </div>
-    </div>
+    </DataTablePanel>
 
     <DetailDrawer v-model="drawerVisible" title="Review detail" size="480px">
       <div v-if="selected" class="space-y-4 text-zinc-300">
@@ -165,7 +191,9 @@
         <div>
           <span class="text-xs text-zinc-500 block mb-1">User</span>
           <div class="text-white font-medium">{{ selected.userName }}</div>
-          <div v-if="selected.userEmail" class="text-sm text-zinc-400">{{ selected.userEmail }}</div>
+          <div v-if="selected.userEmail" class="text-sm text-zinc-400">
+            {{ selected.userEmail }}
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-xs text-zinc-500">Rating</span>
@@ -176,7 +204,9 @@
         </div>
         <div>
           <span class="text-xs text-zinc-500 block mb-1">Content</span>
-          <p class="text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap">{{ selected.content }}</p>
+          <p class="text-sm leading-relaxed text-zinc-200 whitespace-pre-wrap">
+            {{ selected.content }}
+          </p>
         </div>
         <div v-if="selected.images?.length" class="space-y-2">
           <span class="text-xs text-zinc-500">Images</span>
@@ -219,33 +249,52 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { RefreshCw, Search as SearchIcon, Star as StarIcon } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
 import {
   getAdminReviews,
   updateAdminReviewStatus,
   deleteAdminReview,
   type AdminReview,
-  type AdminReviewStatus
+  type AdminReviewStatus,
 } from '@/api/modules/adminReviews'
 import DetailDrawer from '@/components/ui/admin/DetailDrawer.vue'
 import ConfirmDialog from '@/components/ui/dialog/ConfirmDialog.vue'
-import { debounce } from 'lodash-es'
+import DataTablePanel from '@/components/ui/admin/DataTablePanel.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import { useListQuery } from '@/composables/useListQuery'
+import { useToast } from '@/composables/useToast'
 
+const { toast } = useToast()
 const router = useRouter()
-const loading = ref(false)
-const reviews = ref<AdminReview[]>([])
-const searchQuery = ref('')
-const statusFilter = ref('all')
+
+const currentPage = ref(1)
+const pageSize = ref(10)
+
+// 取数失败由 ErrorState 承担持久态（原先只弹瞬时 toast，表格照常渲染成空态 —— 用户看到的
+// 是「没有评价」而不是「加载失败」，且无重试入口）；删除等操作类 catch 仍用 toast。
+const {
+  items: reviews,
+  searchQuery,
+  filter: statusFilter,
+  isLoading: loading,
+  error: errorRef,
+  reloadNow,
+} = useListQuery<AdminReview>({
+  fallbackMessage: 'Failed to load reviews',
+  task: async ({ q, filter, commit }) => {
+    commit(await getAdminReviews({ q, status: filter }))
+    // 新结果回来要回到第一页。写在 commit 之后（即 run 回调内部），与迁移前
+    // 「if (result.ok)」的语义一致：失败时不重置页码。
+    currentPage.value = 1
+  },
+})
+
 const drawerVisible = ref(false)
 const selected = ref<AdminReview | null>(null)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<AdminReview | null>(null)
-
-const currentPage = ref(1)
-const pageSize = ref(10)
 
 const pagedReviews = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
@@ -266,32 +315,13 @@ function formatDate(iso: string) {
   }
 }
 
-const loadData = async () => {
-  loading.value = true
-  try {
-    const data = await getAdminReviews({
-      q: searchQuery.value,
-      status: statusFilter.value
-    })
-    reviews.value = data
-    currentPage.value = 1
-  } catch {
-    ElMessage.error('Failed to load reviews')
-  } finally {
-    loading.value = false
-  }
-}
-
-const debouncedLoad = debounce(loadData, 300)
-watch(searchQuery, () => debouncedLoad())
-
 async function setStatus(row: AdminReview, status: AdminReviewStatus) {
   try {
     await updateAdminReviewStatus(row.id, status)
     row.status = status
-    ElMessage.success(status === 'hidden' ? 'Review hidden' : 'Review visible')
+    toast({ title: status === 'hidden' ? 'Review hidden' : 'Review visible', variant: 'success' })
   } catch {
-    ElMessage.error('Update failed')
+    toast({ title: 'Update failed', variant: 'destructive' })
   }
 }
 
@@ -316,14 +346,12 @@ async function confirmDelete() {
   try {
     await deleteAdminReview(t.id)
     reviews.value = reviews.value.filter((r) => r.id !== t.id)
-    ElMessage.success('Review deleted')
+    toast({ title: 'Review deleted', variant: 'success' })
     if (selected.value?.id === t.id) drawerVisible.value = false
   } catch {
-    ElMessage.error('Delete failed')
+    toast({ title: 'Delete failed', variant: 'destructive' })
   } finally {
     closeDelete()
   }
 }
-
-onMounted(loadData)
 </script>

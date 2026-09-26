@@ -9,7 +9,12 @@
         <p class="text-sm leading-snug text-zinc-500 dark:text-zinc-400">
           Storefront, notifications, and security — save applies to the active tab’s data.
         </p>
-        <el-button type="primary" class="w-full shrink-0 sm:w-auto" :loading="saving" @click="handleSave">
+        <el-button
+          type="primary"
+          class="w-full shrink-0 sm:w-auto"
+          :loading="saving"
+          @click="handleSave"
+        >
           <SaveIcon class="mr-2 h-4 w-4" />
           Save Changes
         </el-button>
@@ -23,16 +28,23 @@
             <!-- Editor: aligned to public store fields -->
             <div class="min-w-0 space-y-6">
               <div>
-                <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">What customers see</h3>
+                <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  What customers see
+                </h3>
                 <p class="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  These fields match your public storefront and product pages (store header, policies sidebar, and
-                  merchant card).
+                  These fields match your public storefront and product pages (store header,
+                  policies sidebar, and merchant card).
                 </p>
               </div>
 
               <el-form :model="form" label-position="top" class="settings-form space-y-1">
                 <el-form-item label="Store name">
-                  <el-input v-model="form.storeName" placeholder="Your store name" maxlength="80" show-word-limit />
+                  <el-input
+                    v-model="form.storeName"
+                    placeholder="Your store name"
+                    maxlength="80"
+                    show-word-limit
+                  />
                 </el-form-item>
 
                 <el-form-item label="Store description">
@@ -92,10 +104,14 @@
                             />
                             <ImageIcon v-else class="h-9 w-9 text-zinc-300 dark:text-zinc-600" />
                           </div>
-                          <span class="text-[10px] font-medium leading-tight text-zinc-500 dark:text-zinc-400">
+                          <span
+                            class="text-[10px] font-medium leading-tight text-zinc-500 dark:text-zinc-400"
+                          >
                             Drop image here or click
                           </span>
-                          <span class="inline-flex items-center gap-0.5 text-[10px] text-amber-700/80 dark:text-amber-400/90">
+                          <span
+                            class="inline-flex items-center gap-0.5 text-[10px] text-amber-700/80 dark:text-amber-400/90"
+                          >
                             <UploadIcon class="h-3 w-3" />
                             Local file
                           </span>
@@ -114,11 +130,14 @@
                     </div>
                     <div class="min-w-0 flex-1 space-y-2">
                       <p class="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                        JPG, PNG, WebP or GIF · max {{ MAX_LOGO_MB }} MB. Uploads to the platform server;
-                        in mock mode a local preview is used instead.
+                        JPG, PNG, WebP or GIF · max {{ MAX_LOGO_MB }} MB. Uploads to the platform
+                        server; in mock mode a local preview is used instead.
                       </p>
                       <div>
-                        <span class="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-300">Image URL</span>
+                        <span
+                          class="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-300"
+                          >Image URL</span
+                        >
                         <el-input
                           v-model="form.logo"
                           clearable
@@ -141,7 +160,11 @@
                         Location
                       </span>
                     </template>
-                    <el-input v-model="form.location" placeholder="e.g. San Francisco, CA" maxlength="120" />
+                    <el-input
+                      v-model="form.location"
+                      placeholder="e.g. San Francisco, CA"
+                      maxlength="120"
+                    />
                   </el-form-item>
 
                   <el-form-item>
@@ -159,13 +182,20 @@
                       class="w-full"
                       placeholder="How fast you usually reply"
                     >
-                      <el-option v-for="opt in responseTimePresets" :key="opt" :label="opt" :value="opt" />
+                      <el-option
+                        v-for="opt in responseTimePresets"
+                        :key="opt"
+                        :label="opt"
+                        :value="opt"
+                      />
                     </el-select>
                   </el-form-item>
                 </div>
 
                 <el-divider content-position="left" class="!my-6">
-                  <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Store policies</span>
+                  <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                    >Store policies</span
+                  >
                 </el-divider>
 
                 <el-form-item>
@@ -207,7 +237,9 @@
 
               <div>
                 <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Account only</h3>
-                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Not displayed on your public store page.</p>
+                <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Not displayed on your public store page.
+                </p>
               </div>
 
               <el-form :model="form" label-position="top">
@@ -225,15 +257,21 @@
               class="mt-6 h-fit rounded-xl border border-zinc-200/90 bg-gradient-to-b from-zinc-50/90 to-white p-3 shadow-sm ring-1 ring-zinc-100/80 dark:border-zinc-600/80 dark:from-zinc-800/50 dark:to-zinc-900 dark:ring-white/5 lg:mt-0 lg:sticky lg:top-4 lg:self-start lg:p-4"
             >
               <div class="mb-2.5 flex items-center justify-between gap-2">
-                <span class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                <span
+                  class="text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+                >
                   Customer preview
                 </span>
                 <EyeIcon class="h-3.5 w-3.5 text-zinc-400" aria-hidden="true" />
               </div>
 
-              <div class="rounded-lg border border-zinc-200/80 bg-white p-3 shadow-sm dark:border-zinc-600/80 dark:bg-zinc-950/50">
+              <div
+                class="rounded-lg border border-zinc-200/80 bg-white p-3 shadow-sm dark:border-zinc-600/80 dark:bg-zinc-950/50"
+              >
                 <div class="flex gap-2.5">
-                  <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-100 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
+                  <div
+                    class="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-100 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800"
+                  >
                     <img
                       v-if="previewLogo"
                       :src="previewLogo"
@@ -241,19 +279,28 @@
                       class="h-full w-full object-cover"
                       @error="onPreviewImgError"
                     />
-                    <div v-else class="flex h-full w-full items-center justify-center text-zinc-300 dark:text-zinc-600">
+                    <div
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-zinc-300 dark:text-zinc-600"
+                    >
                       <ImageIcon class="h-5 w-5" />
                     </div>
                   </div>
                   <div class="min-w-0 flex-1">
-                    <div class="truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">{{ previewName }}</div>
-                    <p class="mt-0.5 line-clamp-3 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                    <div class="truncate text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                      {{ previewName }}
+                    </div>
+                    <p
+                      class="mt-0.5 line-clamp-3 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400"
+                    >
                       {{ previewDescription }}
                     </p>
                   </div>
                 </div>
 
-                <div class="mt-2.5 flex flex-wrap gap-x-2.5 gap-y-1 border-t border-zinc-100 pt-2.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
+                <div
+                  class="mt-2.5 flex flex-wrap gap-x-2.5 gap-y-1 border-t border-zinc-100 pt-2.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                >
                   <span class="inline-flex items-center gap-0.5">
                     <StarIcon class="h-3 w-3 text-amber-500" />
                     <span class="font-medium text-zinc-700 dark:text-zinc-200">—</span>
@@ -269,7 +316,9 @@
                   </span>
                 </div>
 
-                <div class="mt-2.5 space-y-1.5 border-t border-zinc-100 pt-2.5 dark:border-zinc-700">
+                <div
+                  class="mt-2.5 space-y-1.5 border-t border-zinc-100 pt-2.5 dark:border-zinc-700"
+                >
                   <p class="text-[10px] font-semibold text-zinc-700 dark:text-zinc-200">Policies</p>
                   <div class="flex gap-2 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
                     <TruckIcon class="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" />
@@ -281,9 +330,11 @@
                   </div>
                 </div>
 
-                <p class="mt-2.5 border-t border-zinc-100 pt-2 text-[10px] leading-snug text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
-                  Product count, sales, and ratings come from the platform. A verified badge may appear next to your
-                  name when your store qualifies.
+                <p
+                  class="mt-2.5 border-t border-zinc-100 pt-2 text-[10px] leading-snug text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+                >
+                  Product count, sales, and ratings come from the platform. A verified badge may
+                  appear next to your name when your store qualifies.
                 </p>
               </div>
             </aside>
@@ -319,7 +370,9 @@
             <div class="flex items-center justify-between gap-4">
               <div class="min-w-0">
                 <div class="font-medium text-zinc-900 dark:text-zinc-100">SMS Alerts</div>
-                <div class="text-sm text-zinc-500 dark:text-zinc-400">Get text messages for urgent account issues.</div>
+                <div class="text-sm text-zinc-500 dark:text-zinc-400">
+                  Get text messages for urgent account issues.
+                </div>
               </div>
               <el-switch v-model="form.notifications.sms" class="shrink-0" />
             </div>
@@ -358,14 +411,27 @@ import {
   Truck as TruckIcon,
   RotateCcw as RotateCcwIcon,
   Eye as EyeIcon,
-  Star as StarIcon
+  Star as StarIcon,
 } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
-import { getMerchantSettings, updateMerchantSettings, type MerchantSettings } from '@/api/modules/merchantSettings'
+import {
+  getMerchantSettings,
+  updateMerchantSettings,
+  type MerchantSettings,
+} from '@/api/modules/merchantSettings'
 import { uploadFile } from '@/api/modules/upload'
 import { RUNTIME_USE_MOCK } from '@/config/env'
+import { useToast } from '@/composables/useToast'
+import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 
-const responseTimePresets = ['< 30 minutes', '< 1 hour', '< 2 hours', '< 24 hours', '1–3 business days'] as const
+const { toast } = useToast()
+
+const responseTimePresets = [
+  '< 30 minutes',
+  '< 1 hour',
+  '< 2 hours',
+  '< 24 hours',
+  '1–3 business days',
+] as const
 
 const MAX_LOGO_MB = 2
 const MAX_LOGO_BYTES = MAX_LOGO_MB * 1024 * 1024
@@ -381,13 +447,13 @@ function normalizeSettings(data: Partial<MerchantSettings>): MerchantSettings {
     responseTime: data.responseTime ?? '< 1 hour',
     policies: {
       shipping: data.policies?.shipping ?? '',
-      returns: data.policies?.returns ?? ''
+      returns: data.policies?.returns ?? '',
     },
     notifications: {
       email: data.notifications?.email ?? false,
       push: data.notifications?.push ?? false,
-      sms: data.notifications?.sms ?? false
-    }
+      sms: data.notifications?.sms ?? false,
+    },
   }
 }
 
@@ -410,28 +476,26 @@ function validateLogoFile(file: File): string | null {
 async function applyLogoFromFile(file: File) {
   const msg = validateLogoFile(file)
   if (msg) {
-    ElMessage.warning(msg)
+    toast({ title: msg, variant: 'warning' })
     return
   }
   if (RUNTIME_USE_MOCK.value) {
     // Mock mode: keep the local data-URL preview (no backend).
-    const reader = new FileReader()
-    reader.onload = () => {
-      const r = reader.result
-      if (typeof r === 'string') form.logo = r
+    try {
+      form.logo = await readFileAsDataUrl(file)
+    } catch {
+      toast({ title: 'Could not read the file.', variant: 'destructive' })
     }
-    reader.onerror = () => ElMessage.error('Could not read the file.')
-    reader.readAsDataURL(file)
     return
   }
   // Real backend: upload to /file/upload and store the returned URL.
   try {
-    ElMessage.info('Uploading logo…')
+    toast({ title: 'Uploading logo…' })
     const { url } = await uploadFile(file)
     form.logo = url
-    ElMessage.success('Logo uploaded')
+    toast({ title: 'Logo uploaded', variant: 'success' })
   } catch {
-    ElMessage.error('Upload failed. You can paste an image URL instead.')
+    toast({ title: 'Upload failed. You can paste an image URL instead.', variant: 'destructive' })
   }
 }
 
@@ -455,7 +519,9 @@ function onLogoDrop(e: DragEvent) {
 const form = reactive<MerchantSettings>(normalizeSettings({}))
 
 const previewName = computed(() => form.storeName.trim() || 'Your store name')
-const previewDescription = computed(() => form.description.trim() || 'Store description will appear here.')
+const previewDescription = computed(
+  () => form.description.trim() || 'Store description will appear here.',
+)
 const previewLocation = computed(() => form.location.trim())
 const previewResponse = computed(() => form.responseTime.trim())
 const previewShipping = computed(() => form.policies.shipping.trim())
@@ -481,7 +547,7 @@ watch(
   () => form.logo,
   () => {
     previewLogoBroken.value = false
-  }
+  },
 )
 
 const loadData = async () => {
@@ -489,7 +555,7 @@ const loadData = async () => {
     const data = await getMerchantSettings()
     Object.assign(form, normalizeSettings(data))
   } catch {
-    ElMessage.error('Failed to load settings')
+    toast({ title: 'Failed to load settings', variant: 'destructive' })
   }
 }
 
@@ -497,9 +563,9 @@ const handleSave = async () => {
   saving.value = true
   try {
     await updateMerchantSettings(form)
-    ElMessage.success('Settings saved successfully')
+    toast({ title: 'Settings saved successfully', variant: 'success' })
   } catch {
-    ElMessage.error('Failed to save settings')
+    toast({ title: 'Failed to save settings', variant: 'destructive' })
   } finally {
     saving.value = false
   }

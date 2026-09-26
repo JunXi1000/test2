@@ -1,0 +1,45 @@
+#!/bin/sh
+# 前端提交闸门：ESLint → Prettier → Type Check（aiagant.md 第 26 条）
+#
+# 为什么不用 husky：
+#   本仓库根是 Java/Maven 工程，前端在 web/ 子目录。husky v9 要求自己位于 git 根，
+#   从 web/ 执行会报 ".git can't be found"；要让它工作就得往 Maven 根塞 package.json，
+#   等于给后端工程引入一套前端工具链 —— 代价过大，故改为手写钩子。
+#
+# 安装（本地 git config，不进版本库）：
+#   git config core.hooksPath web/.husky
+# 撤销：
+#   git config --unset core.hooksPath
+#
+# 钩子 cwd 是仓库根，不是 web/，所以下面先切目录；并且只对「本次提交动了前端文件」
+# 生效，后端提交完全不受影响。
+
+hook_dir=$(cd "$(dirname "$0")" && pwd) || exit 1
+web_dir=$(dirname "$hook_dir")
+
+# 用 git 的 show-prefix 求前端相对仓库根的路径（形如 "web/"）。
+# 注意别用文件系统路径做字符串前缀比较：Git Bash 下 pwd 是 /e/...，
+# 而 rev-parse --show-toplevel 是 E:/...，两者直接比较必然失配，钩子会静默放行一切。
+cd "$(git rev-parse --show-toplevel)" || exit 1
+web_rel=$(cd "$web_dir" && git rev-parse --show-prefix) || exit 1
+[ -n "$web_rel" ] || exit 1
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# 本次提交没有前端文件 → 直接放行（后端提交走这条）
+printf '%s\n' "$staged" | grep -q "^${web_rel}" || exit 0
+
+cd "$web_dir" || exit 1
+
+# --concurrent false 不是性能取舍，是正确性要求：
+#   lint-staged 默认并发跑所有任务，于是 "prettier --write" 与后面那条
+#   "node scripts/check-vue-template.mjs" 会同时读同一个文件 —— 校验可能在
+#   prettier 还没写坏之前就读完了，于是放行一个**已经坏掉**的提交。
+#   实测过：并发下探针提交确实溜了过去。串行之后顺序才是配置里的顺序，
+#   校验才真正跑在 prettier 之后。
+npx lint-staged --concurrent false || exit 1
+
+# 全量类型检查只在动了前端源码时跑（vue-tsc 约 10 秒）
+if printf '%s\n' "$staged" | grep -q "^${web_rel}src/"; then
+  npm run typecheck || exit 1
+fi

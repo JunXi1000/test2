@@ -1,0 +1,16 @@
+# 构建产物与依赖
+dist
+node_modules
+coverage
+playwright-report
+test-results
+
+# unplugin-vue-components 自动生成，勿格式化（下次 vite 启动会重写）
+src/components.d.ts
+
+# 锁文件由 npm 维护
+package-lock.json
+
+# 静态资源
+public
+*.min.js

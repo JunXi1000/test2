@@ -9,6 +9,7 @@ import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useCompareStore } from '@/stores/compare'
 import { useToast } from '@/composables/useToast'
+import { formatPricePlain } from '@/utils/format'
 
 const props = defineProps<{
   product: Product
@@ -28,17 +29,13 @@ function quickAddToCart(e: Event) {
   cartStore.addItem(props.product, {
     color: 'Default',
     size: 'Standard',
-    quantity: 1
+    quantity: 1,
   })
   toast({
     title: t('product.addedToCart'),
     description: t('product.addedToCartDesc', { title: props.product.title }),
-    variant: 'success'
+    variant: 'success',
   })
-}
-
-function formatPrice(price: number) {
-  return Number(price).toLocaleString('en-US')
 }
 
 function formatReviews(reviews?: number) {
@@ -66,9 +63,11 @@ function toggleWishlist(e: Event) {
     reviews: product.reviews,
   })
   toast({
-    title: wishlistStore.isInWishlist(product.id) ? t('product.addedToWishlist') : t('product.removedFromWishlist'),
+    title: wishlistStore.isInWishlist(product.id)
+      ? t('product.addedToWishlist')
+      : t('product.removedFromWishlist'),
     description: product.title,
-    variant: 'success'
+    variant: 'success',
   })
 }
 
@@ -82,7 +81,7 @@ function toggleCompare(e: Event) {
       toast({
         title: t('product.compareFull'),
         description: t('product.compareFullDesc', { max: compareStore.MAX_COMPARE }),
-        variant: 'destructive'
+        variant: 'destructive',
       })
       return
     }
@@ -100,47 +99,73 @@ function toggleCompare(e: Event) {
 </script>
 
 <template>
-  <div 
+  <div
     class="group relative rounded-2xl border border-border bg-card overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/40 active:scale-[0.99] flex flex-col cursor-pointer"
+    tabindex="0"
     @click="router.push(`/product/${product.id}`)"
     @keyup.enter="router.push(`/product/${product.id}`)"
-    tabindex="0"
   >
     <!-- Image -->
-    <div class="aspect-video w-full overflow-hidden bg-secondary/30 relative flex items-center justify-center">
-      <img 
+    <div
+      class="aspect-video w-full overflow-hidden bg-secondary/30 relative flex items-center justify-center"
+    >
+      <img
         v-if="!imageError"
-        :src="product.image" 
-        :alt="product.title" 
+        :src="product.image"
+        :alt="product.title"
         class="h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-110"
         loading="lazy"
         @error="imageError = true"
       />
-      
+
       <!-- Fallback for broken images -->
-      <div v-else class="flex flex-col items-center justify-center text-muted-foreground w-full h-full bg-secondary/50">
+      <div
+        v-else
+        class="flex flex-col items-center justify-center text-muted-foreground w-full h-full bg-secondary/50"
+      >
         <ImageOff class="w-8 h-8 mb-2 opacity-40" />
         <span class="text-xs font-medium opacity-60">{{ $t('product.noImage') }}</span>
       </div>
 
-      <div class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div
+        class="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity"
+      />
 
       <!-- Wishlist button -->
       <button
-        @click="toggleWishlist"
         class="absolute top-2 right-2 p-2 rounded-full bg-background/80 backdrop-blur shadow-sm transition-all hover:scale-110 z-10"
-        :class="wishlistStore.isInWishlist(product.id) ? 'text-red-500' : 'text-muted-foreground hover:text-red-400'"
-        :title="wishlistStore.isInWishlist(product.id) ? $t('product.removeFromWishlist') : $t('product.addToWishlist')"
+        :class="
+          wishlistStore.isInWishlist(product.id)
+            ? 'text-red-500'
+            : 'text-muted-foreground hover:text-red-400'
+        "
+        :title="
+          wishlistStore.isInWishlist(product.id)
+            ? $t('product.removeFromWishlist')
+            : $t('product.addToWishlist')
+        "
+        @click="toggleWishlist"
       >
-        <Heart class="w-4 h-4" :class="{ 'fill-current': wishlistStore.isInWishlist(product.id) }" />
+        <Heart
+          class="w-4 h-4"
+          :class="{ 'fill-current': wishlistStore.isInWishlist(product.id) }"
+        />
       </button>
 
       <!-- Compare checkbox (visible on hover) -->
       <button
-        @click="toggleCompare"
         class="absolute top-2 left-2 p-1.5 rounded-lg bg-background/80 backdrop-blur shadow-sm transition-all opacity-0 group-hover:opacity-100 z-10"
-        :class="compareStore.isInCompare(product.id) ? 'opacity-100 !bg-primary/10 text-primary border border-primary/30' : 'text-muted-foreground hover:text-primary'"
-        :title="compareStore.isInCompare(product.id) ? $t('product.removeFromCompare') : $t('product.addToCompare')"
+        :class="
+          compareStore.isInCompare(product.id)
+            ? 'opacity-100 !bg-primary/10 text-primary border border-primary/30'
+            : 'text-muted-foreground hover:text-primary'
+        "
+        :title="
+          compareStore.isInCompare(product.id)
+            ? $t('product.removeFromCompare')
+            : $t('product.addToCompare')
+        "
+        @click="toggleCompare"
       >
         <GitCompare class="w-3.5 h-3.5" />
       </button>
@@ -151,7 +176,10 @@ function toggleCompare(e: Event) {
       <div class="flex justify-between items-start mb-2">
         <div class="min-w-0 flex-1 pr-2">
           <!-- 商品标题 -->
-          <h3 class="font-bold text-base leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2" :title="product.title">
+          <h3
+            class="font-bold text-base leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2"
+            :title="product.title"
+          >
             {{ product.title }}
           </h3>
           <!-- 商品分类 -->
@@ -167,26 +195,28 @@ function toggleCompare(e: Event) {
           </span>
           <span class="text-xs text-muted-foreground">({{ formatReviews(product.reviews) }})</span>
         </template>
-        <span v-else class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border/60">
+        <span
+          v-else
+          class="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border/60"
+        >
           {{ $t('product.new') }}
         </span>
       </div>
-      
+
       <div class="mb-2.5">
-        <span class="inline-flex items-center text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+        <span
+          class="inline-flex items-center text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full"
+        >
           {{ getPromoBadge(product) }}
         </span>
       </div>
 
       <div class="flex items-center justify-between mt-auto pt-3 border-t border-border/50">
         <!-- 商品价格 -->
-        <span class="text-3xl leading-none font-black text-primary tracking-tight">${{ formatPrice(product.price) }}</span>
-        <Button 
-          variant="default" 
-          size="sm" 
-          class="rounded-full shadow-sm"
-          @click="quickAddToCart"
+        <span class="text-3xl leading-none font-black text-primary tracking-tight"
+          >${{ formatPricePlain(product.price) }}</span
         >
+        <Button variant="default" size="sm" class="rounded-full shadow-sm" @click="quickAddToCart">
           <ShoppingCart class="w-4 h-4 mr-1.5" />
           {{ $t('common.add') }}
         </Button>

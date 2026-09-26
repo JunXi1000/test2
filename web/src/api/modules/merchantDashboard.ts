@@ -1,8 +1,17 @@
 import { USE_MOCK } from '@/config/env'
 import { get } from '@/api/http'
 
-export interface MerchantStat { label: string; value: string; change: string; icon: 'DollarSign'|'ShoppingCart'|'Package'|'TrendingUp' }
-export interface LowStock { title: string; sku: string; stock: number }
+export interface MerchantStat {
+  label: string
+  value: string
+  change: string
+  icon: 'DollarSign' | 'ShoppingCart' | 'Package' | 'TrendingUp'
+}
+export interface LowStock {
+  title: string
+  sku: string
+  stock: number
+}
 
 const MOCK_MERCHANT_STATS: MerchantStat[] = [
   { label: 'Total Sales', value: '$12,450.00', change: '+12%', icon: 'DollarSign' },

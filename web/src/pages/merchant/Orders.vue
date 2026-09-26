@@ -1,6 +1,9 @@
 <template>
   <div class="merchant-page w-full max-w-full space-y-4">
-    <el-card shadow="never" class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm">
+    <el-card
+      shadow="never"
+      class="merchant-data-panel overflow-hidden rounded-xl border border-gray-100/90 bg-white shadow-sm"
+    >
       <div class="merchant-data-panel-toolbar border-b border-gray-100 bg-white">
         <div class="min-w-0 max-sm:overflow-x-auto max-sm:pb-0.5 filter-row-scroll">
           <div class="flex w-full min-w-0 flex-nowrap items-center gap-4">
@@ -48,7 +51,11 @@
         </div>
       </div>
 
+      <!-- 取数失败与表格互斥：错误时整块换成 ErrorState，而不是照常渲染成空表 -->
+      <ErrorState v-if="errorRef" :message="errorRef" class="m-4" @retry="fetchOrders" />
+
       <el-table
+        v-else
         v-loading="loading"
         :data="orders"
         row-key="id"
@@ -72,7 +79,9 @@
         <el-table-column label="Customer" min-width="228">
           <template #default="{ row }">
             <div class="py-1">
-              <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">{{ row.customer.name }}</div>
+              <div class="text-[15px] font-bold leading-snug tracking-tight text-gray-900">
+                {{ row.customer.name }}
+              </div>
               <div class="mt-0.5 text-sm text-gray-500">{{ row.customer.email }}</div>
             </div>
           </template>
@@ -86,7 +95,9 @@
 
         <el-table-column prop="total" label="Total" width="128" sortable align="left">
           <template #default="{ row }">
-            <span class="text-[15px] font-bold tabular-nums text-gray-900">${{ row.total.toFixed(2) }}</span>
+            <span class="text-[15px] font-bold tabular-nums text-gray-900"
+              >${{ row.total.toFixed(2) }}</span
+            >
           </template>
         </el-table-column>
 
@@ -118,19 +129,27 @@
             </button>
           </template>
         </el-table-column>
+
+        <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+             用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+        <template #empty>
+          <EmptyState
+            :icon="ShoppingCartIcon"
+            title="No orders found"
+            description="Try a different search or filter."
+            class="border-0 py-10"
+          />
+        </template>
       </el-table>
     </el-card>
 
     <!-- Order Details Drawer -->
-    <el-drawer
-      v-model="drawerVisible"
-      title="Order Details"
-      size="50%"
-      destroy-on-close
-    >
+    <el-drawer v-model="drawerVisible" title="Order Details" size="50%" destroy-on-close>
       <div v-if="selectedOrder" class="space-y-6">
         <!-- Status Bar -->
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/90 p-4">
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50/90 p-4"
+        >
           <div>
             <div class="text-xs font-medium text-gray-500">Current status</div>
             <span
@@ -141,40 +160,48 @@
             </span>
           </div>
           <div class="space-x-2">
-             <el-button 
-               v-if="selectedOrder.status === 'pending'" 
-               type="primary" 
-               size="small"
-               @click="updateStatus('processing')"
-             >
-               Start Processing
-             </el-button>
-             <el-button 
-               v-if="selectedOrder.status === 'processing'" 
-               type="success" 
-               size="small"
-               @click="updateStatus('shipped')"
-             >
-               Mark as Shipped
-             </el-button>
-             <el-button 
-               v-if="['pending', 'processing'].includes(selectedOrder.status)" 
-               type="danger" 
-               size="small" 
-               plain
-               @click="updateStatus('cancelled')"
-             >
-               Cancel Order
-             </el-button>
+            <el-button
+              v-if="selectedOrder.status === 'pending'"
+              type="primary"
+              size="small"
+              @click="updateStatus('processing')"
+            >
+              Start Processing
+            </el-button>
+            <el-button
+              v-if="selectedOrder.status === 'processing'"
+              type="success"
+              size="small"
+              @click="updateStatus('shipped')"
+            >
+              Mark as Shipped
+            </el-button>
+            <el-button
+              v-if="['pending', 'processing'].includes(selectedOrder.status)"
+              type="danger"
+              size="small"
+              plain
+              @click="updateStatus('cancelled')"
+            >
+              Cancel Order
+            </el-button>
           </div>
         </div>
 
         <!-- Customer Info -->
         <el-descriptions title="Customer Information" :column="1" border>
-          <el-descriptions-item label="Name">{{ selectedOrder.customer.name }}</el-descriptions-item>
-          <el-descriptions-item label="Email">{{ selectedOrder.customer.email }}</el-descriptions-item>
-          <el-descriptions-item label="Shipping Address">{{ selectedOrder.shippingAddress }}</el-descriptions-item>
-          <el-descriptions-item label="Payment Method">{{ selectedOrder.paymentMethod }}</el-descriptions-item>
+          <el-descriptions-item label="Name">{{
+            selectedOrder.customer.name
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Email">{{
+            selectedOrder.customer.email
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Shipping Address">{{
+            selectedOrder.shippingAddress
+          }}</el-descriptions-item>
+          <el-descriptions-item label="Payment Method">{{
+            selectedOrder.paymentMethod
+          }}</el-descriptions-item>
         </el-descriptions>
 
         <!-- Order Items -->
@@ -198,7 +225,7 @@
             </el-table-column>
           </el-table>
           <div class="flex justify-end mt-4">
-             <div class="text-xl font-bold">Total: ${{ selectedOrder.total.toFixed(2) }}</div>
+            <div class="text-xl font-bold">Total: ${{ selectedOrder.total.toFixed(2) }}</div>
           </div>
         </div>
       </div>
@@ -208,22 +235,36 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { 
-  Search as SearchIcon, 
-  RefreshCw as RefreshCwIcon 
+import {
+  Search as SearchIcon,
+  RefreshCw as RefreshCwIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from 'lucide-vue-next'
-import { ElMessage } from 'element-plus'
-import { 
-  getMerchantOrders, 
-  getMerchantOrderDetails, 
+import {
+  getMerchantOrders,
+  getMerchantOrderDetails,
   updateMerchantOrderStatus,
   type MerchantOrder,
-  type MerchantOrderDetail
+  type MerchantOrderDetail,
 } from '@/api/modules/merchantOrders'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { debounce } from 'lodash-es'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
 // State
-const loading = ref(false)
+const { toast } = useToast()
+// 取数失败由 ErrorState 承担持久态（原先 reportError:false + 一个瞬时 toast，
+// 表格照常渲染成空表 —— 用户看到的是「没有订单」而不是「加载失败」，toast 消失后
+// 也没有任何重试入口）；改状态等操作类 catch 仍用 toast。
+const {
+  isLoading: loading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load orders',
+})
 const orders = ref<MerchantOrder[]>([])
 const searchQuery = ref('')
 const statusFilter = ref('all')
@@ -232,31 +273,27 @@ const selectedOrder = ref<MerchantOrderDetail | null>(null)
 
 // Methods
 const loadData = async () => {
-  loading.value = true
-  try {
+  await run(async () => {
     // Mock filtering logic
     const allOrders = await getMerchantOrders({ status: 'all' })
     let filtered = allOrders
 
     if (searchQuery.value) {
       const q = searchQuery.value.toLowerCase()
-      filtered = filtered.filter(o => 
-        o.id.toLowerCase().includes(q) || 
-        o.customer.name.toLowerCase().includes(q) ||
-        o.customer.email.toLowerCase().includes(q)
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(q) ||
+          o.customer.name.toLowerCase().includes(q) ||
+          o.customer.email.toLowerCase().includes(q),
       )
     }
 
     if (statusFilter.value !== 'all') {
-      filtered = filtered.filter(o => o.status === statusFilter.value)
+      filtered = filtered.filter((o) => o.status === statusFilter.value)
     }
 
     orders.value = filtered
-  } catch (error) {
-    ElMessage.error('Failed to load orders')
-  } finally {
-    loading.value = false
-  }
+  })
 }
 
 const debouncedSearch = debounce(loadData, 300)
@@ -298,8 +335,8 @@ const viewDetails = async (row: MerchantOrder) => {
     const details = await getMerchantOrderDetails(row.id)
     selectedOrder.value = details
     drawerVisible.value = true
-  } catch (error) {
-    ElMessage.error('Failed to load order details')
+  } catch {
+    toast({ title: 'Failed to load order details', variant: 'destructive' })
   }
 }
 
@@ -308,10 +345,10 @@ const updateStatus = async (newStatus: MerchantOrder['status']) => {
   try {
     await updateMerchantOrderStatus(selectedOrder.value.id, newStatus)
     selectedOrder.value.status = newStatus
-    ElMessage.success(`Order updated to ${newStatus}`)
+    toast({ title: `Order updated to ${newStatus}`, variant: 'success' })
     loadData() // Refresh list
-  } catch (error) {
-    ElMessage.error('Failed to update status')
+  } catch {
+    toast({ title: 'Failed to update status', variant: 'destructive' })
   }
 }
 

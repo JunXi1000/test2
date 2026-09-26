@@ -1,7 +1,9 @@
 <template>
   <div class="p-6">
     <div class="mx-auto w-full max-w-6xl">
-      <div class="admin-panel-card !p-0 overflow-hidden">
+      <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
+
+      <div v-else class="admin-panel-card !p-0 overflow-hidden">
         <div
           class="flex flex-col gap-4 border-b border-zinc-800/60 bg-zinc-950/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5"
         >
@@ -22,7 +24,9 @@
           <section
             class="border-b border-zinc-800/60 p-5 sm:p-6 lg:border-b-0 lg:border-r lg:border-zinc-800/60"
           >
-            <h3 class="mb-1 text-base font-semibold tracking-tight text-zinc-100">General Configuration</h3>
+            <h3 class="mb-1 text-base font-semibold tracking-tight text-zinc-100">
+              General Configuration
+            </h3>
             <p class="mb-5 text-xs text-zinc-500">Site identity and platform fee.</p>
             <el-form :model="form" label-position="top" class="dark-form settings-form">
               <el-form-item label="Site Name">
@@ -42,7 +46,9 @@
           </section>
 
           <section class="p-5 sm:p-6">
-            <h3 class="mb-1 text-base font-semibold tracking-tight text-zinc-100">Access Control</h3>
+            <h3 class="mb-1 text-base font-semibold tracking-tight text-zinc-100">
+              Access Control
+            </h3>
             <p class="mb-5 text-xs text-zinc-500">Who can reach the site and sign up.</p>
 
             <div class="space-y-1 rounded-xl border border-zinc-800/50 bg-zinc-950/30 p-4">
@@ -75,33 +81,43 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getAdminSettings, updateAdminSettings, type AdminSettings } from '@/api/modules/adminSettings'
+import {
+  getAdminSettings,
+  updateAdminSettings,
+  type AdminSettings,
+} from '@/api/modules/adminSettings'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useToast } from '@/composables/useToast'
 
+const { toast } = useToast()
 const saving = ref(false)
 const form = reactive<AdminSettings>({
   siteName: '',
   maintenanceMode: false,
   allowRegistrations: true,
-  commissionRate: 0
+  commissionRate: 0,
+})
+
+const { error: errorRef, run } = useAsyncTask({
+  fallbackMessage: 'Failed to load settings',
 })
 
 const loadData = async () => {
-  try {
-    const data = await getAdminSettings()
-    Object.assign(form, data)
-  } catch (error) {
-    ElMessage.error('Failed to load settings')
-  }
+  // 这一页的静默失败比列表页更危险：取数失败时 form 保持全空，页面照样渲染成一张
+  // 可编辑的表单，管理员顺手点「Save Changes」就会把空值/默认值写回服务端，
+  // 覆盖掉真实配置。改成失败时不出表单，只给可重试的错误态。
+  const result = await run(() => getAdminSettings())
+  if (result.ok) Object.assign(form, result.value)
 }
 
 const handleSave = async () => {
   saving.value = true
   try {
     await updateAdminSettings(form)
-    ElMessage.success('Settings updated')
-  } catch (error) {
-    ElMessage.error('Failed to save settings')
+    toast({ title: 'Settings updated', variant: 'success' })
+  } catch {
+    toast({ title: 'Failed to save settings', variant: 'destructive' })
   } finally {
     saving.value = false
   }
