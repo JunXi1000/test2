@@ -30,7 +30,7 @@
 - **构建工具**: Vite 5
 - **HTTP 请求**: Axios
 - **图表**: Echarts
-- **其他**: Swiper, Day.js, Lodash
+- **其他**: Lodash
 
 ## 📂 目录结构
 
@@ -118,6 +118,9 @@ curl -X POST http://localhost:1000/common/login \
 | 后端 API | http://localhost:1000 |
 | MySQL | 容器内 `127.0.0.1:3306`（库 `template_v3`，root / `123456`） |
 
+> 上表的 `123456` 是 `docker-compose.yml` 的**本地默认值**,只对「没有 `docker/.env` 的全新 clone」成立。
+> 若你建过 `docker/.env`(模板见 `docker/.env.example`),口令以那份文件为准;容器的 3306 只绑回环,不对外。
+
 演示账号（密码均 `123456`）：管理员 `admin` / 买家 `user1` / 商家 `shop1`。
 
 ### 4. 常用命令
@@ -154,15 +157,14 @@ docker compose down -v                             # 停止并清空数据库（
 1.  启动你的 MySQL 数据库服务。
 2.  创建一个新的数据库，例如 `template_v3`。
 3.  按依赖顺序导入数据库脚本：`sql/schema.sql`（基础表 + admin 种子）→ `sql/chat.sql` → `sql/migration-2026-08-08-phase1.sql` → `sql/migrations/V1…V5`，导入时带 `--default-character-set=utf8mb4`（否则中文乱码）。**只导 `schema.sql` 是不够的**——唯一键/索引与金额 `DECIMAL(10,2)` 都在 `sql/migrations/` 里，缺了会在并发写入和金额精度上出问题。
-4.  打开后端配置文件 `src/main/resources/application.yaml`，根据你的本地环境修改数据库连接信息：
+4.  **配置数据库连接**。⚠️ 注意**改哪个文件**:
 
-    ```yaml
-    spring:
-      datasource:
-        url: jdbc:mysql://localhost:3306/template_v3?useUnicode=true&useSSL=false&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-        username: your_mysql_username  # 替换为你的 MySQL 用户名
-        password: your_mysql_password  # 替换为你的 MySQL 密码
-    ```
+    - 应用默认激活 `dev` profile,而 **`application-dev.yaml` 里的同名项优先于 `application.yaml`**。
+      所以你改 `src/main/resources/application.yaml` 会被 dev 的值覆盖、**不生效**。
+    - 推荐做法:设环境变量 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`
+      (基配置就是读这三个,dev 的同名项也读它);或直接改 **`src/main/resources/application-dev.yaml`**。
+    - 另外两项也是必填,不设会启动失败:`RESET_PASSWORD`、`JWT_SECRET`
+      (详见 [docs/DEVELOPMENT.md §2.4](docs/DEVELOPMENT.md);dev profile 下这两项有本地默认值,故本地跑通常无需设置)。
 
 ### 2. 启动后端服务
 
@@ -227,7 +229,7 @@ npx playwright install chromium
 | 1 | 注册成功（合法邮箱/≥6 位密码/勾选条款） | 提示创建成功，跳转登录页；该账号可登录 |
 | 2 | 注册失败：邮箱已存在 | 红字横幅「用户名已存在」，停留在注册页 |
 | 3 | 注册失败：邮箱格式错误 / 密码 <6 位 / 两次密码不一致 / 未勾选条款 | 对应字段红框 + 行内错误，提交被拦截 |
-| 4 | 注册为商家 | 提示「提交审核」，跳转商家登录 |
+| 4 | 注册为商家 | ⚠️ **对真实后端不成立**:`/common/register` 只放行 `USER`,商家自助注册被拒(403「仅支持普通用户注册」)。此条只在 mock 模式下成立;真实环境建商家走管理端 `POST /admin/merchants` |
 | 5 | 登录成功 | 跳转首页/对应角色后台，顶部显示用户名，Toast 欢迎 |
 | 6 | 登录失败：错误密码 / 不存在的邮箱 | 统一提示「用户名或密码错误」，不清空输入 |
 | 7 | 登录失败：空邮箱 / 空密码 | 字段红框 + 行内错误，焦点落到首个非法字段 |
