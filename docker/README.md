@@ -8,7 +8,7 @@
 |------|------|------|
 | JDK | 17(eclipse-temurin:17-jdk) | 后端 Spring Boot 3.2.10 |
 | Maven | 3.9.9(固定) | 后端构建 / `mvn spring-boot:run` / `mvn test` |
-| Node + npm | 24.x(NodeSource) | 前端 Vite 5 / `npm install` / `npm run dev` |
+| Node + npm | 24.x(NodeSource) | 前端 Vite 5 / `npm install` / `npm run dev:lan` |
 | MySQL | 8(mysql-server) | 后端数据库,镜像内启动,端口 3306 |
 | 工具 | git / curl / wget / vim / unzip / tzdata(Asia/Shanghai) | 通用开发辅助 |
 
@@ -78,7 +78,7 @@ mvn spring-boot:run
 # 前端(端口 5173)
 cd /workspace/web
 npm install        # 首次;依赖装入 node_modules 命名卷,重启不重装
-npm run dev
+npm run dev:lan    # 容器内必须用 dev:lan(vite --host),不能用 dev —— 见下方说明
 
 # 后端测试(H2,无需 MySQL)
 cd /workspace
@@ -86,6 +86,13 @@ mvn test
 ```
 
 浏览器访问 `http://localhost:5173`;前端通过 `http://127.0.0.1:1000` 调后端(端口已 publish 到宿主机)。
+
+> ⚠️ **容器内跑前端必须用 `npm run dev:lan`(= `vite --host`),不能用 `npm run dev`。**
+> `dev` 按 `vite.config.ts` 绑 `127.0.0.1`,那在**裸机**上是对的;但 Docker 的 `5173:5173`
+> 是把流量 DNAT 到容器 **eth0**(`172.x.x.x`),不是容器内的回环 —— 只绑回环时宿主机
+> `curl localhost:5173` 拿到 `Empty reply`(exit 52),容器内 `curl 127.0.0.1:5173` 却是 200,
+> 极易误判成"没启动"。`--host` 仍然监听回环,故容器内 Playwright 的
+> `baseURL: http://localhost:5173` 不受影响。`entrypoint.sh` 的 `AUTO_START` 走的就是 `dev:lan`。
 
 ## 环境变量
 
@@ -96,7 +103,7 @@ mvn test
 | `MYSQL_ROOT_PASSWORD` | `123456` | MySQL root 密码(与应用默认 `SPRING_DATASOURCE_PASSWORD` 一致) |
 | `MYSQL_DATABASE` | `template_v3` | 自动创建的项目库 |
 | `MYSQL_DATA_DIR` | `/var/lib/mysql` | MySQL 数据目录(挂载卷可持久化) |
-| `AUTO_START` | `true` | 容器启动时自动拉起前后端(`mvn spring-boot:run` + `npm run dev`);纯环境用设 `false` |
+| `AUTO_START` | `true` | 容器启动时自动拉起前后端(`mvn spring-boot:run` + `npm run dev:lan`);纯环境用设 `false` |
 | `AUTO_START_WAIT_BACKEND` | `true` | 起前端前先等后端就绪(轮询 `:1000`,最多 300s),避免打开页面撞上代理 500;想立刻用前端可设 `false` |
 | `SPRING_DATASOURCE_URL` | 容器内默认 | 后端如需连其他库可覆盖(见 compose 注释) |
 

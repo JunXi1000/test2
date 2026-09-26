@@ -134,7 +134,7 @@ echo "  Nexus Market 开发环境已就绪"
 echo "  MySQL : 127.0.0.1:3306  库=${DB}  root 密码=***"
 echo "          (默认 123456,可用环境变量 MYSQL_ROOT_PASSWORD 覆盖;3306 仅宿主机回环可达)"
 echo "  后端  : cd /workspace && mvn spring-boot:run          (http://localhost:1000)"
-echo "  前端  : cd /workspace/web && npm install && npm run dev (http://localhost:5173)"
+echo "  前端  : cd /workspace/web && npm install && npm run dev:lan (http://localhost:5173)"
 echo "  测试  : cd /workspace && mvn test                      (H2,无需 MySQL)"
 echo "  手动导库: mysql --default-character-set=utf8mb4 -h127.0.0.1 -uroot -p<密码> ${DB} < /workspace/sql/<file>.sql"
 echo "  进入容器: docker exec -it $(hostname 2>/dev/null || echo '<容器名>') bash"
@@ -174,8 +174,13 @@ if [ "${AUTO_START:-false}" = "true" ]; then
         echo "    !! 300s 后端仍未就绪(首次编译较慢?),继续启动前端;页面可能短暂报错"
       fi
     fi
-    echo "    前端  -> npm run dev (日志: /var/log/frontend.log)"
-    (cd /workspace/web && npm run dev >/var/log/frontend.log 2>&1) &
+    # 用 dev:lan(vite --host)而不是 dev —— 容器里必须绑所有网卡。
+    # `dev` 走 vite.config.ts 的 host:'127.0.0.1',那在**裸机**上是对的;但 Docker 的
+    # 5173:5173 是把流量 DNAT 到容器 eth0,不是容器内的回环,只绑回环则宿主机打不开
+    # :5173(curl 拿到 Empty reply,exit 52)。--host 仍然监听回环,所以容器内
+    # Playwright 的 baseURL(http://localhost:5173)不受影响。
+    echo "    前端  -> npm run dev:lan (日志: /var/log/frontend.log)"
+    (cd /workspace/web && npm run dev:lan >/var/log/frontend.log 2>&1) &
   else
     echo "    !! /workspace/web 未挂载前端项目(package.json 不存在),跳过前端"
   fi

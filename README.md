@@ -145,7 +145,7 @@ curl -X POST http://localhost:1000/common/login \
 docker compose exec dev bash                       # 进入容器
 docker compose exec dev bash -lc "cd /workspace && mvn spring-boot:run"  # 手动启动/重启后端
 docker compose exec dev bash -lc "cd /workspace && mvn -B clean test"    # 后端测试闸门（H2，无需 MySQL）
-docker compose exec dev bash -lc "cd /workspace/web && npm run dev"      # 前端
+docker compose exec dev bash -lc "cd /workspace/web && npm run dev:lan"  # 前端（容器内必须 dev:lan，见下）
 docker exec nexus-dev tail -f /var/log/frontend.log                      # 前端日志
 docker compose down                                # 停止
 docker compose down -v                             # 停止并清空数据库（下次启动重新导脚本）
@@ -154,6 +154,7 @@ docker compose down -v                             # 停止并清空数据库（
 - **后端不热重载**：改 Java 代码后必须重启 `mvn spring-boot:run`（先停掉旧进程，否则 1000 端口被占）。
 - **跑测试前先停 dev 后端**：否则 `maven-clean-plugin` 删不掉被运行中 JVM 占用的 `target/`（报 `Failed to clean project: Failed to delete /workspace/target`）。停法：`docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'`（中括号写法是必须的，否则 `pkill` 会匹配到自己所在的命令行）。
 - **前端热更新**：Vite 自动 HMR，无需重启。
+- **容器内前端必须用 `npm run dev:lan`（= `vite --host`），不要用 `npm run dev`**：`dev` 按 `vite.config.ts` 绑 `127.0.0.1`（这在**裸机**上是对的），但 Docker 的 `5173:5173` 是把流量 DNAT 到容器 **eth0**、不是容器内回环，只绑回环则宿主机打不开 `:5173`（curl 拿 `Empty reply`/exit 52）。`--host` 仍监听回环，容器内 Playwright 的 `localhost:5173` 不受影响。
 - 端口映射、环境变量、常见问题见 [docker/README.md](docker/README.md)。
 
 ---
