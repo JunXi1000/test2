@@ -41,8 +41,11 @@
 │   ├── docker-compose.yml
 │   └── entrypoint.sh
 ├── sql/                      # 数据库脚本
+│   ├── schema.sql            # 基础建表 + admin 种子数据
 │   ├── chat.sql              # 聊天表
-│   └── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
+│   ├── migration-2026-08-08-phase1.sql  # 一期增量迁移（对运行中库补表）
+│   └── migrations/           # 增量迁移 V1–V5（安全 / 金额 DECIMAL / 唯一键与索引）
+│       └── rollback/         # 对应回滚脚本（放子目录，避免被 entrypoint 的 glob 当迁移自动执行）
 ├── src/                      # 后端 Java 源码（Spring Boot）
 │   └── main/java/com/project/platform/  # 19 个 Controller + service/mapper/entity
 ├── uploads/                  # 上传文件（运行时数据，git 忽略）
@@ -51,20 +54,21 @@
 │   ├── .env*                 # 环境变量（VITE_API_BASE_URL / VITE_USE_MOCK）
 │   ├── vite.config.ts        # 开发代理 /api → :1000
 │   └── package.json
-├── docs/                     # 项目文档（8 份）
+├── docs/                     # 项目文档（9 份）
 │   ├── REQUIREMENTS.md       # 电商系统需求分析文档（百万级用户目标，含用例/时序图）
 │   ├── REQUIREMENTS-GAP.md   # 现有实现 vs 需求差距分析
 │   ├── ARCHITECTURE.md       # 系统架构（分层/认证）
 │   ├── MODULES.md            # 功能模块与实现状态矩阵（真实/部分/占位）
 │   ├── DEVELOPMENT.md        # 开发指南与代码规范
 │   ├── backend-api.md        # 后端接口契约清单（端点×实现状态）
-│   ├── ROADMAP.md            # 开发路线图（Phase 1 已完成，Phase 2–4）
+│   ├── ROADMAP.md            # 开发路线图（Phase 1–2 已完成，Phase 3–5）
+│   ├── REFACTOR_PLAN-BACKEND.md  # 后端重构计划（遗留 CRUD 清理 / 授权默认拒绝 / 迁移 V4–V5）
 │   └── API接口说明.md        # 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```
 
-> 📖 **文档索引**：新开发者从 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 起步（环境/启动/mock 机制），读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 了解架构，用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发。
+> 📖 **文档索引**：新开发者从 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 起步（环境/启动/mock 机制），读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 了解架构，用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发；本轮后端重构的范围与取舍见 [docs/REFACTOR_PLAN-BACKEND.md](docs/REFACTOR_PLAN-BACKEND.md)。
 
 ## 🚀 快速开始（Docker 开发环境，推荐）
 
@@ -86,7 +90,9 @@ cd docker
 docker compose up -d --build      # 已有镜像时直接复用，不重复构建
 ```
 
-容器启动即自动完成：初始化并启动 MySQL → 建库 `template_v3` → 首次运行按依赖顺序导入 `sql/*.sql`（必带 `--default-character-set=utf8mb4`，否则中文双重编码乱码）→ `AUTO_START=true` 自动拉起前后端。
+容器启动即自动完成：初始化并启动 MySQL → 建库 `template_v3` → **仅首次建库时**按依赖顺序导入 `sql/schema.sql` → `sql/chat.sql` → `sql/migration-2026-08-08-phase1.sql` → `sql/migrations/V1…V5`（导入命令必带 `--default-character-set=utf8mb4`，否则中文双重编码乱码；导入完在 MySQL 数据卷里写 `${DATA_DIR}/.schema-imported` 标记，`docker compose down -v` 清卷后才会重导）→ `AUTO_START=true` 自动拉起前后端。
+
+> ⚠️ **已有库不会被自动升级**：新增迁移（如 `V4__constraints_and_indexes.sql` 的唯一键 + 索引、`V5__money_decimal_round2.sql` 的金额 `DECIMAL(10,2)`）需手工执行，回滚脚本在 `sql/migrations/rollback/`。
 
 > ⏱️ **首次启动约 5–10 分钟**（下载 Maven 依赖 + 编译）；之后依赖缓存在 `m2cache` / `node_modules` 卷里，启动为秒级。
 
@@ -119,7 +125,7 @@ curl -X POST http://localhost:1000/common/login \
 ```bash
 docker compose exec dev bash                       # 进入容器
 docker compose exec dev bash -lc "cd /workspace && mvn spring-boot:run"  # 手动启动/重启后端
-docker compose exec dev bash -lc "cd /workspace && mvn test"             # 后端测试（H2，无需 MySQL）
+docker compose exec dev bash -lc "cd /workspace && mvn -B clean test"    # 后端测试闸门（H2，无需 MySQL）
 docker compose exec dev bash -lc "cd /workspace/web && npm run dev"      # 前端
 docker exec nexus-dev tail -f /var/log/frontend.log                      # 前端日志
 docker compose down                                # 停止
@@ -127,6 +133,7 @@ docker compose down -v                             # 停止并清空数据库（
 ```
 
 - **后端不热重载**：改 Java 代码后必须重启 `mvn spring-boot:run`（先停掉旧进程，否则 1000 端口被占）。
+- **跑测试前先停 dev 后端**：否则 `maven-clean-plugin` 删不掉被运行中 JVM 占用的 `target/`（报 `Failed to clean project: Failed to delete /workspace/target`）。停法：`docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'`（中括号写法是必须的，否则 `pkill` 会匹配到自己所在的命令行）。
 - **前端热更新**：Vite 自动 HMR，无需重启。
 - 端口映射、环境变量、常见问题见 [docker/README.md](docker/README.md)。
 
@@ -146,7 +153,7 @@ docker compose down -v                             # 停止并清空数据库（
 
 1.  启动你的 MySQL 数据库服务。
 2.  创建一个新的数据库，例如 `template_v3`。
-3.  将项目根目录下的 `sql/schema.sql` 文件导入到你创建的数据库中，以初始化表结构和基础数据（admin 种子账号已包含其中）。
+3.  按依赖顺序导入数据库脚本：`sql/schema.sql`（基础表 + admin 种子）→ `sql/chat.sql` → `sql/migration-2026-08-08-phase1.sql` → `sql/migrations/V1…V5`，导入时带 `--default-character-set=utf8mb4`（否则中文乱码）。**只导 `schema.sql` 是不够的**——唯一键/索引与金额 `DECIMAL(10,2)` 都在 `sql/migrations/` 里，缺了会在并发写入和金额精度上出问题。
 4.  打开后端配置文件 `src/main/resources/application.yaml`，根据你的本地环境修改数据库连接信息：
 
     ```yaml
@@ -192,16 +199,18 @@ docker compose down -v                             # 停止并清空数据库（
 后端测试用 H2 `MODE=MySQL` 内存库，覆盖注册/登录/当前用户/找回密码/越权等场景，无需启动 MySQL：
 
 ```bash
-mvn test
+# 容器内闸门命令（必须带 clean；仓库 bind mount 在 /workspace）
+docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test'
 ```
 
+- **跑之前必须先停掉容器内的 dev 后端**，否则 `maven-clean-plugin` 删不掉被运行中 JVM 占用的 `target/`：`docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'`
 - 测试基类：`src/test/java/.../controller/BaseControllerTest.java`（自动签发 ADMIN/USER/SHOP 的 JWT）
 - 登录注册专项：`AuthFlowTest.java`（成功 + 失败场景全覆盖）、`AuthControllerTest.java`、`SecurityControllerTest.java`（验证码/越权）
 - 新增表必须同步 `src/test/resources/schema-h2.sql`，否则测试报表不存在
 
 ### 前端端到端测试（Playwright）
 
-`web/tests/*.spec.ts` 为 Playwright e2e（默认 **mock 模式**，不依赖真实后端）。需先启动前端 dev server：
+`web/tests/*.spec.ts` 为 Playwright e2e。前端以 `web/.env` 的 `VITE_USE_MOCK=false` 启动，请求经 Vite 代理 `/api` → `:1000`，因此 **e2e 需要 dev 后端已就绪**（Docker 环境里 `AUTO_START=true` 已自动拉起；纯 mock 模式需在浏览器控制台置 `localStorage.RUNTIME_USE_MOCK='true'` 后刷新，e2e 未这么做）。需先启动前端 dev server：
 
 ```bash
 cd web

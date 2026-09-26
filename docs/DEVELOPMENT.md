@@ -65,9 +65,11 @@ clone 下来 `docker compose up -d` 就能跑,不必先配环境变量。
 USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === 'true')
 ```
 
-- **构建时**:`.env` 默认 `VITE_USE_MOCK=true`,前端默认 mock。
-- **运行时覆盖**:浏览器控制台 `localStorage.RUNTIME_USE_MOCK='false'` 后刷新,即切真实后端(无需重建)。
-- **生产构建陷阱**:`.env.production` 未覆盖 `VITE_USE_MOCK`,故 `npm run build-prod` 产物默认仍是 mock=true。要生产关 mock,需在 `.env.production` 显式加 `VITE_USE_MOCK=false`。
+- **构建时**:`.env` 默认 `VITE_USE_MOCK=false`,前端默认走真实后端。
+- **运行时覆盖**:浏览器控制台 `localStorage.RUNTIME_USE_MOCK='true'` 后刷新,即切 mock(无需重建)。
+- **生产构建已不是 mock**(自 `c528a5a` / 2026-08-24 起):`.env.production` 只设 `VITE_API_BASE_URL=/api`,不覆盖 `VITE_USE_MOCK`;
+  但 Vite 在 `--mode production` 下**仍会加载 `.env`**,故 `npm run build-prod` 产物读到的 `VITE_USE_MOCK=false`。
+  要临时打一个带 mock 的产物,才需显式加 `VITE_USE_MOCK=true`。(旧记载「产物默认 mock=true、需显式关」已作废。)
 - **模块差异**:部分模块(admin*/merchant* 系列)读取响应式 `RUNTIME_USE_MOCK.value`,切换立即生效;其余模块用 `import` 时的常量 `USE_MOCK`,切换需刷新页面。
 - **聊天 mock 已补齐**:`web/src/api/modules/chat.ts` 已加 mock 分支。⚠️ 若在 **mock 模式下登录**,后端签发的 token 是假的,任何**未加 mock 分支**的真实请求会 401 → 全局拦截器清会话跳登录 → 死循环。新增模块务必保留 mock 兜底。
 
@@ -85,7 +87,7 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
   - 放行清单的回归网:`config/AuthzRulesTest`(规则表纯单测)与 `controller/AuthorizationBaselineTest`(端起端到端);两者分工是「规则表说放不放」与「拦截器真的照做了」。
   - 行为须知:未知路径对已登录用户返回 **403**、对匿名用户 **401**,而不是 404 —— 拦截先于 `NoResourceFoundException` 生效。好处是探测者无法区分路径存在与否。
 - **前端路径对齐**:面向前端页面的新端点放**门面控制器**(`Storefront*` / `AdminApi` / `MerchantApi`),路径与 `web/src/api/modules/*.ts` 一一对应;传统 CRUD 放传统控制器。
-- **服务层守卫必须「成对写」**:现有代码存在系统性遗漏——同一个 service 里 `page()` 按 `userId` 过滤,而 **`list()` 完全不过滤**;`insert()` 判角色,而 **`updateById()`/`removeByIds()` 不判**。`ProductTypeServiceImpl` / `SlideshowServiceImpl` / `AdvertisingServiceImpl` 甚至一处守卫都没有。新增/修改遗留 CRUD 时,**读方法要给 `list()` 也加过滤,写方法要逐个判角色或归属**,不要只加在 `page()`/`insert()` 上。
+- **服务层守卫必须「成对写」**:现有代码存在系统性遗漏——同一个 service 里 `page()` 按 `userId` 过滤,而 **`list()` 完全不过滤**;`insert()` 判角色,而 **`updateById()`/`removeByIds()` 不判**。`ProductTypeServiceImpl` / `ShopServiceImpl` 甚至一处守卫都没有(前者 `check()` 是空方法)。(原先同时点名的 `SlideshowServiceImpl` / `AdvertisingServiceImpl` 已随其控制器物理删除,问题不复存在。)新增/修改遗留 CRUD 时,**读方法要给 `list()` 也加过滤,写方法要逐个判角色或归属**,不要只加在 `page()`/`insert()` 上。
 
 ### 4.4 依赖与构建(已知偏差)
 
@@ -137,7 +139,12 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
   若报 `Failed to delete /workspace/target` 但**确认没有后端在跑**,那是**瞬时占用**:本仓库位于
   OneDrive 同步目录下,同步客户端会去扫 `target/` 并短暂持有文件句柄。**重试即可**;
   反复出现可把 `target/` 排除出 OneDrive 同步。
-  2026-09-24 建立的基线:64 个测试全绿(11 个 test set)。另有三个**特性化测试**类用于钉住重构前行为(见 `docs/REFACTOR_PLAN-BACKEND.md`):`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、`AuthorizationBaselineTest`,后者的 B 段断言的是**当前缺陷**,重构时应翻转为 403。
+  2026-09-24 建立的**起点基线**是 64 个测试全绿(11 个 test set);当前(2026-09-26)为
+  **155 个 `@Test` / 21 个测试类**。另有三个**特性化测试**类用于钉住重构前行为(见
+  `docs/REFACTOR_PLAN-BACKEND.md`):`OrderCancelCharacterizationTest`、`ShoppingCartCharacterizationTest`、
+  `AuthorizationBaselineTest`。其中 `AuthorizationBaselineTest` 的 B 段**已完成翻转**:它现在断言的是
+  「已删除/未登记的遗留端点仍被默认拒绝」—— 14 个遗留控制器已物理删除,这些路径没有处理器,
+  但 `LoginInterceptor` 的默认拒绝仍先一步挡下(匿名 401 / 已登录 403),故断言一字未改仍然成立。
 - **前端**:目前无单测脚本;`web/tests/*.spec.ts` 为 Playwright 端到端(可选择性运行)。改动页面建议手动验证:`npm run dev` + 控制台切 `RUNTIME_USE_MOCK`。
 
 ## 6. 数据库 schema 维护约定
@@ -179,8 +186,8 @@ docker exec nexus-dev bash -lc '
 
 | 症状 | 原因 / 处理 |
 |------|-------------|
-| 消息页报错 | 聊天无 mock,需后端在线 |
-| 生产构建出来是假数据 | `.env.production` 缺 `VITE_USE_MOCK=false` |
+| 消息页报错 | 聊天**已有** mock 兜底(`web/src/api/modules/chat.ts` 读 `USE_MOCK`,四处分支)。仅在「mock 关闭 + 后端未启动」时才会真报错 —— 先确认后端在线 |
+| 生产构建出来是假数据 | 自 `c528a5a` 起 `.env` 已设 `VITE_USE_MOCK=false`,产物默认**不是** mock。仍见假数据时按序排查:`.env.production.local` / 手改的 `.env` 是否覆盖、浏览器 `localStorage.RUNTIME_USE_MOCK` 是否残留 `'true'`、构建缓存是否陈旧 |
 | 登录后白屏/被踢回登录页 | 旧会话失效,`sessionStorage.auth_cleared=1` 触发;重新登录 |
 | 结算成功但订单列表没有 | mock 关闭后订单只存在于服务端;Phase 2 修复前属预期 |
 | 改了后端不生效 | 本地需重启 Spring Boot |

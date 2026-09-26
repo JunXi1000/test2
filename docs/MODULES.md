@@ -11,13 +11,13 @@
 | 商品 | 列表/详情/推荐/销量榜 | Home / ProductDetail / Compare | `/products` `/products/:id` `/products/recommend/:size` `/products/sales-top/:size` | 🟢 真实 |
 | 商品 | 分类计数 | Home 分类栏 | `/products/category-counts` | 🔴 占位(全部计数硬编码 0) |
 | 搜索 | 建议/结果/趋势/分面 | SearchResults | `/search/suggestions` `/search` `/search/trending` | 🟡 suggestions 真实;trending 硬编码、facets 空 |
-| 购物车 | 增删改/下单 | Cart | `/shoppingCart`(page/add/update/delBatch + createOrder) | 🟢 后端真实(登录态前端已对接、越权已收紧;guest 仍走 localStorage) |
+| 购物车 | 增删改/下单 | Cart | `/shoppingCart`(page/add/update/delBatch) | 🟢 后端真实(登录态前端已对接、越权已收紧;guest 仍走 localStorage)。同控制器下的 `selectById` / `list` / **`createOrder`** 前端 0 引用且 `createOrder` 对传入 `shoppingCartId` 无归属校验,故**刻意未登记 → 默认拒绝 403**;下单走 `/payments/create` |
 | 结算 | 金额汇总/优惠码 | Checkout | `/checkout/summary` `/checkout/promo` | 🟢 金额按 DB 价格服务端重算;优惠码已接 coupon 表;优惠/运费/税为展示用不入账 |
 | 支付 | 创建/确认支付 | Checkout | `/payments/create` `/payments/confirm` `/payments/complete-action` | 🟢 模拟网关真实落库(`payment` 表 + 订单行 + 库存扣减,channel=card/balance);无真实商户号,接入微信/支付宝需替换 |
 | 订单 | 我的订单/最近/仪表盘 | DashboardHome / Orders | `/orders` `/orders/recent` `/orders/{orderNo}/cancel` `/dashboard/stats` | 🟢 真实(按 order_no 分组;取消回补库存/退款;30min 未支付自动取消) |
 | 账户 | 资料/通知偏好 | dashboard/Settings | `/account/profile` `/account/notifications` | 🟢 真实(通知偏好落库 `user_notification_pref`) |
 | 地址 | CRUD/默认 | dashboard/Addresses | `/addresses` CRUD | 🟡 CRUD 真实;`setDefaultAddress` no-op |
-| 聊天 | 会话/消息/未读 | UserMessages / MerchantMessages / ChatWidget | `/chat/*` | 🟢 全量真实(唯一无 mock 兜底的模块) |
+| 聊天 | 会话/消息/未读 | UserMessages / MerchantMessages / ChatWidget | `/chat/*` | 🟢 全量真实(`chat.ts` 已有 mock 分支:mock 模式下走本地假数据,不依赖后端) |
 | 收藏/关注 | 心愿单/收藏/浏览历史/店铺关注 | Wishlist / ProductDetail | ~~`/productCollect` `/productBrowsingHistory` `/shopCollect`~~ | 🔴 **端点已于 2026-09-24 物理删除**;前端 store 本就是 localStorage 未同步 → 该功能现在**完全没有后端**。底层 entity/mapper 仍保留(被 `ProductServiceImpl.recommended()` 的个性化权重使用),但已无 CRUD 入口 |
 | 评价 | 评论/审核 | ProductDetail 评论区 / AdminReviews | ~~`/productOrderEvaluate`~~ + 管理端 `/admin/reviews` | 🟡 传统 CRUD 端点已删除;**管理端 `/admin/reviews` 仍真实**(用 `ProductOrderEvaluateService`);前端商品详情页的评论子系统是纯 localStorage |
 | 退换货 | 申请/状态 | dashboard/Returns | `/returns`(GET/POST) | 🟢 真实(`return_request` 表) |
@@ -47,22 +47,24 @@
 
 ### 后端控制器占位(`src/main/java/com/project/platform/controller/`)
 
+> 行号于 2026-09-26 按当前代码重新核对过一遍(`getProfile` 那行本就在正确位置)。
+
 | 位置 | 行号 | 占位内容 |
 |------|------|----------|
-| `AdminApiController.getDashboardStats` | L34-42 | 4 个统计硬编码 `"$0"/"0"/"+0%"` |
-| `AdminApiController.getRevenueChart` | L59-62 | `Collections.emptyList()` |
-| `AdminApiController.updateReviewStatus` | L303-306 | no-op,永远成功 |
-| `AdminApiController.updateSettings` / `getSettings` | L316-329 | 设置硬编码(`siteName "Nexus Market"`),更新 no-op |
-| `MerchantApiController.getDashboardStats` | L38-46 | 统计硬编码 `"$0"/"0"` |
-| `MerchantApiController.getWallet` | L152-159 | 余额/pending 恒 0,无后端支撑 |
-| `MerchantApiController.getTransactions` | L161-164 | `Collections.emptyList()` |
-| `MerchantApiController.withdraw` | L166-169 | no-op |
-| `MerchantApiController.updateSettings` | L191-194 | no-op(getSettings 部分硬编码) |
+| `AdminApiController.getDashboardStats` | L35-46 | 4 个统计硬编码 `"$0"/"0"/"+0%"` |
+| `AdminApiController.getRevenueChart` | L63-66 | `Collections.emptyList()` |
+| `AdminApiController.updateReviewStatus` | L312-317 | no-op,永远成功(入参已去掉) |
+| `AdminApiController.updateSettings` / `getSettings` | L327-342 | 设置硬编码(`siteName "Nexus Market"`),更新 no-op(入参已去掉) |
+| `MerchantApiController.getDashboardStats` | L38-48 | 统计硬编码 `"$0"/"0"` |
+| `MerchantApiController.getWallet` | L185-192 | 余额/pending 恒 0,无后端支撑 |
+| `MerchantApiController.getTransactions` | L194-197 | `Collections.emptyList()` |
+| `MerchantApiController.withdraw` | L199-205 | no-op(入参已去掉) |
+| `MerchantApiController.updateSettings` | L227-232 | no-op(getSettings 部分硬编码) |
 | `StorefrontSearchController.getTrending` | L54-59 | 硬编码关键词数组 |
-| `StorefrontSearchController.search` | L101-103 | facets 空 Map、relatedSearches 空 |
-| `StorefrontProductController.getCategoryCounts` | L77-87 | 计数全部 0(注释 "Placeholder") |
+| `StorefrontSearchController.search` | L102-103 | facets 空 Map、relatedSearches 空 |
+| `StorefrontProductController.getCategoryCounts` | L79-89 | 计数全部 0(注释 "Placeholder") |
 | `StorefrontMerchantController.getProfile` | L45-59 | stats 硬编码、featuredProducts 空、policies 硬编码 |
-| `StorefrontAddressController.setDefaultAddress` | L51-55 | no-op,不设默认地址 |
+| `StorefrontAddressController.setDefaultAddress` | L56-60 | no-op,不设默认地址 |
 
 ### 后端明确 TODO / Bug
 
@@ -78,7 +80,7 @@
 
 | 位置 | 内容 |
 |------|------|
-| `web/src/components/ProductQA.vue` L28-75 | 问答硬编码 mock,提问/点赞仅前端状态 |
+| `web/src/components/ui/ProductQA.vue` L28-75 | 问答硬编码 mock,提问/点赞仅前端状态 |
 | `web/src/pages/admin/Products.vue` L115 | 商品详情描述为占位文案 |
 
 ### 前端 localStorage store 清单(后端同步状态)
@@ -96,9 +98,9 @@
 
 ## 3. 关键依赖关系与风险
 
-1. **聊天是唯一无 mock 兜底的模块**(`chat.ts` 不读 USE_MOCK)→ 后端未启动时消息页/悬浮聊天必然报错。
+1. **聊天已有 mock 兜底**(`web/src/api/modules/chat.ts` 读 `USE_MOCK`,4 处分支)→ mock 模式下消息页/悬浮聊天走本地假数据;只有当 mock 关闭**且**后端未启动时才必然报错。(旧记载「聊天是唯一无 mock 兜底的模块」已作废。)
 2. **结算→支付→订单 主链路已打通(Phase 2 ✅)**:结算按 DB 价格服务端校验、支付模拟网关真实落库、订单按 order_no 分组展示;遗留限制——优惠/运费/税为展示用不入账、支付无真实商户号。
-3. **生产构建默认 mock=true**(`.env.production` 未覆盖 `VITE_USE_MOCK`)→ 产物若后端未就绪会静默用假数据。
+3. **生产构建已不是 mock**(自 `c528a5a` / 2026-08-24 起):`.env` 设 `VITE_USE_MOCK=false`,而 Vite 在 `--mode production` 下**同样加载 `.env`**,`.env.production` 也**没有**覆盖它 → 产物默认读 `false`,不会静默用假数据。旧记载「生产构建默认 mock=true,需在 `.env.production` 显式关」已作废。产物仍出假数据时改查 `.env.production.local` 与残留的 `localStorage.RUNTIME_USE_MOCK`。
 4. **密码找回前后端字段不匹配**:前端发 `email`、后端 `retrievePassword` 用 `tel`;`resetPasswordWithToken` 把 token 当 userId 拼 URL。
 5. **前端 Debug 工具残留**:`FEATURE_DEV_LOGOUT` 仅定义无引用;原 `web/docs/` 陈旧工具文档(DebugPanel/Force Logout/Seed Data)描述的界面代码中不存在,文档已删除(2026-08-24)。
 6. **外链图片**:商品图/头像均 Unsplash/Picsum 外链,离线时 ProductDetail 有三级 failover(主图→picsum→内联 SVG)。

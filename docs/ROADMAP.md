@@ -35,7 +35,7 @@
 | 全链路 | 购物车→下单→支付→订单→用户中心,关 mock 跑通 |
 | 购物车同步 | 前端 cart store 对接 `/shoppingCart`(含 createOrder) |
 | 优惠码统一 | `/checkout/promo` 与 Phase 1 coupon 打通 |
-| 顺带修复 | `setDefaultAddress` no-op、结算成功订单写入服务端 |
+| 顺带修复 | 结算成功订单写入服务端。（同期的 `setDefaultAddress` no-op **并没有修掉**，见 Phase 4） |
 
 **验收** ✅:mock 关闭,新注册用户可完整走通 浏览→加购→结算→支付→订单列表 且数据落库;取消订单回补库存。
 
@@ -46,7 +46,7 @@
 | 范围 | 说明 |
 |------|------|
 | 商家钱包 | `wallet` + `transaction` 表/Service,替换 `MerchantApiController` mock(余额/流水/提现) |
-| 后台统计 | Admin/Merchant dashboard stats、revenue-chart 用真实 SQL 聚合(参考 `StatisticalReportFormsServiceImpl`) |
+| 后台统计 | Admin/Merchant dashboard stats、revenue-chart 用真实 SQL 聚合（原参考实现 `StatisticalReportFormsServiceImpl` 已随 14 个遗留 CRUD 控制器一并删除，需自行实现） |
 | 设置持久化 | `/admin/settings`、`/merchant/settings` 落库 |
 | 店铺/搜索真实化 | `/merchants/:id/profile` stats、`/products/category-counts`、`/search/trending`、facets |
 | 通知后端化 | 若 WP-7 未做,在此完成;用户侧通知补全 |
@@ -57,19 +57,23 @@
 
 **目标**:修复已知缺陷、消除文档漂移、补测试。
 
+> **进度(2026-09)**:生产 mock 开关、JWT 密钥外置、退款完成、验证码加固均已落地;表中原「用户名查重 bug」一项经复核不成立,已删除(见勘误);其余待办。
+
 | 范围 | 说明 |
 |------|------|
-| 生产 mock 开关 | `.env.production` 显式 `VITE_USE_MOCK=false` |
-| 用户名查重 bug | `UserServiceImpl.check` L213 `id != id` 恒 false |
+| 生产 mock 开关 | ✅ 已完成(2026-09):`web/.env` 为 `VITE_API_BASE_URL=/api` + `VITE_USE_MOCK=false`,且 `web/src/config/env.ts` 在变量缺省时按 `!== 'true'` 判 false——生产构建同样加载 `.env`,故产物非 mock(无需 `.env.production` 再写一遍) |
+| 默认地址 no-op | `StorefrontAddressController.setDefaultAddress` 仍是 `// Simple implementation` 直接 `ok()`,未写库(Phase 2 曾误记为「已修」) |
 | 密码找回流程 | 前端 `email` ↔ 后端 `tel` 对齐;`resetPasswordWithToken` 不再把 token 当 userId |
-| JWT 密钥外置 | `JwtUtils` 硬编码密钥 → 配置项 |
-| 退款完成 | `ProductOrderServiceImpl` 的 `//TODO 退款` |
+| JWT 密钥外置 | ✅ 已完成(2026-09):仓库内无任何可用密钥;未提供 `JWT_SECRET` 时非 prod 生成一次性随机密钥(重启即失效),prod profile 直接拒绝启动 |
+| 退款完成 | ✅ 已完成:`ProductOrderServiceImpl` 取消链路已按支付渠道分流退款(`balance` 回补余额、网关渠道只推进支付单)且幂等,仅余一行历史注释 `//消费 TODO 退款` |
 | 验证码加固 | ✅ 三个 `retrievePassword` 均已先校验验证码;补充发送限流(60s 间隔/单日 10 次)与 `security.expose-reset-code` 开关(prod 关闭响应返回) |
-| 测试补强 | 现有 H2 冒烟测试 → 增加业务断言级用例(订单状态机/购物车/统计) |
+| 测试补强 | 现有 H2 冒烟测试 → 增加业务断言级用例(订单状态机/购物车/统计);截至 2026-09 共 155 个测试(2026-09-24 基线为 64 个) |
 | 文档同步 | 已删除 `web/docs/` 陈旧工具文档(2026-08-24);其余文档按代码同步 |
 | 清理 | `VITE_APP_API_URL` 无用变量(templatev3_s.sql 已删除,admin 种子并入 schema.sql) |
 
-**验收**:`mvn test` 全绿;生产构建 mock=false;登录/查重/找回密码行为正确。
+> **勘误(2026-09)**:原表「用户名查重 bug —— `UserServiceImpl.check` L213 `id != id` 恒 false」**不成立**。`check` 就是正确的查重(按 username 查出后排除自身 id 再报「用户名已存在」),且 `insert` / `updateById` 都已调用它,代码里没有 `id != id` 这种写法。该待办已删除,不必再修。
+
+**验收**:容器内 `mvn -B clean test` 全绿(**跑前先停 dev 后端**,否则 `maven-clean-plugin` 删不掉被 JVM 占用的 `target/`);生产构建 mock=false;登录/找回密码/默认地址行为正确。
 
 ## Phase 5 — 前端扩展与增长功能(候选,未排期)
 
@@ -91,6 +95,6 @@
 ## 执行约定
 
 - 每阶段结束提交一次,工作区保持干净再进入下一阶段。
-- Phase 1 阶段内的零风险修复(生产 mock 开关、用户名查重 bug)若顺路碰到,随手修掉,不必等 Phase 4。
+- 阶段内的零风险修复(如生产 mock 开关、JWT 密钥外置)若顺路碰到,随手修掉,不必等 Phase 4。
 - 新端点遵循门面控制器 + ResponseVO + 「mock 分支 + 真实分支」约定(见 [DEVELOPMENT.md](DEVELOPMENT.md))。
 - 阶段范围可随时按业务需要调整;调整时同步更新本文件。

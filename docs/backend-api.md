@@ -83,15 +83,19 @@
 
 | 方法 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| POST | `/checkout/summary` | 🔴 | 用前端传入 price 直接算,未按服务端 DB 校验 |
+| POST | `/checkout/summary` | 🟢 | 金额一律按 DB `product.price` 重算小计/运费/税/满减,**不信任前端传入的 price**;`items` 为空、数量缺失或 ≤0、商品不存在 → 400(见 §3) |
 | POST | `/checkout/promo` | 🟡 | 先查 coupon 表(`CouponService.applyByCode`,含门槛/有效期校验),未命中再兜底硬编码 `SAVE10`/`VIP15` |
 
 ### 1.8 支付 /payments — StorefrontPaymentController
 
+> **模拟网关(非真实)**:下单/支付记录**真实落库**(`payment` 表)、库存**真实扣减**、状态机**真实**;
+> 但没有真实商户号与回调验签 —— 接入微信/支付宝必须替换为「网关下单 + 回调验签 + 幂等入账」。
+
 | 方法 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| POST | `/payments/create` | 🔴 | 吞异常,返回 mock `pay_*`/`ORD-随机`/`mock_secret`;无支付表 |
-| POST | `/payments/confirm` | 🔴 | 永远返回 `succeeded` |
+| POST | `/payments/create` | 🟢 | 真实下单 + 建支付单(`payment` 表),原子扣库存;`paymentId`/`orderId` 均回填 `orderNo`;`clientSecret` 恒 `null`(模拟网关无真实 secret) |
+| POST | `/payments/confirm` | 🟢 | 真实状态机:校验支付单、按 `channel`(缺省读支付单)落库(`TXN-<orderNo>` + `paid_at`);**已支付则幂等**直接返回 `succeeded`,不重复扣款 |
+| POST | `/payments/complete-action` | 🟢 | 3DS 回调:读支付单 `channel` 转调 `confirm`,同语义同幂等(`orderNo` 回落顺序与 `confirm` **相反**:`paymentId` 优先) |
 
 ### 1.9 公开店铺 /merchants — StorefrontMerchantController
 
@@ -208,7 +212,15 @@
 >
 > 下表是删除前的记录,保留作为历史参考 —— 这些前缀已不存在,不要再按它对接。
 
-| 已删除的前缀 | 额外业务端点(曾) | Service(已删) |
+> ⚠️ **列名更正(2026-09-26)**:下表第三列原写作「Service(已删)」,**那是错的**。
+> 真正被删的 service 只有六个:`AdvertisingService`、`SlideshowService`、`ShopCollectService`、
+> `ProductCollectService`、`ProductBrowsingHistoryService`、`StatisticalReportFormsService`。
+> 表中其余(如 `UserService`、`ProductService`、`ProductOrderService`、`ProductTypeService`、
+> `ShippingAddressService`、`ProductOrderEvaluateService`、`ShopService`、`ShoppingCartService`)
+> **都还在 `service/` 下** —— 被删的只是它们那些「遗留 CRUD 入口」,而它们各自仍被存活代码使用
+> (见 §2 开头的保留清单)。
+
+| 已删除的前缀 | 额外业务端点(曾) | Service(现存情况) |
 |------|-------------|---------|
 | `/user` | `POST /user/topUp/{amount}` 充值 | UserService |
 | `/admin-accounts` | — | AdminService |
@@ -219,14 +231,21 @@
 | `/productCollect` | — | ProductCollectService |
 | `/productBrowsingHistory` | — | ProductBrowsingHistoryService(去重插入) |
 | `/productOrderEvaluate` | — | ProductOrderEvaluateService |
-| `/shoppingCart` | `POST /shoppingCart/createOrder` 购物车下单 | ShoppingCartService |
 | `/shippingAddress` | — | ShippingAddressService |
 | `/shopCollect` | — | ShopCollectService(联动 fans_count) |
 | `/slideshow` | — | SlideshowService |
 | `/advertising` | — | AdvertisingService |
 | `/statisticalReportForms` | 2 个图表端点(商品类型占比 / 近 N 天销售总额,真实 SQL) | StatisticalReportFormsService |
-| `/file` | `POST /file/upload`、`GET /file/{fileName}`(MD5 命名落盘) | FileService |
-| `/common` | `login` / `register` / `currentUser` / `updatePassword` / `retrievePassword` / `resetPassword`(登录/注册走这里) | UserService / ShopService / AdminService(CommonService) |
+
+> ⚠️ **`/common`、`/file`、`/shoppingCart` 三个控制器**没有**被删除** —— 它们曾一度被列在上面这张
+> 「已删除」表里,那是错的,已移出。三者今天仍在服务,端点与授权如下(`/common` 的免登录路径见
+> `config/SpringMvcConfig` 的 `excludePathPatterns`,其余在 `config/AuthzRules`):
+>
+> | 前缀 | 控制器 | 端点 | 授权 |
+> |------|--------|------|------|
+> | `/common` | `CommonController` | `login` / `register` / `sendResetCode` / `retrievePassword` / `resetPassword` / `currentUser` / `updateCurrentUser` / `updatePassword` | `login` / `register` / `sendResetCode` / `retrievePassword` 四个在 `SpringMvcConfig` 白名单(不走拦截器);`currentUser` / `updateCurrentUser` / `updatePassword` 三角色、`resetPassword` 仅 ADMIN(均在 `AuthzRules`) |
+> | `/file` | `FilesController` | `POST /file/upload`、`GET /file/{fileName}`(MD5 命名落盘) | `/file/**` → 三角色;图片 GET 由 `LoginInterceptor` 提前放行 |
+> | `/shoppingCart` | `ShoppingCartController` | 仅 `page` / `add` / `update` / `delBatch` 放行(USER);同控制器的 `selectById` / `list` / **`createOrder`** 未登记 → **默认拒绝** | USER |
 
 ## 3. 与前端契约的差异与缺口
 
