@@ -1,36 +1,51 @@
 # 在线商店 (前后端分离)
 
-这是一个基于 Java (Spring Boot) 和 Vue 3 的前后端分离电商项目。它提供了一套完整的电商核心功能，包括用户、商品、订单、购物车、店铺、地址管理等，并集成了后台管理系统。
+这是一个基于 Java (Spring Boot) 和 Vue 3 的前后端分离电商项目。
 
-## ✨ 项目特色
+## 📌 当前实现状态（先读这段）
 
-- **前后端分离**：后端专注业务逻辑与 API，前端负责用户交互与视图渲染，分工明确，易于维护。
-- **技术栈主流**：采用 Spring Boot 3、MyBatis、Vue 3、Vite、Element Plus 等业界流行技术，学习价值高。
-- **功能模块完整**：覆盖电商核心业务流程，从用户注册登录到商品浏览、下单支付、后台管理，一应俱全。
-- **代码结构清晰**：遵循标准 Maven 和 Vue 项目结构，代码分层合理，易于二次开发。
+**买家主链路是真实可用的**：注册登录 → 浏览/搜索商品 → 购物车 → 结算 → 支付 → 订单与取消/退款 → 地址、优惠券、退换货、到货提醒、聊天。
+
+**但并非"一应俱全"**，别按功能清单去假设可用性：
+
+- **管理端与商家端有相当一部分是占位**：仪表盘统计、钱包余额、系统设置等返回**硬编码假数据**或直接 no-op（前端会把它当真实数据渲染）。逐条清单见 [docs/MODULES.md](docs/MODULES.md) §2。
+- **支付网关是模拟的**：`payment` 表与状态机是真的，但没有真实商户号、回调验签与对账。
+- **库存无预占**（下单即扣、取消/超时回补），没有 SKU/SPU、没有流水表。
+- 缺口分析见 [docs/REQUIREMENTS-GAP.md](docs/REQUIREMENTS-GAP.md)。
+
+> **哪些文档说了算**（README 只负责"怎么跑起来"）：
+> 后端**实际暴露哪些端点** → [docs/backend-api.md](docs/backend-api.md)；
+> 前端**实际调用哪些路径** → `web/src/api/modules/*.ts`；
+> 环境、规范与坑 → [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+> `docs/API接口说明.md` 是**历史文档**（前端最初的期望），不要当契约用。
 
 ## 🛠️ 技术栈
 
 ### 后端 (`src/main/java`)
 
 - **核心框架**: Spring Boot 3.2.10
-- **持久层**: MyBatis 3.0.4
-- **数据库**: MySQL 8.0
-- **安全与认证**: JWT (JSON Web Token)
+- **持久层**: MyBatis 3.0.4（接口 + XML / 注解）
+- **数据库**: MySQL 8.0（测试用 H2 `MODE=MySQL`）
+- **认证**: JWT（jjwt 0.9.1，HS256）
+- **授权**: `config/AuthzRules` 显式规则表 + **默认拒绝**（未登记的路径对所有角色 403；详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)）
+- **密码**: BCrypt（`spring-security-crypto`，不引 Spring Security 过滤器链）
 - **构建工具**: Maven
 - **开发语言**: Java 17
 - **其他**: Lombok, Fastjson2, Hutool
 
 ### 前端 (`web/`)
 
-- **核心框架**: Vue 3.4
+- **核心框架**: Vue 3.4 + TypeScript 5.9（`vue-tsc` 做类型检查）
 - **路由**: Vue Router 4
-- **状态管理**: Pinia
-- **UI 组件库**: Element Plus
+- **状态管理**: Pinia 2
+- **UI**: Element Plus 2.8（表格/表单等有内部状态机的组件）+ 自建 `components/ui/*`（shadcn-vue 风格：`cva` + `tailwind-merge`）
+- **样式**: Tailwind CSS 4（主题令牌的来源，见 `src/assets/css/tailwind.css`）
 - **构建工具**: Vite 5
-- **HTTP 请求**: Axios
-- **图表**: Echarts
-- **其他**: Lodash
+- **HTTP 请求**: Axios（统一走 `src/api/http.ts`）
+- **国际化**: vue-i18n 9（目前只有 `locales/en.ts`）
+- **图表**: ECharts 5
+- **工具库**: lodash-es, @vueuse/core, lucide-vue-next（图标）
+- **E2E 测试**: Playwright
 
 ## 📂 目录结构
 
@@ -38,7 +53,8 @@
 .
 ├── docker/                   # 开发环境镜像（JDK/Maven/Node/MySQL，一键起前后端）
 │   ├── Dockerfile
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml    # 只用于**本机开发**（含本地默认口令，3306 绑回环）
+│   ├── .env.example          # 口令/密钥的可选覆盖模板（复制成 .env，已 gitignore）
 │   └── entrypoint.sh
 ├── sql/                      # 数据库脚本
 │   ├── schema.sql            # 基础建表 + admin 种子数据
@@ -63,7 +79,7 @@
 │   ├── backend-api.md        # 后端接口契约清单（端点×实现状态）
 │   ├── ROADMAP.md            # 开发路线图（Phase 1–2 已完成，Phase 3–5）
 │   ├── REFACTOR_PLAN-BACKEND.md  # 后端重构计划（遗留 CRUD 清理 / 授权默认拒绝 / 迁移 V4–V5）
-│   └── API接口说明.md        # 前端期望的 HTTP 接口汇总（与 web/src/api 对齐）
+│   └── API接口说明.md        # ⚠️ 历史文档：前端最初的接口期望，**不要当契约用**（权威见上面「当前实现状态」）
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```
@@ -148,7 +164,7 @@ docker compose down -v                             # 停止并清空数据库（
 
 - **JDK**: 17 或更高版本
 - **Maven**: 3.6 或更高版本
-- **Node.js**: 16.x 或更高版本
+- **Node.js**: 18 或更高（Vite 5 的 `engines` 要求 `^18 || >=20`）
 - **MySQL**: 8.0 或更高版本
 - **IDE**: IntelliJ IDEA, VS Code (推荐)
 
@@ -207,6 +223,8 @@ docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test'
 
 - **跑之前必须先停掉容器内的 dev 后端**，否则 `maven-clean-plugin` 删不掉被运行中 JVM 占用的 `target/`：`docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'`
 - 测试基类：`src/test/java/.../controller/BaseControllerTest.java`（自动签发 ADMIN/USER/SHOP 的 JWT）
+- **授权回归网**：`config/AuthzRulesTest`（规则表纯单测）、`controller/AuthorizationBaselineTest`（端起端到端：合法访问矩阵 / 未登记端点 403 / 角色不跨域 / 对象级越权）
+- **错误模型回归网**：`controller/ErrorModelTest`（5 类异常 → 4xx、`msg`/`data` 双写、各处缺字段不再 500）
 - 登录注册专项：`AuthFlowTest.java`（成功 + 失败场景全覆盖）、`AuthControllerTest.java`、`SecurityControllerTest.java`（验证码/越权）
 - 新增表必须同步 `src/test/resources/schema-h2.sql`，否则测试报表不存在
 
