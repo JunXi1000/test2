@@ -232,14 +232,17 @@ docker exec nexus-dev bash -lc 'cd /workspace && mvn -B clean test'
 
 ### 前端端到端测试（Playwright）
 
-`web/tests/*.spec.ts` 为 Playwright e2e。前端以 `web/.env` 的 `VITE_USE_MOCK=false` 启动，请求经 Vite 代理 `/api` → `:1000`，因此 **e2e 需要 dev 后端已就绪**（Docker 环境里 `AUTO_START=true` 已自动拉起；纯 mock 模式需在浏览器控制台置 `localStorage.RUNTIME_USE_MOCK='true'` 后刷新，e2e 未这么做）。需先启动前端 dev server：
+`web/tests/*.spec.ts` 为 Playwright e2e，**一律跑在 mock 模式下**：`web/playwright.config.ts` 用 `storageState` 在页面脚本执行前注入 `localStorage.RUNTIME_USE_MOCK='true'`（`storageState` 是 Playwright 唯一能在应用启动前写好 localStorage 的官方入口）。因此 **e2e 不需要后端就绪**，它验证的是前端自身行为在 mock 数据下的正确性。
+
+> ⚠️ 由此的推论：**e2e 全绿 ≠ 前后端联调通过**。前端真实请求走 `web/.env` 的 `VITE_API_BASE_URL=/api`，再经 Vite 代理 `/api` → `:1000`（rewrite 去掉 `/api`，后端无 context-path）；这条真实链路目前**没有任何自动化测试覆盖**，要验证联调得手工打接口。
+
+配置自带 `webServer`（`npm run dev`），忘开 dev server 会自动拉起：
 
 ```bash
 cd web
 npm install
 npx playwright install chromium
-# 终端 1: npm run dev    (:5173)
-# 终端 2: npx playwright test
+npx playwright test
 ```
 
 ### 登录注册手动测试清单
