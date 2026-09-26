@@ -133,7 +133,6 @@ USE_MOCK = localStorage.RUNTIME_USE_MOCK ?? (import.meta.env.VITE_USE_MOCK === '
 | `application-prod.yaml` | root WARN、`com.project.platform` INFO、mapper WARN;`security.expose-reset-code=false`(不回显找回密码验证码) |
 | `logback-spring.xml` | 每行日志带 `%X{requestId:-no-request-id}`,与 `config/RequestIdFilter` 配对做请求串联 |
 | `web/.env` | `VITE_API_BASE_URL=/api`、`VITE_USE_MOCK=false`(所有模式加载) |
-| `web/.env.development` | 含未使用的 `VITE_APP_API_URL`(代码实际读 `VITE_API_BASE_URL`) |
 | `web/.env.production` | 仅 `VITE_API_BASE_URL=/api` —— 不覆盖 `VITE_USE_MOCK`,故沿用 `.env` 的 `false` |
 | `web/vite.config.ts` | 代理 `/api` → `http://localhost:1000`,rewrite 去 `/api`;别名 `@ → ./src`;manualChunks 分包 |
 

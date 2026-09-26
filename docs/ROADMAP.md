@@ -69,7 +69,7 @@
 | 验证码加固 | ✅ 三个 `retrievePassword` 均已先校验验证码;补充发送限流(60s 间隔/单日 10 次)与 `security.expose-reset-code` 开关(prod 关闭响应返回) |
 | 测试补强 | 现有 H2 冒烟测试 → 增加业务断言级用例(订单状态机/购物车/统计);截至 2026-09 共 155 个测试(2026-09-24 基线为 64 个) |
 | 文档同步 | 已删除 `web/docs/` 陈旧工具文档(2026-08-24);其余文档按代码同步 |
-| 清理 | `VITE_APP_API_URL` 无用变量(templatev3_s.sql 已删除,admin 种子并入 schema.sql) |
+| 清理 | ✅ 已完成(2026-09-26):整个 `web/.env.development` 已删除 —— 它只有两行,`VITE_APP_API_URL` 与 `NODE_ENV` **代码里都不读**(实际生效的 baseURL 来自 `web/.env` 的 `VITE_API_BASE_URL=/api`)。templatev3_s.sql 已删除、admin 种子并入 schema.sql |
 
 > **勘误(2026-09)**:原表「用户名查重 bug —— `UserServiceImpl.check` L213 `id != id` 恒 false」**不成立**。`check` 就是正确的查重(按 username 查出后排除自身 id 再报「用户名已存在」),且 `insert` / `updateById` 都已调用它,代码里没有 `id != id` 这种写法。该待办已删除,不必再修。
 

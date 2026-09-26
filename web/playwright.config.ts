@@ -17,7 +17,7 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     // E2E 一律跑在 mock 模式下：localStorage 必须在应用启动前写好，
     // storageState 是 Playwright 唯一能在页面脚本执行前注入 localStorage 的官方入口。
-    // 不这么做的话，请求会打到 VITE_APP_API_URL(:1000) 的真实后端上。
+    // 不这么做的话，前端会按 .env 的 VITE_API_BASE_URL=/api 走 Vite 代理打到 :1000 的真实后端。
     storageState: {
       cookies: [],
       origins: [
