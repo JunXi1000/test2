@@ -1,6 +1,17 @@
 .idea/
 target/
 
+# Eclipse / STS 工程元数据(机器相关,不入库)
+#
+# .factorypath 里是**绝对路径**的 M2_REPO jar 清单,每次 Lombok 之类依赖升版都会
+# 被 IDE 重写一遍 —— 于是工作区天天显示脏,而 diff 里只有版本号变化,没有信息量。
+# .project 里的项目名也早已过时(仍写着 template_v3)。
+# 这四个都是「每台机器自己生成」的东西,本地文件保留即可,不必入库。
+.factorypath
+.classpath
+.project
+.settings/
+
 # Node 依赖(本地可删,重装即可)
 web/node_modules/
 
