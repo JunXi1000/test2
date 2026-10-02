@@ -13,11 +13,11 @@
 - **库存无预占**（下单即扣、取消/超时回补），没有 SKU/SPU、没有流水表。
 - 缺口分析见 [docs/REQUIREMENTS-GAP.md](docs/REQUIREMENTS-GAP.md)。
 
-> **哪些文档说了算**（README 只负责"怎么跑起来"）：
+> **哪些文档说了算**：
+> **怎么把项目跑起来** → [docs/STARTUP.md](docs/STARTUP.md)（唯一权威启动文档）；
 > 后端**实际暴露哪些端点** → [docs/backend-api.md](docs/backend-api.md)；
 > 前端**实际调用哪些路径** → `web/src/api/modules/*.ts`；
 > 环境、规范与坑 → [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-> `docs/API接口说明.md` 是**历史文档**（前端最初的期望），不要当契约用。
 
 ## 🛠️ 技术栈
 
@@ -51,11 +51,20 @@
 
 ```
 .
-├── docker/                   # 开发环境镜像（JDK/Maven/Node/MySQL，一键起前后端）
-│   ├── Dockerfile
+├── start.sh / start.bat      # ★ 一键启动:拉镜像 → 起容器 → 等就绪 → 验证接口 → 开浏览器
+├── stop.sh / stop.bat        # 停止(数据保留)
+├── logs.sh / logs.bat        # 跟随容器日志
+├── dev.sh / dev.bat          # 通用入口(status / shell / restart / reset / pull / build)
+├── docker/                   # 开发环境镜像（JDK/Maven/Node/MySQL + 预热依赖，一键起前后端）
+│   ├── Dockerfile            # 环境镜像;第 5 步把 Maven/npm 依赖预热进去
 │   ├── docker-compose.yml    # 只用于**本机开发**（含本地默认口令，3306 绑回环）
-│   ├── .env.example          # 口令/密钥的可选覆盖模板（复制成 .env，已 gitignore）
-│   └── entrypoint.sh
+│   ├── .env.example          # 口令/密钥/镜像地址的可选覆盖模板（复制成 .env，已 gitignore）
+│   ├── entrypoint.sh         # 建库 + 导脚本 + 恢复前端依赖 + 拉起前后端
+│   └── scripts/
+│       ├── dev.sh / dev.ps1  # 一键脚本的真正逻辑
+│       └── publish-image.sh  # 维护者:构建并推送镜像到 ghcr.io
+├── .github/workflows/
+│   └── dev-env-image.yml     # 自动化:改了镜像输入文件就构建推送(双架构)
 ├── sql/                      # 数据库脚本
 │   ├── schema.sql            # 基础建表 + admin 种子数据
 │   ├── chat.sql              # 聊天表
@@ -64,13 +73,15 @@
 │       └── rollback/         # 对应回滚脚本（放子目录，避免被 entrypoint 的 glob 当迁移自动执行）
 ├── src/                      # 后端 Java 源码（Spring Boot）
 │   └── main/java/com/project/platform/  # 19 个 Controller + service/mapper/entity
-├── uploads/                  # 上传文件（运行时数据，git 忽略）
+├── uploads/                  # 上传文件（运行时数据，git 忽略；例外见下）
+│   └── demo-avatar.png       # admin 种子头像的占位图，**唯一入库**的上传文件
 ├── web/                      # 前端 Vue 源码
 │   ├── src/                  # 页面 / api / stores / router
 │   ├── .env*                 # 环境变量（VITE_API_BASE_URL / VITE_USE_MOCK）
 │   ├── vite.config.ts        # 开发代理 /api → :1000
 │   └── package.json
-├── docs/                     # 项目文档（9 份）
+├── docs/                     # 项目文档
+│   ├── STARTUP.md            # ★ 启动文档（唯一权威：一键启动/裸机启动/故障排查）
 │   ├── REQUIREMENTS.md       # 电商系统需求分析文档（百万级用户目标，含用例/时序图）
 │   ├── REQUIREMENTS-GAP.md   # 现有实现 vs 需求差距分析
 │   ├── ARCHITECTURE.md       # 系统架构（分层/认证）
@@ -78,137 +89,44 @@
 │   ├── DEVELOPMENT.md        # 开发指南与代码规范
 │   ├── backend-api.md        # 后端接口契约清单（端点×实现状态）
 │   ├── ROADMAP.md            # 开发路线图（Phase 1–2 已完成，Phase 3–5）
-│   ├── REFACTOR_PLAN-BACKEND.md  # 后端重构计划（遗留 CRUD 清理 / 授权默认拒绝 / 迁移 V4–V5）
-│   └── API接口说明.md        # ⚠️ 历史文档：前端最初的接口期望，**不要当契约用**（权威见上面「当前实现状态」）
+│   └── REFACTOR_PLAN-BACKEND.md  # 后端重构计划（遗留 CRUD 清理 / 授权默认拒绝 / 迁移 V4–V5）
 ├── pom.xml                   # 后端 Maven 依赖
 └── README.md                 # 项目说明
 ```
 
-> 📖 **文档索引**：新开发者从 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 起步（环境/启动/mock 机制），读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 了解架构，用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发；本轮后端重构的范围与取舍见 [docs/REFACTOR_PLAN-BACKEND.md](docs/REFACTOR_PLAN-BACKEND.md)。
+> 📖 **文档索引**：**先把项目跑起来看 [docs/STARTUP.md](docs/STARTUP.md)**；
+> 然后读 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)（环境/规范/mock 机制）与
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)（架构），
+> 用 [docs/MODULES.md](docs/MODULES.md) 看功能实现状态，按 [docs/ROADMAP.md](docs/ROADMAP.md) 推进开发。
 
-## 🚀 快速开始（Docker 开发环境，推荐）
+## 🚀 快速开始
 
-后端所需的 **JDK 17 / Maven / MySQL 8 / Node 24** 已全部打包在一个开发环境镜像里，**宿主机无需安装任何依赖**。
-
-| 组件 | 版本 | 位置 |
-|------|------|------|
-| JDK | 17 (eclipse-temurin) | 镜像内 `/opt/java/openjdk` |
-| Maven | 3.9.9 | 镜像内 `/opt/maven` |
-| Node + npm | 24.x | 镜像内 |
-| MySQL | 8.0 | 容器内 `localhost:3306` |
-
-镜像 `nexus-market/dev-env:1.0` 由 [docker/Dockerfile](docker/Dockerfile) 构建，**不含项目代码**——代码以卷挂载到容器 `/workspace`，改代码即时生效，无需重建镜像。
-
-### 1. 启动环境
+机器上**只需要 Docker**：JDK 17 / Maven / Node 24 / MySQL 8 **全部在那个开发环境镜像里**，
+宿主机无需安装任何依赖，也不用手动建库导表。
 
 ```bash
-cd docker
-docker compose up -d --build      # 已有镜像时直接复用，不重复构建
+bash start.sh        # macOS / Linux
+```
+```bat
+start.bat            ::  Windows:双击
 ```
 
-容器启动即自动完成：初始化并启动 MySQL → 建库 `template_v3` → **仅首次建库时**按依赖顺序导入 `sql/schema.sql` → `sql/chat.sql` → `sql/migration-2026-08-08-phase1.sql` → `sql/migrations/V1…V5`（导入命令必带 `--default-character-set=utf8mb4`，否则中文双重编码乱码；导入完在 MySQL 数据卷里写 `${DATA_DIR}/.schema-imported` 标记，`docker compose down -v` 清卷后才会重导）→ `AUTO_START=true` 自动拉起前后端。
-
-> ⚠️ **已有库不会被自动升级**：新增迁移（如 `V4__constraints_and_indexes.sql` 的唯一键 + 索引、`V5__money_decimal_round2.sql` 的金额 `DECIMAL(10,2)`）需手工执行，回滚脚本在 `sql/migrations/rollback/`。
-
-> ⏱️ **首次启动约 5–10 分钟**（下载 Maven 依赖 + 编译）；之后依赖缓存在 `m2cache` / `node_modules` 卷里，启动为秒级。
-
-启动顺序是**先起后端、轮询 `:1000` 等它就绪、再起前端**：Vite 约 1s 就绪而后端要 ~60s，若并行启动，页面会撞上「后端未监听 → Vite 代理 500」的窗口期。
-
-### 2. 验证后端已启动
-
-```bash
-docker exec nexus-dev tail -f /var/log/backend.log
-# 出现 Tomcat started on port 1000 (http) with context path '' 即成功
-
-curl -X POST http://localhost:1000/common/login \
-  -H "Content-Type: application/json" \
-  -d '{"type":"ADMIN","username":"admin","password":"123456"}'
-# 返回 code=200，data 为 JWT 字符串
-```
-
-### 3. 访问
+脚本会：拉取环境镜像（拉不到才退回本机构建）→ 起容器 → 建库并导入全部 SQL → 恢复前端依赖 →
+拉起前后端 → **等到服务真的开始应答**（收到 HTTP 响应，不是「端口能连上」）→
+用 `admin` 账号验证一次登录 → 打开浏览器。首次约 **2 分钟**。
 
 | 服务 | 地址 |
 |------|------|
-| 前端页面 | http://localhost:5173 |
-| 后端 API | http://localhost:1000 |
-| MySQL | 容器内 `127.0.0.1:3306`（库 `template_v3`，root / `123456`） |
-
-> 上表的 `123456` 是 `docker-compose.yml` 的**本地默认值**,只对「没有 `docker/.env` 的全新 clone」成立。
-> 若你建过 `docker/.env`(模板见 `docker/.env.example`),口令以那份文件为准;容器的 3306 只绑回环,不对外。
+| 前端页面 | <http://localhost:5173> |
+| 后端 API | <http://localhost:1000> |
+| MySQL | `127.0.0.1:3306`（库 `template_v3`，root / `123456`） |
 
 演示账号（密码均 `123456`）：管理员 `admin` / 买家 `user1` / 商家 `shop1`。
 
-### 4. 常用命令
-
-```bash
-docker compose exec dev bash                       # 进入容器
-docker compose exec dev bash -lc "cd /workspace && mvn spring-boot:run"  # 手动启动/重启后端
-docker compose exec dev bash -lc "cd /workspace && mvn -B clean test"    # 后端测试闸门（H2，无需 MySQL）
-docker compose exec dev bash -lc "cd /workspace/web && npm run dev:lan"  # 前端（容器内必须 dev:lan，见下）
-docker exec nexus-dev tail -f /var/log/frontend.log                      # 前端日志
-docker compose down                                # 停止
-docker compose down -v                             # 停止并清空数据库（下次启动重新导脚本）
-```
-
-- **后端不热重载**：改 Java 代码后必须重启 `mvn spring-boot:run`（先停掉旧进程，否则 1000 端口被占）。
-- **跑测试前先停 dev 后端**：否则 `maven-clean-plugin` 删不掉被运行中 JVM 占用的 `target/`（报 `Failed to clean project: Failed to delete /workspace/target`）。停法：`docker exec nexus-dev bash -lc 'pkill -f "[s]pring-boot:run"; pkill -f "[P]rojectManagement"'`（中括号写法是必须的，否则 `pkill` 会匹配到自己所在的命令行）。
-- **前端热更新**：Vite 自动 HMR，无需重启。
-- **容器内前端必须用 `npm run dev:lan`（= `vite --host`），不要用 `npm run dev`**：`dev` 按 `vite.config.ts` 绑 `127.0.0.1`（这在**裸机**上是对的），但 Docker 的 `5173:5173` 是把流量 DNAT 到容器 **eth0**、不是容器内回环，只绑回环则宿主机打不开 `:5173`（curl 拿 `Empty reply`/exit 52）。`--host` 仍监听回环，容器内 Playwright 的 `localhost:5173` 不受影响。
-  ⚠️ 另外：`5173` 的映射是裸的 `"5173:5173"`（Docker 默认绑 `0.0.0.0`），与 `--host` 叠加后 dev server **对局域网开放**；`1000` 同理。只想给本机用就给这两条映射加 `127.0.0.1:` 前缀（代价：手机/其它机器不能再访问）。
-- 端口映射、环境变量、常见问题见 [docker/README.md](docker/README.md)。
-
----
-
-## 💻 裸机开发（可选，需自行安装环境）
-
-不想用 Docker 时，可在宿主机直接跑。需先安装：
-
-- **JDK**: 17 或更高版本
-- **Maven**: 3.6 或更高版本
-- **Node.js**: 18 或更高（Vite 5 的 `engines` 要求 `^18 || >=20`）
-- **MySQL**: 8.0 或更高版本
-- **IDE**: IntelliJ IDEA, VS Code (推荐)
-
-### 1. 数据库配置
-
-1.  启动你的 MySQL 数据库服务。
-2.  创建一个新的数据库，例如 `template_v3`。
-3.  按依赖顺序导入数据库脚本：`sql/schema.sql`（基础表 + admin 种子）→ `sql/chat.sql` → `sql/migration-2026-08-08-phase1.sql` → `sql/migrations/V1…V5`，导入时带 `--default-character-set=utf8mb4`（否则中文乱码）。**只导 `schema.sql` 是不够的**——唯一键/索引与金额 `DECIMAL(10,2)` 都在 `sql/migrations/` 里，缺了会在并发写入和金额精度上出问题。
-4.  **配置数据库连接**。⚠️ 注意**改哪个文件**:
-
-    - 应用默认激活 `dev` profile,而 **`application-dev.yaml` 里的同名项优先于 `application.yaml`**。
-      所以你改 `src/main/resources/application.yaml` 会被 dev 的值覆盖、**不生效**。
-    - 推荐做法:设环境变量 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD`
-      (基配置就是读这三个,dev 的同名项也读它);或直接改 **`src/main/resources/application-dev.yaml`**。
-    - 另外两项也是必填,不设会启动失败:`RESET_PASSWORD`、`JWT_SECRET`
-      (详见 [docs/DEVELOPMENT.md §2.4](docs/DEVELOPMENT.md);dev profile 下这两项有本地默认值,故本地跑通常无需设置)。
-
-### 2. 启动后端服务
-
-1.  使用 IntelliJ IDEA 打开项目根目录。
-2.  等待 Maven 自动下载所有依赖。
-3.  找到启动类 `src/main/java/com/project/platform/ProjectManagement.java`。
-4.  右键点击并选择 `Run 'ProjectManagement.main()'`。
-5.  如果控制台输出 `Tomcat started on port(s): 1000 (http)`，则表示后端服务启动成功。
-
-### 3. 启动前端服务
-
-1.  在 VS Code 中打开 `web/` 目录，或在终端中进入该目录。
-2.  安装项目依赖：
-
-    ```bash
-    npm install
-    ```
-
-3.  启动开发服务器：
-
-    ```bash
-    npm run dev
-    ```
-
-4.  前端服务默认会运行在 `http://localhost:5173` (具体端口以终端输出为准)。
-5.  打开浏览器访问该地址，即可看到项目登录页面。
+> 📖 **完整说明见 [docs/STARTUP.md](docs/STARTUP.md)**：常用命令、环境变量、不用脚本的手动方式、
+> 不用 Docker 的裸机启动、故障排查表、端口与安全注意事项，都在那一份里。
+>
+> 只记三条就够：`bash start.sh` 启动 · `bash stop.sh` 停止（数据保留）· `bash dev.sh reset` 清库重来。
 
 ---
 

@@ -2,6 +2,9 @@
 
 > 新加入项目从这里开始:启动环境、mock 机制、代码规范、测试策略、常见坑。
 
+> ⚠️ **多 Agent / CI 并行开发时,先读 [§9 并行开发与构建期陷阱](#9-并行开发与构建期陷阱)**。
+> 该节记录了一个会把「单个 XML 语法错误」伪装成「147 个测试失败」的坑,排查成本极高。
+
 ## 1. 环境准备
 
 | 依赖 | 版本 | 说明 |
@@ -195,3 +198,70 @@ docker exec nexus-dev bash -lc '
 | 迁移 SQL 中文变乱码 | 导入含中文的 SQL 必须加 `--default-character-set=utf8mb4`;mysql CLI 默认 latin1,会把 UTF-8 字节双重编码入库 |
 | 构建报 `cannot find symbol: method setId(...)`,且指向 Lombok 类的 getter/setter | **IDE 污染了 `target/classes`**。本机 IDE 的 Lombok 注解处理器会崩(`NoClassDefFoundError: lombok.javac.Javac`),但仍把**不含 Lombok 生成方法**的 class 写进 `target/classes`;这些 class 比源码新,Maven 增量编译据此判定「已最新」而不重编。判别式:`javap -p target/classes/.../X.class \| grep -c getXxx` 为 0 即被污染。处理:`mvn clean test` 重来,并**不要去改源码**。同时,IDE 里大量主源码「错误」(`PageVO.getList()` undefined 等)是同一个原因造成的**假报错**,以 Maven 结果为准 |
 | 离线构建失败 `mockito-bom:pom:5.11.0 (absent)` | `pom.xml` 覆盖了 Spring Boot 托管的 mockito 版本,见 4.4 节。联网构建一次即写入 `.m2` 缓存,之后可离线 |
+
+## 8. 脚本与命令的实际情况
+
+> 以下为实测结果,与直觉不符,**照抄本文档的命令,不要凭直觉写脚本**。
+
+| 想做的事 | ❌ 错的命令 | ✅ 正确的 |
+|---|---|---|
+| 构建前端 | `npm run build` | **`npm run build-prod`**(`build` 脚本不存在,会 `Missing script`) |
+| 后端测试 | `mvn test` | `mvn` 可能**不在 PATH**(只在 `~/.m2/wrapper/dists/.../bin/mvn.cmd`),先确认路径再调用 |
+| 判定"服务起来了" | 端口能连上 | **必须收到真实 HTTP 响应**;见下方「陈旧 class 陷阱」 |
+
+## 9. 并行开发与构建期陷阱
+
+> 本节记录 2026-09 多 Agent 并行改造期间实际踩到的坑,全部有具体症状与判别方法。
+
+### 9.1 🔴 一个 XML 语法错误 = 147 个测试失败
+
+**症状**:`mvn clean test` 报 163 个测试中 **147 个 ERROR**,错误信息是
+`ApplicationContext failure exceeded`,看不出跟 XML 有关。
+
+**真因**:`src/main/resources/mapper/AnalyticsMapper.xml:151` 写了裸 `<`
+(本应是 `&lt;`,出现在 `WHEN product.price < 50 THEN 0` 这类条件里)
+→ SAXParseException → `SqlSessionFactory` 建不起来 → Spring 上下文加载失败
+→ **后续所有测试连带阵亡**。
+
+**为什么难查**:Mapper XML 在 **Spring 上下文加载期**解析,
+所以**症状在测试层、病因在 XML 层**,距离极远。照着测试失败去查测试,永远查不到。
+
+**处置**:
+1. 每次编译后跑一次 **Mapper XML 良构性校验**(当前 14 个文件,全部应良构)
+2. 见到大面积 context 加载失败,**先验证 XML 良构性**,不要直接按业务缺陷排查
+3. 写 Mapper XML 时,条件里的 `<` `>` 记得转义
+
+### 9.2 🔴 陈旧 class 伪装成"服务正常"
+
+**症状**:后端 API 一直在响应,但源码其实**编译不过**。容器跑的是更早编译好的 class,
+所以端口是绿的。**任何人重启容器都会直接失败。**
+
+**判别**:重启前先做一次干净编译(不复用任何旧 class)。
+
+**因此**:**"服务正常"在并行开发中不构成任何证据。**
+报告服务状态必须附带:本次编译是否成功 + 运行的 class 来自哪次编译。
+
+### 9.3 并行写同一工作区的竞态
+
+多个执行单元同时读写 `src/` / `sql/` 时,构建可能读到**写了一半的文件**。
+两种典型表现:
+
+- 读 XML 半截文件 → 见 9.1
+- 读 `schema-h2.sql` 半截文件 → 测试报"表不存在"
+
+**处置**:
+- 大批量改动前先让其他执行单元暂缓
+- 或**把源码复制到独立目录再编译/测试**(本项目已验证可行)
+- 评估基线时用 `git archive HEAD` 导出到干净检出,而非在脏工作区跑
+
+> 注:第 4 节"跑测试前先停 dev 后端"只解决了**运行期占用**(`maven-clean-plugin`
+> 删不掉被 JVM 占用的 `target/`),**没有解决编译期读半截文件**。两者都要做。
+
+### 9.4 H2 与 MySQL 的索引命名冲突(改 H2 schema 前必读)
+
+- MySQL 索引名**表内唯一**;H2 是 **schema 内全局唯一**
+- 照抄 MySQL 的 `idx_user_id`(它挂在 5 张表上)会让第 2~5 张表
+  **静默拿不到索引** —— **不报错、不告警**
+- 本项目约定:H2 侧索引一律加表前缀(`idx_ord_user_id`)
+
+详见 [TASK-000/03-DATABASE.md](TASK-000/03-DATABASE.md) §6.4。
