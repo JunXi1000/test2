@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li><b>数字→字符串的强转不再 500</b>:既有实现用 `(String) data.get("phone")` 取手机号,
  *       请求体传数字会 `ClassCastException` → 500;换成 `String` 字段后由反序列化器强转。
  *       这是**结构改动自带的收益**,无需新增校验。</li>
- *   <li><b>原有校验与状态码不变</b>:例如结算项不合法仍是 409、优惠码为空是 400。</li>
+ *   <li><b>原有校验与状态码不变</b>:例如结算项不合法是 <b>400</b>(入参不合法,与「业务冲突」409 区分开)、优惠码为空是 400。</li>
  * </ol>
  */
 class RequestShapeTest extends BaseControllerTest {
@@ -46,7 +46,8 @@ class RequestShapeTest extends BaseControllerTest {
         body.put("items", List.of(item));
         body.put("zip", "10001");          // 后端不读的字段
 
-        MvcResult result = post("/checkout/summary", "", body)
+        // C0:该端点已移出白名单 ⇒ 必须带 token(此前用 "" 按匿名契约发,现在会 401)
+        MvcResult result = post("/checkout/summary", userToken(), body)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andReturn();
@@ -62,7 +63,7 @@ class RequestShapeTest extends BaseControllerTest {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", 1);                  // 无 productId,回落 id
         item.put("quantity", 1);
-        MvcResult result = post("/checkout/summary", "", Map.of("items", List.of(item)))
+        MvcResult result = post("/checkout/summary", userToken(), Map.of("items", List.of(item)))
                 .andExpect(status().isOk())
                 .andReturn();
         JSONObject data = JSONObject.parseObject(
@@ -71,13 +72,13 @@ class RequestShapeTest extends BaseControllerTest {
     }
 
     @Test
-    @DisplayName("结算摘要:商品项不合法仍是 409(既有语义未变)")
-    void summaryInvalidItemStillConflict() throws Exception {
+    @DisplayName("结算摘要:商品项不合法 → 400(入参不合法,与「业务冲突」409 区分开)")
+    void summaryInvalidItemIsBadRequest() throws Exception {
         Map<String, Object> bad = new LinkedHashMap<>();
         bad.put("quantity", 0);             // 无商品 id 且数量为 0
-        post("/checkout/summary", "", Map.of("items", List.of(bad)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(409));
+        post("/checkout/summary", userToken(), Map.of("items", List.of(bad)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
     }
 
     @Test

@@ -2,9 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import ProductCard from '@/components/ui/card/ProductCard.vue'
 import Button from '@/components/ui/button/Button.vue'
-import { getProducts, getRecommendedProducts, type ProductQuery } from '@/api/modules/product'
+import { getProducts, type ProductQuery } from '@/api/modules/product'
 import type { Product } from '@/types/product'
-import { useBrowsingHistory } from '@/stores/browsingHistory'
 import { useToast } from '@/composables/useToast'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
@@ -12,12 +11,11 @@ import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { useRouter } from 'vue-router'
 import { debounce } from 'lodash-es'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
-import { Search, ListFilter, RefreshCw, Loader2, X, Sparkles } from 'lucide-vue-next'
+import { Search, ListFilter, RefreshCw, Loader2, X } from 'lucide-vue-next'
 import { useScroll, useEventListener } from '@vueuse/core'
 
 const router = useRouter()
 const { toast } = useToast()
-const browsingHistory = useBrowsingHistory()
 const containerRef = ref<HTMLElement | null>(null)
 const carouselRef = ref<any>(null)
 const activeCarouselIndex = ref(0)
@@ -314,16 +312,13 @@ const debouncedFetch = debounce(() => fetchProducts(true), 300)
 
 onMounted(() => {
   fetchProducts(true)
-  loadRecommended()
 })
 watch(activeCategory, () => {
   fetchProducts(true)
-  loadRecommended()
 })
 watch(sortBy, () => fetchProducts(true))
 watch(searchQuery, () => {
   debouncedFetch()
-  loadRecommended()
 })
 
 onBeforeUnmount(() => {
@@ -332,26 +327,6 @@ onBeforeUnmount(() => {
 })
 
 const filteredProducts = computed(() => productsRef.value)
-
-// ── Recommended for You（阶段 1.1）──
-const recommendedRef = ref<Product[]>([])
-const recommendedLoading = ref(false)
-
-async function loadRecommended() {
-  // 只在首页默认流且未搜索时展示推荐
-  if (activeCategory.value !== 'All' || searchQuery.value) {
-    recommendedRef.value = []
-    return
-  }
-  recommendedLoading.value = true
-  try {
-    recommendedRef.value = await getRecommendedProducts(6)
-  } catch {
-    recommendedRef.value = []
-  } finally {
-    recommendedLoading.value = false
-  }
-}
 </script>
 
 <template>
@@ -643,77 +618,15 @@ async function loadRecommended() {
         </template>
       </div>
 
-      <!-- Recommended for You（阶段 1.1） -->
-      <div
-        v-if="!searchQuery && activeCategory === 'All' && recommendedRef.length > 0"
-        class="mt-12 pt-8 border-t border-border"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold flex items-center gap-2">
-            <Sparkles class="w-5 h-5 text-primary" />
-            {{ $t('home.recommended') }}
-          </h2>
-          <span class="text-xs text-muted-foreground" v-html="$t('home.recommendedHint')"></span>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <div v-for="i in 6" v-if="recommendedLoading" :key="`rec-${i}`" class="col-span-1">
-            <div class="space-y-3 p-3 border rounded-2xl bg-card h-full">
-              <Skeleton class="aspect-video w-full rounded-lg" />
-              <Skeleton class="h-4 w-3/4" />
-              <Skeleton class="h-4 w-1/2" />
-            </div>
-          </div>
-          <ProductCard
-            v-for="p in recommendedRef"
-            :key="`rec-${p.id}`"
-            :product="p"
-            class="h-full"
-          />
-        </div>
-      </div>
+      <!-- Recommended for You（阶段 1.1）已于 2026-10 整块移除：
+           它挂在首页最底部（主列表 + Load More 之后），商品一多就永远滚不到，
+           加上"推荐"在只有个位数商品时只是把主列表又重复一遍，故删。
+           同时移除了 recommendedRef / recommendedLoading / loadRecommended()。 -->
 
-      <!-- Recently Viewed -->
-      <div
-        v-if="browsingHistory.recentItems.length > 0 && !searchQuery"
-        class="mt-12 pt-8 border-t border-border"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold">{{ $t('home.recentlyViewed') }}</h2>
-          <button
-            class="text-xs text-muted-foreground hover:text-destructive transition-colors"
-            @click="browsingHistory.clearHistory()"
-          >
-            {{ $t('home.clearHistory') }}
-          </button>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-          <div
-            v-for="item in browsingHistory.recentItems"
-            :key="item.id"
-            class="group rounded-xl border border-border bg-card overflow-hidden cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5"
-            @click="router.push(`/product/${item.id}`)"
-          >
-            <div class="aspect-square bg-secondary overflow-hidden">
-              <img
-                :src="item.image"
-                :alt="item.title"
-                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                loading="lazy"
-              />
-            </div>
-            <div class="p-2.5">
-              <h4
-                class="text-xs font-semibold line-clamp-1 group-hover:text-primary transition-colors"
-              >
-                {{ item.title }}
-              </h4>
-              <p class="text-sm font-bold text-primary mt-0.5">
-                ${{ Number(item.price).toLocaleString('en-US') }}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- Recently Viewed 同样于 2026-10 移除：位置在首页最底部，商品一多就没人看得到。
+           注意**记录行为没有删**：ProductDetail.vue 仍调用 browsingHistory.recordView()，
+           store 原样保留（只是 recentItems 目前没有界面在读了）。 -->
+
     </div>
   </div>
 </template>

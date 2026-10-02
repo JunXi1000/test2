@@ -55,6 +55,18 @@
             <if test="query.remark != null and query.remark.trim() != ''">
                 AND product_order.remark LIKE CONCAT('%', #{query.remark}, '%')
             </if>
+            <!--
+              跨列模糊搜索(管理端/商家端订单列表的 ?q=)。
+              此前两个端点都接收 q 却从不使用,搜索框完全失效;
+              这里按「订单号 / 商品名 / 收货人 / 收货电话」四列匹配。
+              注意 product_name 取自 product_order 冗余列,故无需再关联 product。
+            -->
+            <if test="query.keyword != null and query.keyword.trim() != ''">
+                AND (product_order.order_no LIKE CONCAT('%', #{query.keyword}, '%')
+                OR product_order.product_name LIKE CONCAT('%', #{query.keyword}, '%')
+                OR product_order.consignee_name LIKE CONCAT('%', #{query.keyword}, '%')
+                OR product_order.consignee_tel LIKE CONCAT('%', #{query.keyword}, '%'))
+            </if>
         </where>
     </sql>
 

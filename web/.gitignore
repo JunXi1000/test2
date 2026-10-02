@@ -31,7 +31,12 @@ coverage
 
 
 yarn.lock
-package-lock.json
+# ⚠️ package-lock.json 曾被这里排除,那是个 bug —— 它是 npm ci 与镜像预热层的**输入**:
+#   · 本地:docker/entrypoint.sh 用它的 sha256 校验镜像里预热的 node_modules 是否对得上;
+#   · 构建:docker/Dockerfile 的 `COPY web/package-lock.jso[n]` 与 `npm ci` 都依赖它。
+#   被排除的后果是**全新 clone 后 docker build 直接失败在 COPY 那一步**、npm ci 也无从谈起,
+#   故改为**入库**。
+#   yarn.lock 仍排除:本项目是 npm 单包(见 CLAUDE.md 第 1 节)。
 
 # 测试产物 / 本地工具配置(不入库)
 test-results

@@ -9,6 +9,7 @@ import {
 } from '@/api/modules/merchantDashboard'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 
 const {
   isLoading: isLoadingRef,
@@ -59,6 +60,13 @@ onMounted(fetchStats)
       </div>
     </div>
     <ErrorState v-else-if="errorRef" :message="errorRef" @retry="fetchStats" />
+    <EmptyState
+      v-else-if="stats.length === 0"
+      :icon="Package"
+      title="No store statistics yet"
+      description="Your sales metrics appear once orders come in."
+      class="rounded-xl border border-dashed border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900"
+    />
     <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 lg:grid-cols-4">
       <div
         v-for="stat in stats"
@@ -86,6 +94,13 @@ onMounted(fetchStats)
         <span class="text-xs text-zinc-500">Action needed</span>
       </div>
       <div class="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        <EmptyState
+          v-if="lowStock.length === 0"
+          :icon="Package"
+          title="Stock levels are healthy"
+          description="No products are running low right now."
+          variant="compact"
+        />
         <div
           v-for="p in lowStock"
           :key="p.sku"

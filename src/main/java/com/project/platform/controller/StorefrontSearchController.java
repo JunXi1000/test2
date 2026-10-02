@@ -3,6 +3,7 @@ package com.project.platform.controller;
 import com.project.platform.dto.SearchRequestDTO;
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductType;
+import com.project.platform.service.AnalyticsService;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.ProductTypeService;
 import com.project.platform.vo.PageVO;
@@ -20,11 +21,20 @@ import java.util.stream.Collectors;
 @RequestMapping("/search")
 public class StorefrontSearchController {
 
+    /** 热门搜索词条数,与前端 mock 分支的展示宽度一致 */
+    private static final int TRENDING_LIMIT = 10;
+
+    /** 相关搜索词条数 */
+    private static final int RELATED_LIMIT = 5;
+
     @Resource
     private ProductService productService;
 
     @Resource
     private ProductTypeService productTypeService;
+
+    @Resource
+    private AnalyticsService analyticsService;
 
     /**
      * GET /search/suggestions?q=
@@ -50,12 +60,14 @@ public class StorefrontSearchController {
 
     /**
      * GET /search/trending
+     *
+     * <p>2026-09-27 起为真实数据(此前是硬编码的 "Phone"/"Laptop"/… 固定数组):
+     * 按 {@code product.sales_volume} 取销量最高的商品名,不足时用分类名补齐。
+     * 库里完全没有销量数据时返回空列表 —— 前端渲染成空,不报错,也不编数据。
      */
     @GetMapping("/trending")
     public ResponseVO<List<String>> getTrending() {
-        // Return trending keywords — placeholder
-        List<String> trending = Arrays.asList("Phone", "Laptop", "Headphones", "Watch", "Camera");
-        return ResponseVO.ok(trending);
+        return ResponseVO.ok(analyticsService.trendingKeywords(TRENDING_LIMIT));
     }
 
     /**
@@ -70,12 +82,9 @@ public class StorefrontSearchController {
         }
         String category = params.getCategory();
         if (category != null && !category.isEmpty()) {
-            List<ProductType> types = productTypeService.list();
-            for (ProductType pt : types) {
-                if (pt.getName().equals(category)) {
-                    query.put("productTypeId", pt.getId());
-                    break;
-                }
+            Integer typeId = resolveTypeId(category);
+            if (typeId != null) {
+                query.put("productTypeId", typeId);
             }
         }
 
@@ -96,11 +105,28 @@ public class StorefrontSearchController {
             products.sort(Comparator.comparing(Product::getPrice).reversed());
         }
 
+        Integer typeId = params.getCategory() == null || params.getCategory().isEmpty()
+                ? null
+                : resolveTypeId(params.getCategory());
+
         Map<String, Object> result = new HashMap<>();
         result.put("products", products);
         result.put("total", pageVO.getTotal());
-        result.put("facets", new HashMap<>());
-        result.put("relatedSearches", Collections.emptyList());
+        // 2026-09-27:facets 由 AnalyticsService 真实聚合(此前恒为空 Map)。
+        // 口径与前端 SearchResults.facets 一致:categories / priceRanges / ratings。
+        result.put("facets", analyticsService.searchFacets(q, typeId));
+        result.put("relatedSearches",
+                analyticsService.relatedSearches(q, products, RELATED_LIMIT));
         return ResponseVO.ok(result);
+    }
+
+    /** 分类名 → 分类 id;找不到返回 null(此时不按分类过滤,而不是静默返回空集) */
+    private Integer resolveTypeId(String category) {
+        for (ProductType pt : productTypeService.list()) {
+            if (pt.getName().equals(category)) {
+                return pt.getId();
+            }
+        }
+        return null;
     }
 }

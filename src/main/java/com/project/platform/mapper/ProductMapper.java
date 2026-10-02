@@ -30,6 +30,15 @@ public interface ProductMapper {
     @Select("SELECT * FROM product order by sales_volume desc limit #{size}")
     List<Product> salesVolumeTop(int size);
 
+    /**
+     * 单店销量榜(公开店铺页的 featuredProducts)。
+     *
+     * <p>不能用「全局销量榜再按 shop_id 过滤」代替:那样小店铺会因为挤不进全局前 N 而恒返回空。
+     * 销量并列时按 id 升序,保证同一店铺每次返回的顺序稳定。
+     */
+    @Select("SELECT * FROM product WHERE shop_id = #{shopId} ORDER BY sales_volume DESC, id ASC LIMIT #{size}")
+    List<Product> salesVolumeTopByShopId(@Param("shopId") Integer shopId, @Param("size") int size);
+
     @Select("select product_type.name  as name,product.count  as value from  product_type  join ( SELECT product_type_id,COUNT(*) AS count FROM product  GROUP BY product_type_id)  product on product.product_type_id=product_type.id")
     List<ValueNameVO> selectTypeCount();
 

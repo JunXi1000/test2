@@ -35,6 +35,23 @@ export interface ReviewItem {
 }
 
 /**
+ * 内置种子评价 —— **已下线（2026-10-01）**。
+ *
+ * 下线原因：这 8 条是凭空编造的（含伪造的买家用户名/头像/日期、伪造的 `verified:
+ * true`「已验证购买」标识、伪造的商家回复）。它**没有 mock 守卫** —— 原先
+ * `useProductReviews.ts` 无条件调用 `getSeedReviews()`，因此生产构建（`VITE_USE_MOCK=false`）
+ * 也会把它们渲染给消费者。在多数电商平台，「已验证购买」属平台担保的事实性陈述，
+ * 伪造它构成虚假宣传而非体验缺陷。
+ *
+ * 常量本身**刻意保留**而非删除：
+ *   1. 注释 L40-41 约定「id ≤ 100 是种子、> 100 是用户新写」的分界，`useProductReviews`
+ *      的 `migratedSeedIds` 仍在读这个区间，删常量要连带改判定；
+ *   2. 后端 `GET/POST /products/:id/reviews` 落地后，这里应整体删除。
+ * 处置原则是「宁可空态，不要假数据」—— 见 `docs/TASK-000/05-FRONTEND-MAP.md` §2 F1。
+ */
+const SEED_REVIEWS_ENABLED = false
+
+/**
  * 内置种子评价。
  *
  * id 全部 ≤ 100 —— 用户新写的评价用 `Date.now()`，恒大于 100。这个分界是后面
@@ -150,10 +167,15 @@ const SEED_REVIEWS: ReviewItem[] = [
 /**
  * 返回种子评价的**深副本**。
  *
+ * `SEED_REVIEWS_ENABLED` 为 false 时恒返回空数组 —— 评价区因此渲染诚实空态，
+ * 而不是 8 条编造评价。调用方（`useProductReviews`）的合并、水合、迁移逻辑全部
+ * 原样保留，后端评价端点就位后把开关翻回 true 即可恢复。
+ *
  * 必须复制：调用方会把种子的回复 push 进去（当用户回复一条种子评价时，代码会把种子
  * 克隆进用户区再改）。直接给引用的话，改动会跨商品、跨会话泄漏。
  */
 export function getSeedReviews(): ReviewItem[] {
+  if (!SEED_REVIEWS_ENABLED) return []
   return SEED_REVIEWS.map((r) => ({
     ...r,
     images: r.images ? [...r.images] : undefined,

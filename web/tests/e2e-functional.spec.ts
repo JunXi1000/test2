@@ -234,7 +234,10 @@ test.describe('Wishlist Persistence', () => {
 // 3. Browsing History — Real tracking
 // ═══════════════════════════════════════════════════════════════════
 test.describe('Browsing History', () => {
-  test('Recently Viewed updates after visiting product', async ({ page }) => {
+  // 首页的「Recently Viewed」板块已于 2026-10 移除（位置太靠底、商品一多就看不到），
+  // 所以这里不再断言那个板块，只断言**记录行为**仍在：ProductDetail.vue 依旧
+  // 调 browsingHistory.recordView()，数据落在 localStorage 里。
+  test('访问商品会把浏览记录写进 localStorage', async ({ page }) => {
     // Visit a product detail
     await gotoApp(page, '/product/1')
     await page.waitForTimeout(2000)
@@ -242,13 +245,6 @@ test.describe('Browsing History', () => {
     // Visit another product
     await gotoApp(page, '/product/5')
     await page.waitForTimeout(2000)
-
-    // Go to homepage — should show Recently Viewed
-    await gotoApp(page, '/')
-    await page.waitForTimeout(2000)
-
-    const recentlyViewed = page.locator('text=Recently Viewed')
-    await expect(recentlyViewed.first()).toBeVisible({ timeout: 5000 })
 
     // Check localStorage has browsing history (key is user-scoped, e.g. _guest)
     const historyCount = await page.evaluate(() => {
@@ -597,17 +593,8 @@ test.describe('Recommendations (Phase 1.1)', () => {
     expect(after).toBeGreaterThan(before)
   })
 
-  test('Homepage shows "Recommended for You" based on browsing history', async ({ page }) => {
-    // Visit a product to build browsing history preference
-    await gotoApp(page, '/product/1')
-    await page.waitForTimeout(2000)
-    // Go home — Recommended section should appear
-    await gotoApp(page, '/')
-    await page.waitForTimeout(2500)
-    const heading = page.locator('h2:has-text("Recommended for You")')
-    await expect(heading).toBeVisible({ timeout: 8000 })
-  })
-
+  // ⚠️ 2026-10：首页「Recommended for You」板块已整块移除（位置太靠底、商品一多就看不到），
+  // 原本那条 "Homepage shows Recommended for You" 用例随之删除。
   test('Checkout review shows "Complete the Look" add-on recommendations', async ({ page }) => {
     // 加购 → 结算 → 填完收货与支付信息，停在 Review 步
     await prepareCheckout(page)
@@ -770,10 +757,24 @@ test.describe('Followed Stores (Phase 1.2)', () => {
 })
 
 // ═══════════════════════════════════════════════════════════════════
-// 4. Tiered Discounts (Phase 3.2) — 满减自动匹配 + 优惠码叠加
+// 4. Cart 金额口径（TASK-002 BLK-5 回归）— 购物车只展示服务端口径，不再自算运费/税/满减
 // ═══════════════════════════════════════════════════════════════════
-test.describe('Tiered Discounts (Phase 3.2)', () => {
-  // 读取 scoped 购物车 key 中的 subtotal 总和
+/**
+ * 本块的前身是「Tiered Discounts (Phase 3.2)」两条用例，它们断言的**已经不存在**了：
+ *   - `text=/Tiered discount/i` 行:购物车不再画满减档位(后端契约里已无 shipping/tax/满减);
+ *   - `Add $X more to save $Y` / `Max tier unlocked` 进度提示:随档位引擎一并从本页移除。
+ *
+ * 为什么必须改而不是删:它们是「购物车金额与结算/实扣不一致」这条缺陷(BLK-5,实测
+ * 购物车 689.52 ≠ 实扣 694.00)在 e2e 层的**唯一锚点**。现在金额统一走
+ * `useCartSummary → /checkout/summary`,所以新锚点要断言的是「差额来源已消失」+
+ * 「显示的 Total 等于小计」。
+ *
+ * ⚠️ e2e 一律跑在 mock 模式(playwright.config 的 storageState 注入 RUNTIME_USE_MOCK),
+ * 所以这里验证的是**前端自身口径**;真实 HTTP 层的一致性由
+ * `src/test/.../CheckoutMoneyConsistencyTest` 与 TASK-002-D 的容器回归负责。
+ */
+test.describe('Cart Money Consistency (TASK-002 BLK-5)', () => {
+  /** 读 scoped 购物车 key 的小计总额 */
   const readCartSubtotal = (page: any) =>
     page.evaluate(() => {
       let total = 0
@@ -789,7 +790,7 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
       return total
     })
 
-  // 从首页真实加购直到 subtotal 达到门槛
+  /** 从首页真实加购直到 subtotal 达到门槛 */
   const addUntilSubtotal = async (page: any, target: number) => {
     let subtotal = 0
     for (let i = 0; i < 12 && subtotal < target; i++) {
@@ -801,63 +802,171 @@ test.describe('Tiered Discounts (Phase 3.2)', () => {
     expect(subtotal).toBeGreaterThanOrEqual(target)
   }
 
-  test('Cart auto-applies tiered discount and shows next-tier progress hint', async ({ page }) => {
+  /** mock 模式 + 登录态:金额走服务端口径(useCartSummary)的必要前提 */
+  const seedLoggedIn = (page: any) =>
+    page.addInitScript(() => {
+      localStorage.setItem('RUNTIME_USE_MOCK', 'true')
+      localStorage.setItem(
+        'nexus_user',
+        JSON.stringify({ id: '1', name: 'E2E User', email: 'e2e@example.com', role: 'user' }),
+      )
+      localStorage.setItem('nexus_token', 'e2e-token')
+    })
+
+  /** 取摘要面板里的 Total 数字 */
+  const readDisplayedTotal = async (page: any) => {
+    const text = await page
+      .locator('xpath=//span[normalize-space(text())="Total"]/following-sibling::span')
+      .first()
+      .textContent()
+    return parseFloat((text || '').replace(/[^0-9.]/g, ''))
+  }
+
+  test('登录态:购物车不再出现运费/税行,且 Total 等于权威小计', async ({ page }) => {
+    await seedLoggedIn(page)
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
     await addUntilSubtotal(page, 100)
 
     await gotoApp(page, '/cart')
-    await page.waitForTimeout(1500)
+    await page.waitForTimeout(2000)
 
-    // Tiered discount row visible in summary
-    await expect(page.locator('text=/Tiered discount/i').first()).toBeVisible({ timeout: 6000 })
+    // ── 不可变量 1:运费行与税行必须**不存在** ──
+    // 后端契约已把 shipping/tax 移出(`/checkout/summary` 不再返回),页面也不得再自算这两行。
+    // 钉"行不存在"而不是钉某个数字:数字会随种子/小计变化,行存在与否才是契约。
+    await expect(page.locator('text=/^Tax \\(/i')).toHaveCount(0)
+    await expect(page.locator('text=/^Shipping$/i')).toHaveCount(0)
 
-    // Progress hint visible: "Add $X more to save $Y" OR "Max tier unlocked"
-    const hint = page.locator('text=/more to save|Max tier unlocked/i').first()
-    await expect(hint).toBeVisible({ timeout: 6000 })
-
-    // Discount amount displayed should be > 0 (value span next to the label)
-    const discountValue = page
-      .locator('xpath=//span[normalize-space(text())="Tiered discount"]/following-sibling::span')
-      .first()
-    await expect(discountValue).toBeVisible({ timeout: 5000 })
-    const discountText = (await discountValue.textContent()) || ''
-    expect(discountText).toContain('- $')
+    // ── 不可变量 2:显示的 Total == 权威小计 ──
+    // 注意**不要**断言 `text=/Tiered discount/i` 为 0:那是实现细节的字面量 ——
+    // 券生效时该行**仍会**渲染(标签沿用,值取 `summary.discount`)。钉它会把
+    // "券可用"这件正确的事判成失败(本用例在重启前的旧版本就栽在这里)。
+    const subtotal = await readCartSubtotal(page)
+    expect(subtotal).toBeGreaterThan(0)
+    // 本用例未加券 ⇒ 服务端 discount=0 ⇒ 权威总额 == 小计;页面显示的 Total 必须与之一致
+    expect(await readDisplayedTotal(page)).toBeCloseTo(subtotal, 2)
   })
 
-  test('Promo code stacks on top of tiered discount', async ({ page }) => {
+  test('匿名态:不给一个可能不对的应付总额,改为提示登录后可见', async ({ page }) => {
     await gotoApp(page, '/')
     await page.waitForTimeout(2000)
     await addUntilSubtotal(page, 100)
 
     await gotoApp(page, '/cart')
+    await page.waitForTimeout(2000)
+
+    // C0 把 /checkout/summary 移出白名单 ⇒ 匿名拿不到服务端金额(401 还会清会话跳登录)。
+    // 页面的正确处置是**不展示**一个自算的应付总额,而是明确提示登录 —— 比显示假数字诚实。
+    await expect(page.locator('text=/^Tax \\(/i')).toHaveCount(0)
+    await expect(page.locator('text=/^Shipping$/i')).toHaveCount(0)
+    await expect(
+      page.locator('text=/Sign in to see your order total/i').first(),
+    ).toBeVisible({ timeout: 6000 })
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// 5. 结算页内加购 → 摘要必须重取（TASK-002 BLK-I1）
+// ═══════════════════════════════════════════════════════════════════
+/**
+ * BLK-I1：结算页里从「Complete the Look」加购之后，**摘要没有重取** ⇒ 页面 Total 还是旧值，
+ * 而实扣按新 items 算 ⇒ 显示额 ≠ 实扣。这是 BLK-4(券) → BLK-E1(积分) → **BLK-I1(items)**
+ * 同一条"两条口径分叉"线上的第三处。
+ *
+ * 修复方式是**价格签名 watcher**（`id:quantity:price`）—— 绑在**数据**上而不是"加购"这个动作上，
+ * 所以将来多出改数量/删行/服务端改价也一并覆盖。
+ *
+ * 本用例钉的不可变量：**加购后显示的 Total 必须等于"新 items 的服务端总额"**。
+ * 在 mock 模式下"服务端总额"就是 `calculateOrderSummary` 对同一份 items 的结果，
+ * 且推荐位默认全选 ⇒ 期望值 = 加购前 Total + 被加入商品的单价之和。
+ *
+ * ⚠️ 导航纪律：`mock + 登录态`下购物车只存在**内存**里（`stores/cart.ts` 的持久化条件两头不落地），
+ * 所以从首页到购物车到结算**必须点站内链接**，`page.goto` 会整页重载把内存态丢掉。
+ *
+ * 「空列表/跳转时不得有多余重取」（本任务的第 3 条判据）在**单测**层覆盖更准 —— 见
+ * `useOrderSummary.spec.ts` 的 `清空 items 不重取`、`一次动作里加多件只发一次请求`、
+ * `服务端回拉替换 items 不会重复请求`、`收尾闸门不重取`；mock 模式下页面不发 HTTP，
+ * e2e 无从计数请求，故不在这一层重复。
+ */
+test.describe('Checkout Add-to-Order refetch (TASK-002 BLK-I1)', () => {
+  /** 读结算页摘要里的 Total 数字 */
+  const readCheckoutTotal = async (page: any) => {
+    const text = await page
+      .locator('xpath=//span[normalize-space(text())="Total"]/following-sibling::span')
+      .first()
+      .textContent()
+    return parseFloat((text || '').replace(/[^0-9.]/g, ''))
+  }
+
+  test('结算页内加购后：Total 随之变化，且等于新 items 的服务端总额', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('RUNTIME_USE_MOCK', 'true')
+      localStorage.setItem(
+        'nexus_user',
+        JSON.stringify({ id: '1', name: 'E2E User', email: 'e2e@example.com', role: 'user' }),
+      )
+      localStorage.setItem('nexus_token', 'e2e-token')
+    })
+
+    // ① 首页加购一件 → 点链接进购物车 → 进结算（全程 SPA，保住内存购物车）
+    await gotoApp(page, '/')
+    await page.waitForTimeout(1500)
+    await page.locator('.group.relative.rounded-2xl button:has-text("Add")').first().click()
+    await page.waitForTimeout(700)
+
+    await page.locator('a[href="/cart"]').first().click()
+    await page.waitForURL(/\/cart$/, { timeout: 15_000 })
+    await page.waitForTimeout(800)
+    await page.getByTestId('cart-checkout').click()
+    await page.waitForURL(/\/checkout/, { timeout: 15_000 })
     await page.waitForTimeout(1500)
 
-    // Capture total before promo
-    await expect(page.locator('text=/Tiered discount/i').first()).toBeVisible({ timeout: 6000 })
-    const totalBeforeText = await page
-      .locator('xpath=//span[text()="Total"]/following-sibling::span')
-      .first()
-      .textContent()
-    const totalBefore = parseFloat((totalBeforeText || '').replace(/[^0-9.]/g, ''))
+    // ② 推进到 **Step 3 Review** —— 推荐位只在复核步渲染（`v-if="currentStep === 2"`）。
+    //    先填收货信息（Step 1 → 2），再填卡（Step 2 → 3）。注意第 3 步的 next 按钮已变成
+    //    "Pay $xx"，**不能再点**，否则会真的发起支付。
+    await page.getByTestId('checkout-email').fill('e2e@example.com')
+    await page.getByTestId('checkout-first-name').fill('Alex')
+    await page.getByTestId('checkout-last-name').fill('Doe')
+    await page.getByTestId('checkout-address').fill('1 Infinite Loop')
+    await page.getByTestId('checkout-city').fill('Cupertino')
+    await page.getByTestId('checkout-zip').fill('95014')
+    await page.getByTestId('checkout-next').click()
+    await expect(page.getByTestId('checkout-card-number')).toBeVisible({ timeout: 10_000 })
 
-    // Apply SAVE10 promo code
-    const promoInput = page.locator('input[placeholder="Promo code"]').first()
-    await promoInput.fill('SAVE10')
-    await page.locator('button:has-text("Apply")').first().click()
-    await page.waitForTimeout(1000)
+    await page.getByTestId('checkout-card-number').fill('4242424242424242')
+    await page.getByTestId('checkout-expiry').fill('1230')
+    await page.getByTestId('checkout-cvc').fill('123')
+    await page.getByTestId('checkout-next').click()
+    // 已到复核步：按钮文案变成 "Pay ..."（**只断言、不再点击**）
+    await expect(page.getByTestId('checkout-next')).toContainText(/Pay/i, { timeout: 10_000 })
+    await page.waitForTimeout(1500)
 
-    // Both discount rows should show
-    await expect(page.locator('text=/Tiered discount/i').first()).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('text=/Promo code/i').first()).toBeVisible({ timeout: 5000 })
+    const totalBefore = await readCheckoutTotal(page)
+    expect(totalBefore).toBeGreaterThan(0)
 
-    // Total should have dropped further
-    const totalAfterText = await page
-      .locator('xpath=//span[text()="Total"]/following-sibling::span')
-      .first()
-      .textContent()
-    const totalAfter = parseFloat((totalAfterText || '').replace(/[^0-9.]/g, ''))
-    expect(totalAfter).toBeLessThan(totalBefore)
+    // ③ 推荐位（Complete the Look）默认全选 ⇒ 记录即将加入的单价之和
+    const ctl = page.getByTestId('complete-the-look')
+    await expect(ctl).toBeVisible({ timeout: 10_000 })
+    const cardTexts: string[] = await ctl.locator('button[data-ctl-id]').allTextContents()
+    expect(cardTexts.length).toBeGreaterThan(0)
+    // ⚠️ `formatPrice` 会加千分位（$1,056.00）—— 必须**先去掉逗号**再解析，
+    // 否则 `$1,056.00` 会被正则截成 `$1`（本用例第一版就栽在这里：算出的期望值偏小）。
+    const addedSum = cardTexts
+      .map((t) => t.replace(/,/g, '').match(/\$([0-9]+(?:\.[0-9]+)?)/))
+      .filter((m): m is RegExpMatchArray => !!m)
+      .reduce((s, m) => s + parseFloat(m[1]), 0)
+    expect(addedSum).toBeGreaterThan(0)
+
+    // ④ 加购
+    await ctl.getByRole('button', { name: /Add to Order/ }).click()
+    await page.waitForTimeout(2500)
+
+    // ⑤ 不可变量：Total 必须变成「旧值 + 新加入的小计」，而不是停在旧值
+    const totalAfter = await readCheckoutTotal(page)
+    expect(totalAfter, '加购后 Total 必须变化 —— 停在旧值就是 BLK-I1 复发').toBeGreaterThan(
+      totalBefore,
+    )
+    expect(totalAfter).toBeCloseTo(totalBefore + addedSum, 2)
   })
 })
 

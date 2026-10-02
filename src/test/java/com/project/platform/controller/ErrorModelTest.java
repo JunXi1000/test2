@@ -100,10 +100,11 @@ class ErrorModelTest extends BaseControllerTest {
     @Test
     @DisplayName("结算摘要缺/空 items → 400(此前静默返回 subtotal=0 的 200)")
     void summaryEmptyItemsIsBadRequest() throws Exception {
-        post("/checkout/summary", "", Map.of())
+        // C0:该端点已移出白名单 ⇒ 必须带 token(此前按匿名契约发,现在会 401)
+        post("/checkout/summary", userToken(), Map.of())
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400));
-        post("/checkout/summary", "", Map.of("items", List.of()))
+        post("/checkout/summary", userToken(), Map.of("items", List.of()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(400));
     }
@@ -144,9 +145,12 @@ class ErrorModelTest extends BaseControllerTest {
     @Test
     @DisplayName("优惠码缺 subtotal → 400(此前下游乘法 NPE → 500)")
     void promoMissingSubtotalIsBadRequest() throws Exception {
-        post("/checkout/promo", "", Map.of("code", "WELCOME10"))
+        // C0/C2:该端点已移出白名单且要求登录 + 已领券 ⇒ 必须带 token,
+        // 否则拿到的会是 401,测不到「缺 subtotal」这条入参校验。
+        post("/checkout/promo", userToken(), Map.of("code", "WELCOME10"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(400));
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.msg").value("结算金额不能为空"));
     }
 
     @Test

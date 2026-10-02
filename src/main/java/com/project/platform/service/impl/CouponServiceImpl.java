@@ -7,6 +7,7 @@ import com.project.platform.mapper.CouponMapper;
 import com.project.platform.mapper.UserCouponMapper;
 import com.project.platform.service.CouponService;
 import jakarta.annotation.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -92,37 +93,110 @@ public class CouponServiceImpl implements CouponService {
         couponMapper.incrementClaimed(couponId);
     }
 
+    /**
+     * 结算用优惠码校验(严格模式)。
+     *
+     * <p>2026-09-27 TASK-000-I 之前的实现有三个信任缺陷:
+     * <ol>
+     *   <li><b>不查归属</b> —— 任何人输入任意码都能拿到折扣(券是发给某个用户的,不是公开发的);</li>
+     *   <li><b>未命中返回 null</b> —— 控制器据此回退到硬编码的 SAVE10(10%)/VIP15(15%),
+     *       那两个码在 coupon 表里根本不存在,无券记录、无核销、可无限次重复使用;</li>
+     *   <li><b>不封顶</b> —— 固定额券用 {@code value.min(subtotal)} 截断是对的,
+     *       但百分比券的上限只看 {@code maxDiscount},没兜住「优惠 > 小计」。</li>
+     * </ol>
+     * 现在改为:查不到 / 下架 / 过期 / 未领取 / 已使用 → 一律 400;金额一律封顶为小计。
+     */
     @Override
-    public Map<String, Object> applyByCode(String code, BigDecimal subtotal) {
+    public Map<String, Object> applyByCode(String code, BigDecimal subtotal, Integer userId) {
+        // 匿名无法证明「这张券是我的」。两个入口(/checkout/summary、/checkout/promo)
+        // 自 2026-10-02 起都需登录(拦截器先行拦成 401),正常路径到不了这里;
+        // 本判断保留为**服务层兜底**:即使有人把端点在别处直连进来,也不放行无归属的折扣。
+        if (userId == null) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "请先登录后再使用优惠码");
+        }
         Coupon coupon = couponMapper.selectByCode(code);
+        // selectByCode 的 WHERE 已过滤 status='enabled' 与 expires_at,故「下架/过期」与
+        // 「不存在」到这里都是 null —— 对用户而言都是「这个码不能用」,不必区分。
         if (coupon == null) {
-            return null;
+            throw new CustomException(HttpStatus.BAD_REQUEST, "优惠码无效");
+        }
+        // 归属:必须是**这个用户自己领的**券
+        UserCoupon userCoupon = userCouponMapper.selectByUserAndCoupon(userId, coupon.getId());
+        if (userCoupon == null) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "您未领取该优惠券");
+        }
+        if ("used".equals(userCoupon.getStatus())) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "该优惠券已使用");
         }
         BigDecimal minOrder = coupon.getMinOrder() == null ? BigDecimal.ZERO : coupon.getMinOrder();
         if (subtotal != null && subtotal.compareTo(minOrder) < 0) {
+            // 沿用既有的 409(门槛不达标是「冲突」而非「码无效」),不改动既有错误码契约
             throw new CustomException("未达到优惠券使用门槛");
         }
-        BigDecimal discount;
-        if ("percent".equals(coupon.getType())) {
-            // value 存百分数(value=10 表示 9 折)。除法必须显式给 scale 与舍入方式,
-            // 否则 BigDecimal 会因除不尽抛 ArithmeticException
-            BigDecimal rate = coupon.getValue() == null ? BigDecimal.ZERO : coupon.getValue();
-            discount = subtotal.multiply(rate).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-            if (coupon.getMaxDiscount() != null && discount.compareTo(coupon.getMaxDiscount()) > 0) {
-                discount = coupon.getMaxDiscount();
-            }
-        } else if ("fixed".equals(coupon.getType())) {
-            BigDecimal value = coupon.getValue() == null ? BigDecimal.ZERO : coupon.getValue();
-            discount = value.min(subtotal);
-        } else {
-            discount = BigDecimal.ZERO;
-        }
+
+        BigDecimal discount = computeDiscount(coupon, subtotal).setScale(2, RoundingMode.HALF_UP);
         Map<String, Object> result = new HashMap<>();
         result.put("code", coupon.getCode());
         result.put("title", coupon.getTitle());
         result.put("type", coupon.getType());
-        result.put("discount", discount.setScale(2, RoundingMode.HALF_UP));
+        result.put("discount", discount);
+        // couponId 用**券码**而非主键:前端 StorefrontPromoTest 与结算页都按 code 消费它,
+        // 换成数字 id 属契约变更。
+        result.put("couponId", coupon.getCode());
+        // 下面两个是**服务端内部用**,不进 HTTP 响应:
+        //   couponIdRaw —— 核销时要按主键查 user_coupon
+        //   userCouponId —— 条件 UPDATE 抢占时的主键
+        result.put("couponIdRaw", coupon.getId());
+        result.put("userCouponId", userCoupon.getId());
         return result;
+    }
+
+    /**
+     * 核销:条件 UPDATE 抢占。受影响行数为 0 = 该券已被另一个并发请求核销掉。
+     *
+     * <p>用条件更新而不是「先查状态 → 判断 → 再写」:后者在无锁下两个执行流可以同时
+     * 通过判断,同一张券被核销两次(等于优惠被重复享受)。
+     */
+    @Override
+    public void redeem(Integer userId, Integer couponId) {
+        if (userId == null || couponId == null) {
+            throw new CustomException(HttpStatus.BAD_REQUEST, "请先登录后再使用优惠码");
+        }
+        UserCoupon userCoupon = userCouponMapper.selectByUserAndCoupon(userId, couponId);
+        if (userCoupon == null || userCouponMapper.markUsedIfUnused(userCoupon.getId()) == 0) {
+            throw new CustomException(HttpStatus.CONFLICT, "该优惠券已被使用,请勿重复提交");
+        }
+    }
+
+    /**
+     * 按券型算折扣额。
+     *
+     * <p><b>最后一道防线:优惠额封顶为小计</b>(返回 {@code min(discount, subtotal)} 且非负)。
+     * 没有它,构造一张「高百分比 + 无 maxDiscount」的券就能算出负数订单金额,
+     * 进而让退款 / 余额扣减出现反向加钱。
+     */
+    private BigDecimal computeDiscount(Coupon coupon, BigDecimal subtotal) {
+        if (subtotal == null || subtotal.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal value = coupon.getValue() == null ? BigDecimal.ZERO : coupon.getValue();
+        BigDecimal discount;
+        if ("percent".equals(coupon.getType())) {
+            // value 存百分数(value=10 表示 9 折)。除法必须显式给 scale 与舍入方式,
+            // 否则 BigDecimal 会因除不尽抛 ArithmeticException
+            discount = subtotal.multiply(value).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+            if (coupon.getMaxDiscount() != null && discount.compareTo(coupon.getMaxDiscount()) > 0) {
+                discount = coupon.getMaxDiscount();
+            }
+        } else if ("fixed".equals(coupon.getType())) {
+            discount = value;
+        } else {
+            discount = BigDecimal.ZERO;   // shipping 等未知券型不产生金额优惠
+        }
+        if (discount.compareTo(subtotal) > 0) {
+            discount = subtotal;          // 封顶:优惠额不得超过商品小计
+        }
+        return discount.signum() < 0 ? BigDecimal.ZERO : discount;
     }
 
     private Map<String, Object> toCatalogMap(Coupon c) {

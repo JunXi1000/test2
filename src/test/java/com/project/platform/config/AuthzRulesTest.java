@@ -82,6 +82,10 @@ class AuthzRulesTest {
                 "/returns", "/stock-alerts/mine", "/stock-alerts/1",
                 "/shoppingCart/page", "/shoppingCart/add", "/shoppingCart/update", "/shoppingCart/delBatch",
                 "/payments/create", "/payments/confirm", "/payments/complete-action",
+                // C0(TASK-002):结算摘要与优惠码从白名单移入本表。
+                // 二者此前在白名单里 ⇒ 拦截器不跑 ⇒ CurrentUserThreadLocal 为空 ⇒
+                // 券入口对所有人恒 400(TASK-001 BLK-1)。移入规则表后:匿名 401、USER 200。
+                "/checkout/summary", "/checkout/promo",
                 "/common/currentUser", "/common/updatePassword", "/file/upload"
         };
         for (String path : userPaths) {
@@ -130,6 +134,12 @@ class AuthzRulesTest {
         assertFalse(AuthzRules.isAllowed("/orders", AuthzRules.ADMIN));
         assertFalse(AuthzRules.isAllowed("/shoppingCart/add", AuthzRules.SHOP));
         assertFalse(AuthzRules.isAllowed("/addresses", AuthzRules.ADMIN));
+        // 结算摘要/优惠码(C0 移入本表)只给买家:商家与管理端不得算别人的折扣
+        assertFalse(AuthzRules.isAllowed("/checkout/summary", AuthzRules.SHOP),
+                "结算摘要不该对商家放行 —— 它按 token 里的 userId 算券折扣");
+        assertFalse(AuthzRules.isAllowed("/checkout/summary", AuthzRules.ADMIN));
+        assertFalse(AuthzRules.isAllowed("/checkout/promo", AuthzRules.SHOP));
+        assertFalse(AuthzRules.isAllowed("/checkout/promo", AuthzRules.ADMIN));
         // 会话只有买卖双方(管理端没有消息页)
         assertFalse(AuthzRules.isAllowed("/chat/conversations", AuthzRules.ADMIN));
     }

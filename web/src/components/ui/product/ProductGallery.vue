@@ -5,7 +5,7 @@ import { useProductGallery } from '@/composables/useProductGallery'
 import type { Product } from '@/types/product'
 
 /**
- * 商品详情页左栏：主图 / 演示视频混排、缩略图条、悬停放大镜、外链图失败转移。
+ * 商品详情页左栏：主图 / 演示视频混排、缩略图条、悬停放大镜、图片失败兜底。
  *
  * 从 `ProductDetail.vue` 整块搬出来（162 行模板 + 约 260 行脚本）。判据仍是依赖而不是行数：
  * 这块用到的三十来个标识符里，块外只有 `product`、`selectedColor` 与「分享」这一个动作，
@@ -16,10 +16,8 @@ import type { Product } from '@/types/product'
  * - 分享：`shareProduct` 要用 navigator.share + toast，是页面的动作。
  */
 const props = defineProps<{
-  /** 用于给 picsum 备选图生成稳定 seed */
-  productId: number
   product: Product | null
-  /** 选中颜色影响主图（变体图优先），也进失败转移链的 slot key */
+  /** 选中颜色影响主图（变体图优先），也进失败兜底的 slot key */
   selectedColor: { name: string; value?: string } | null
 }>()
 
@@ -61,7 +59,6 @@ const {
   onHeroMouseMove,
   onHeroMouseLeave,
 } = useProductGallery({
-  productId: props.productId,
   product: computed(() => props.product),
   selectedColor: computed(() => props.selectedColor),
   heroCardRef,

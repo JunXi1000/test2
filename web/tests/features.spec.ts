@@ -90,17 +90,11 @@ test.describe('Phase 2: Wishlist Persistence', () => {
 
 // ═══════════════════════════════════════════════════════════════════
 // Phase 3: Browsing History
+//   ⚠️ 2026-10：首页的「Recently Viewed」板块已整块移除（位置太靠底，商品一多就没人看得到），
+//   所以原本断言那个板块可见的用例一并删除。
+//   **记录行为**仍在（ProductDetail.vue 依旧调 browsingHistory.recordView()），
+//   该行为由 tests/e2e-functional.spec.ts 的「Browsing History」用例覆盖，此处不重复。
 // ═══════════════════════════════════════════════════════════════════
-test.describe('Phase 3: Browsing History', () => {
-  test('Visiting product records browsing history', async ({ page }) => {
-    await gotoApp(page, '/product/1')
-    await page.waitForTimeout(1500)
-    await gotoApp(page, '/')
-    await page.waitForTimeout(1500)
-    const recentlyViewed = page.locator('text=Recently Viewed').first()
-    await expect(recentlyViewed).toBeVisible({ timeout: 5000 })
-  })
-})
 
 // ═══════════════════════════════════════════════════════════════════
 // Phase 4: Product Compare
@@ -286,12 +280,38 @@ test.describe('Core Pages', () => {
     })
   })
 
-  test('Checkout page redirects to cart when empty', async ({ page }) => {
+  /**
+   * B3 之后 `/checkout` 挂上了 `meta:{requiresAuth:true, role:'user'}`，于是
+   * 「匿名访问」与「登录后空车」是**两条不同的不变式**，必须分开钉：
+   *   - 匿名 → 认证守卫先拦截，落到登录页并带 `redirect=/checkout`；
+   *   - 登录 + 空车 → 走到页面自己的空车守卫，落到 `/cart`。
+   * 旧版只有后者且没 seed 登录态，B3 之后它会先撞上认证守卫而失效。
+   */
+  test('Checkout page redirects anonymous visitors to login with redirect param', async ({
+    page,
+  }) => {
     await gotoApp(page, '/checkout')
     await page.waitForTimeout(2000)
-    // Checkout redirects to /cart when cart is empty (correct guard behavior)
+    // 认证守卫必须把归属信息带上，否则登录后回不到结算页
     const url = page.url()
-    expect(url).toMatch(/\/cart/)
+    expect(url).toMatch(/\/login/)
+    expect(decodeURIComponent(url)).toMatch(/redirect=.*\/checkout/)
+  })
+
+  test('Checkout page redirects to cart when empty (logged in)', async ({ page }) => {
+    // 先注入登录态，才能走到页面自己的空车守卫 —— 而不是被认证守卫送到登录页
+    await page.addInitScript(() => {
+      localStorage.setItem('RUNTIME_USE_MOCK', 'true')
+      localStorage.setItem(
+        'nexus_user',
+        JSON.stringify({ id: '1', name: 'E2E User', email: 'e2e@example.com', role: 'user' }),
+      )
+      localStorage.setItem('nexus_token', 'e2e-token')
+    })
+    await gotoApp(page, '/checkout')
+    await page.waitForTimeout(2500)
+    // 空车 → 回购物车（原本的守卫行为，B3 未改）
+    expect(page.url()).toMatch(/\/cart/)
   })
 
   test('Login page renders', async ({ page }) => {

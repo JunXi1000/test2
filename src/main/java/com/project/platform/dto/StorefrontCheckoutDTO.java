@@ -14,6 +14,17 @@ public class StorefrontCheckoutDTO {
     private String remark;
     /** 支付渠道:card=模拟银行卡 / balance=钱包余额 */
     private String channel;
+    /**
+     * 可选的优惠码(2026-09-27 新增)。
+     *
+     * <p>结算页把同一个码同时发给 {@code /checkout/summary} 与 {@code /payments/create},
+     * 两处走**同一套** {@code CouponService.applyByCode} 校验,因此
+     * {@code summary.total == payments/create 的 amount} 恒成立(AC-04.2)。
+     *
+     * <p>与 summary 不同的是:这里会真正<b>核销</b>该券(条件 UPDATE 抢占,
+     * 同一张券并发核销只能成功一次)。整个落单在同一事务内,核销失败会连同订单一起回滚。
+     */
+    private String code;
     /** 下单成功后要清除的购物车行 id(服务端按当前用户过滤,防御横向越权) */
     private List<Integer> cartItemIds;
 
@@ -139,6 +150,14 @@ public class StorefrontCheckoutDTO {
 
     public void setChannel(String channel) {
         this.channel = channel;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public List<Integer> getCartItemIds() {

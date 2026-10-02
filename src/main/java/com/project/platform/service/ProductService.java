@@ -29,6 +29,9 @@ public interface ProductService {
 
     List<Product> salesVolumeTop(int size);
 
+    /** 单店销量榜(公开店铺页 featuredProducts);size 收敛到 1~100 */
+    List<Product> salesVolumeTopByShopId(Integer shopId, int size);
+
     List<Product> recommended(Integer size);
 
 

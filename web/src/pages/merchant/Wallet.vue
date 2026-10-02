@@ -13,10 +13,32 @@
             Available balance and funds still clearing.
           </p>
         </div>
-        <el-button type="primary" class="w-full shrink-0 sm:w-auto" @click="dialogVisible = true">
+        <el-button
+          type="primary"
+          class="w-full shrink-0 sm:w-auto"
+          :disabled="!isWriteImplemented"
+          :title="notImplementedHint"
+          @click="dialogVisible = true"
+        >
           <ArrowUpRightIcon class="mr-2 h-4 w-4" />
           Withdraw Funds
         </el-button>
+      </div>
+
+      <!-- 诚实降级（TASK-002 / C5）：POST /merchant/wallet/withdraw 已改为 501。
+           此前收下 {amount, destinationId} 却什么都不写就返回 200，商家看到「提现已受理」
+           而余额/流水/钱三处都没有变化。所以真实后端下入口直接禁用并说明。
+           余额与流水**仍可读**（GET /merchant/wallet 未降级），页面照常展示。 -->
+      <div
+        v-if="!isWriteImplemented"
+        data-testid="wallet-withdraw-unavailable"
+        class="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300/90"
+      >
+        <AlertTriangleIcon class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Withdrawals are not available yet: this endpoint is not implemented on the server, so a
+          request would not move any money. You can still review your balance and transactions below.
+        </span>
       </div>
 
       <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -30,7 +52,8 @@
             <div
               class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
             >
-              ${{ wallet.balance.toFixed(2) }}
+              <Skeleton v-if="walletLoading" class="h-8 w-32" />
+              <template v-else>${{ wallet.balance.toFixed(2) }}</template>
             </div>
           </div>
           <div class="shrink-0 rounded-full bg-white/90 p-3 shadow-sm dark:bg-zinc-800/80">
@@ -48,7 +71,8 @@
             <div
               class="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-3xl"
             >
-              ${{ wallet.pending.toFixed(2) }}
+              <Skeleton v-if="walletLoading" class="h-8 w-32" />
+              <template v-else>${{ wallet.pending.toFixed(2) }}</template>
             </div>
           </div>
           <div class="shrink-0 rounded-full bg-white/90 p-3 shadow-sm dark:bg-zinc-800/80">
@@ -79,9 +103,14 @@
         </el-button>
       </div>
 
-      <div class="overflow-x-auto">
+      <!-- 取数失败与表格互斥：错误时整块换成 ErrorState，而不是照常渲染成空表。
+           钱包页尤其不能静默失败 —— 空表 + $0.00 会被读成「余额真的没了」。 -->
+      <ErrorState v-if="errorRef" :message="errorRef" class="m-4" @retry="refreshData" />
+
+      <div v-else class="overflow-x-auto">
         <el-table
           :data="pagedTransactions"
+          v-loading="walletLoading"
           class="merchant-wallet-table"
           stripe
           style="width: 100%"
@@ -132,6 +161,17 @@
               </div>
             </template>
           </el-table-column>
+
+          <!-- EP 内建空态是英文 "No Data"，与全站的 图标+标题+说明 不一致。
+               用 class 去掉自带的虚线边框：表格外壳本身已有边框，套两层会变成盒中盒。 -->
+          <template #empty>
+            <EmptyState
+              :icon="PayoutWalletIcon"
+              title="No transactions yet"
+              description="Completed sales and withdrawals will appear here."
+              class="border-0 py-10"
+            />
+          </template>
         </el-table>
       </div>
       <div
@@ -361,6 +401,8 @@
             type="primary"
             class="w-full sm:min-w-[200px]"
             :loading="submitting"
+            :disabled="!isWriteImplemented"
+            :title="notImplementedHint"
             @click="handleWithdraw"
           >
             Withdraw ${{ withdrawAmount.toFixed(2) }}
@@ -387,6 +429,7 @@ import {
   ShieldCheck,
   Plus,
   Trash2,
+  AlertTriangle as AlertTriangleIcon,
 } from 'lucide-vue-next'
 import { ElMessageBox } from 'element-plus'
 import {
@@ -397,9 +440,18 @@ import {
   type WalletTransaction,
 } from '@/api/modules/merchantWallet'
 import { useToast } from '@/composables/useToast'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useWriteEndpointAvailability } from '@/composables/useWriteEndpointAvailability'
+import { toErrorMessage } from '@/utils/error'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
+import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import { isValidEmail } from '@/utils/validators'
 
 const { toast } = useToast()
+// POST /merchant/wallet/withdraw 已按契约 C5 改为 501：真实后端下入口禁用 + 说明。
+// 余额与流水照常可读（GET 未降级），所以页面仍然有内容可看。
+const { isWriteImplemented, notImplementedHint } = useWriteEndpointAvailability()
 
 /** Payout method; user-saved entries include `kind` and masked `label`. */
 type UserPayoutKind = 'bank' | 'paypal' | 'wise'
@@ -728,21 +780,30 @@ function addUserPayoutMethod() {
 }
 
 // Methods
+// 取数失败改由 ErrorState 承担持久态。原先这一页只有刷新按钮的 walletRefreshing，
+// 失败仅弹一个瞬时 toast —— 在钱包页这是最危险的一种静默失败：余额区停在初始值 $0.00、
+// 流水表渲染成空表，toast 一消失用户看到的就是「我余额是 0」而不是「加载失败」，
+// 而且没有任何重试入口。现与 merchant/Orders.vue 保持同一形状。
+const {
+  isLoading: walletLoading,
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load wallet data',
+  // 首帧会先渲染出 $0.00 与空表，再被骨架屏顶掉 —— 闪一帧更糟，所以预置为加载中
+  initialLoading: true,
+})
+
 const loadData = async (options?: { showRefreshing?: boolean }) => {
   if (options?.showRefreshing) walletRefreshing.value = true
-  try {
+  const result = await run(async () => {
     const [balanceData, txData] = await Promise.all([getWalletBalance(), getTransactions()])
     wallet.value = balanceData
     transactions.value = txData
     txPage.value = 1
-  } catch {
-    // 本页没有 error ref / isLoading，只有刷新按钮的 walletRefreshing，
-    // 所以这一处**刻意不迁 useAsyncTask**（迁了要么多一个没人读的 loading，要么形状更绕）。
-    // 只统一提示通道。见 REFACTOR_PLAN 阶段 4a 的「有意排除」一节。
-    toast({ title: 'Failed to load wallet data', variant: 'destructive' })
-  } finally {
-    if (options?.showRefreshing) walletRefreshing.value = false
-  }
+  })
+  if (!result.ok) console.error('Wallet load failed:', result.cause)
+  if (options?.showRefreshing) walletRefreshing.value = false
 }
 
 const refreshData = () => {
@@ -765,6 +826,15 @@ const getTypeTag = (type: string) => {
 }
 
 const handleWithdraw = async () => {
+  // 双保险：入口与提交按钮在未实现时都已禁用，这里再挡一次
+  if (!isWriteImplemented.value) {
+    toast({
+      title: 'Withdrawals are not available yet',
+      description: notImplementedHint.value,
+      variant: 'warning',
+    })
+    return
+  }
   if (withdrawAmount.value > wallet.value.balance) {
     toast({ title: 'Insufficient funds', variant: 'warning' })
     return
@@ -786,8 +856,14 @@ const handleWithdraw = async () => {
     toast({ title: 'Withdrawal request submitted', variant: 'success' })
     dialogVisible.value = false
     loadData()
-  } catch (error) {
-    toast({ title: 'Withdrawal failed', variant: 'destructive' })
+  } catch (e) {
+    // 不再吞掉原因：后端 501 的具体说明（"提现尚未实现…"）就在 e.message 里，
+    // 用 toErrorMessage 折算给用户，而不是一句看不出所以然的 'Withdrawal failed'
+    toast({
+      title: 'Withdrawal failed',
+      description: toErrorMessage(e, 'Please try again.'),
+      variant: 'destructive',
+    })
   } finally {
     submitting.value = false
   }

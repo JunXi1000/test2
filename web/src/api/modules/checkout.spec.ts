@@ -111,60 +111,78 @@ describe('applyPromoCode：优惠码（mock 分支）', () => {
 })
 
 describe('calculateOrderSummary：mock 分支的算账规则', () => {
-  it('subtotal / shipping / tax / discount / total 逐项可复算', async () => {
-    await expect(calculateOrderSummary([cartItem(50)])).resolves.toEqual({
+  it('无 code：subtotal 按数量累加，discount=0，total=subtotal，且**不含运费/税**', async () => {
+    await expect(calculateOrderSummary([cartItem(50)], '', '')).resolves.toEqual({
       subtotal: 50,
-      shipping: 12,
-      tax: 4,
       discount: 0,
-      total: 66,
+      discountCode: null,
+      total: 50,
     })
+    // 契约里 shipping/tax 已移除：mock 也不能再造一个 12 元运费出来
+    const summary = await calculateOrderSummary([], '', '')
+    expect(summary).not.toHaveProperty('shipping')
+    expect(summary).not.toHaveProperty('tax')
   })
 
-  it('金额按 quantity 累加', async () => {
-    // 30 * 3 = 90，未达 100 门槛
-    await expect(calculateOrderSummary([cartItem(30, 3)])).resolves.toEqual({
+  it('金额按 quantity 累加（无运费断崖，也不再有满减档位）', async () => {
+    // 30 × 3 = 90：旧 mock 会在这里加 12 运费 + 7.2 税，现在一律不造
+    await expect(calculateOrderSummary([cartItem(30, 3)], '', '')).resolves.toEqual({
       subtotal: 90,
-      shipping: 12,
-      tax: 7.2,
       discount: 0,
-      total: 109.2,
+      discountCode: null,
+      total: 90,
     })
   })
 
-  it('运费门槛是严格大于 200——恰好 200 仍收运费', async () => {
-    const at200 = await calculateOrderSummary([cartItem(200)])
-    const at201 = await calculateOrderSummary([cartItem(201)])
-    expect(at200.shipping).toBe(12)
-    expect(at201.shipping).toBe(0)
-  })
-
-  it('多买 1 元反而少付 10.92 元（运费断崖与满减档叠加）', async () => {
-    const at200 = await calculateOrderSummary([cartItem(200)])
-    const at201 = await calculateOrderSummary([cartItem(201)])
-    expect(at200.total).toBe(198)
-    expect(at201.total).toBe(187.08)
-    // 两个"已四舍五入到分"的数相减，结果本身并不精确（198 - 187.08 = 10.919999…）
-    expect(at200.total - at201.total).toBeCloseTo(10.92, 2)
-  })
-
-  it('最高档账单', async () => {
-    await expect(calculateOrderSummary([cartItem(300)])).resolves.toEqual({
-      subtotal: 300,
-      shipping: 0,
-      tax: 24,
-      discount: 60,
-      total: 264,
+  it('带 code：减免与服务端同源（券码规则只有一份），total = subtotal − discount', async () => {
+    // SAVE10 = 10% off；100 × 10% = 10
+    await expect(calculateOrderSummary([cartItem(100)], '', 'SAVE10')).resolves.toEqual({
+      subtotal: 100,
+      discount: 10,
+      discountCode: 'SAVE10',
+      total: 90,
     })
   })
 
-  it('空购物车仍会算出一笔 12 元运费（调用方需自行拦空车）', async () => {
-    await expect(calculateOrderSummary([])).resolves.toEqual({
-      subtotal: 0,
-      shipping: 12,
-      tax: 0,
+  it('带 code：大小写不敏感，回传大写券码', async () => {
+    const summary = await calculateOrderSummary([cartItem(100)], '', 'save10')
+    expect(summary.discount).toBe(10)
+    expect(summary.discountCode).toBe('SAVE10')
+  })
+
+  it('空白码等价于没用券（后端 isBlank 同样按未传处理）', async () => {
+    await expect(calculateOrderSummary([cartItem(100)], '', '   ')).resolves.toEqual({
+      subtotal: 100,
       discount: 0,
-      total: 12,
+      discountCode: null,
+      total: 100,
+    })
+  })
+
+  it('未知券码：折扣 0 而不是抛错（真实分支是 400，调用方先经 applyPromoCode 挡住）', async () => {
+    await expect(calculateOrderSummary([cartItem(100)], '', 'NOPE')).resolves.toEqual({
+      subtotal: 100,
+      discount: 0,
+      discountCode: null,
+      total: 100,
+    })
+  })
+
+  it('subtotal 为零时不会出现负数 total（封顶：discount ≤ subtotal）', async () => {
+    const summary = await calculateOrderSummary([], '', 'SAVE10')
+    expect(summary.subtotal).toBe(0)
+    expect(summary.discount).toBe(0)
+    expect(summary.total).toBe(0)
+  })
+
+  it('zip 是 string（不再是 undefined）：购物车传空串、结算页传邮编，两个调用点请求形状一致（MIN-E2）', async () => {
+    // 后端忽略 zip（`CheckoutSummaryDTO` 只认 items/code），这里钉的是**签名与调用形状**：
+    // 传空串与传真实邮编都必须算得出同一个 subtotal，且都不抛。
+    await expect(calculateOrderSummary([cartItem(50)], '', '')).resolves.toMatchObject({
+      subtotal: 50,
+    })
+    await expect(calculateOrderSummary([cartItem(50)], '94103', '')).resolves.toMatchObject({
+      subtotal: 50,
     })
   })
 })
@@ -219,5 +237,25 @@ describe('券码规则：可领取的码都能兑出折扣（回归钉子）', (
     await expect(applyPromoCode('SAVE20', 99)).resolves.toEqual({ discount: 0 })
     // LOYAL40 门槛 200
     await expect(applyPromoCode('LOYAL40', 199)).resolves.toEqual({ discount: 0 })
+  })
+
+  /**
+   * **BLK-4 的回归钉子**：同一个码，`/checkout/summary` 与 `/checkout/promo` 必须算出
+   * 同一笔减免。
+   *
+   * 旧代码的形状是「summary 收不到 code（discount 恒 0）、promo 单独算一份」，于是页面
+   * 用 promo 那份、实扣按 summary 那份 —— 有优惠时两者必然不等。这条用例把它钉在
+   * 「两条路径的 discount 相等」上；若以后有人只改了其中一条，这里会红。
+   */
+  it('同一个码：summary.discount 与 promo.discount 相等（两处口径同源）', async () => {
+    for (const code of ['SAVE10', 'SAVE20']) {
+      const subtotal = 250
+      const summary = await calculateOrderSummary([cartItem(subtotal)], '', code)
+      const promo = await applyPromoCode(code, subtotal)
+      expect(summary.discount, `${code} 两条路径的减免不一致`).toBe(promo.discount)
+      // 且 total 真的是「小计 − 减免」，不会是减两次或一次都没减
+      expect(summary.total).toBe(+(subtotal - summary.discount).toFixed(2))
+      expect(summary.total).toBeLessThan(subtotal)
+    }
   })
 })

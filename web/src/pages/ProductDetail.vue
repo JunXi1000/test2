@@ -482,7 +482,6 @@ watch(
         <!-- Left: 主图 / 演示视频 / 缩略图 / 放大镜 —— 整块在 <ProductGallery> 里。
              selectedColor 由右栏选择器驱动（变体图），share 是页面动作（navigator.share + toast）。 -->
         <ProductGallery
-          :product-id="productId"
           :product="productRef"
           :selected-color="selectedColor"
           @share="shareProduct"

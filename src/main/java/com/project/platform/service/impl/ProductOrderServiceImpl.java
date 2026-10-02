@@ -9,6 +9,7 @@ import com.project.platform.exception.CustomException;
 import com.project.platform.mapper.PaymentMapper;
 import com.project.platform.mapper.ProductOrderMapper;
 import com.project.platform.mapper.ShoppingCartMapper;
+import com.project.platform.service.CouponService;
 import com.project.platform.service.ProductOrderService;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.UserService;
@@ -25,6 +26,7 @@ import com.project.platform.vo.StorefrontCheckoutResult;
 import com.project.platform.vo.StorefrontOrderVO;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,6 +40,10 @@ import java.util.Map;
 public class ProductOrderServiceImpl implements ProductOrderService {
     @Resource
     private ProductOrderMapper productOrderMapper;
+
+    /** 优惠码校验与核销(Phase 1 已有 coupon 链路,本轮只把它接进下单流程) */
+    @Resource
+    private CouponService couponService;
 
     @Resource
     private PaymentMapper paymentMapper;
@@ -134,6 +140,14 @@ public class ProductOrderServiceImpl implements ProductOrderService {
     /**
      * 前台结算下单(Phase 2):一次结算一个 order_no 分组 + 一张支付单。
      * 逐 item 以 DB 价格落单、原子扣库存;成功后按当前用户清除对应购物车行。
+     *
+     * <p><b>金额诚信(2026-09-27 TASK-000-I)</b>:落单金额 = Σ(DB 价 × 数量) − 服务端校验通过的优惠。
+     * 此前本方法<b>完全不应用任何优惠</b>,而 {@code /checkout/summary} 却展示
+     * 「满减 + 运费 + 税」后的总额 —— 两者对不上。现在 summary 与本方法走**同一套**优惠校验,
+     * 故 {@code summary.total == 本方法返回的 amount == Σ(product_order.total_money)}(AC-04)。
+     *
+     * <p>优惠在最后**按行比例分摊**(见 {@link #allocateDiscount}),保证
+     * {@code Σ(各行 total_money) == 扣减后的应付总额}精确成立,不因四舍五入差一分。
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -146,7 +160,11 @@ public class ProductOrderServiceImpl implements ProductOrderService {
             throw new CustomException("请选择要购买的商品");
         }
         String orderNo = OrderNoGenerator.next();
-        BigDecimal amount = BigDecimal.ZERO;
+        Integer userId = CurrentUserThreadLocal.getCurrentUser().getId();
+
+        // 先按 DB 价把各行落下来(doInsert 内部会用 product.price 重算 totalMoney,
+        // 前端传的 price 一律忽略),落完才知道小计是多少,才能校验优惠门槛。
+        BigDecimal gross = BigDecimal.ZERO;
         for (StorefrontCheckoutDTO.Item item : items) {
             Integer productId = item.resolveProductId();
             Integer qty = item.getQuantity();
@@ -164,12 +182,31 @@ public class ProductOrderServiceImpl implements ProductOrderService {
             }
             order.setRemark(dto.getRemark());
             doInsert(order);
-            amount = amount.add(order.getTotalMoney());
+            gross = gross.add(order.getTotalMoney());
         }
+
+        // 优惠:与服务端校验绑定,前端传什么都只影响「用不用这张券」,不影响「减多少」
+        BigDecimal discount = BigDecimal.ZERO;
+        if (dto.getCode() != null && !dto.getCode().isBlank()) {
+            Map<String, Object> coupon = couponService.applyByCode(dto.getCode(), gross, userId);
+            discount = (BigDecimal) coupon.get("discount");
+            if (discount.compareTo(gross) > 0) {
+                discount = gross;                       // 兜底封顶:应付不得为负
+            }
+            // 核销:条件 UPDATE 抢占,受影响行数 0 = 被并发提交抢先核销 → 409,整个事务回滚
+            couponService.redeem(userId, (Integer) coupon.get("couponIdRaw"));
+        }
+
+        // 把优惠按比例摊回各行,再逐行改写 total_money。
+        // 不摊的话 Σ(各行 total_money) 仍是未折扣的 gross,与支付单 amount 对不上(AC-04.3)。
+        applyDiscountToRows(orderNo, gross, discount);
+
+        BigDecimal amount = gross.subtract(discount).setScale(2, RoundingMode.HALF_UP);
+
         // 支付单(待支付)
         Payment payment = new Payment();
         payment.setOrderNo(orderNo);
-        payment.setUserId(CurrentUserThreadLocal.getCurrentUser().getId());
+        payment.setUserId(userId);
         payment.setAmount(amount);
         payment.setChannel(dto.getChannel() == null || dto.getChannel().isBlank() ? "card" : dto.getChannel());
         payment.setStatus("待支付");
@@ -177,9 +214,81 @@ public class ProductOrderServiceImpl implements ProductOrderService {
         paymentMapper.insert(payment);
         // 下单成功后清除对应购物车行(仅限当前用户的行,防御横向越权)
         if (dto.getCartItemIds() != null && !dto.getCartItemIds().isEmpty()) {
-            shoppingCartMapper.removeByIdsOfUser(CurrentUserThreadLocal.getCurrentUser().getId(), dto.getCartItemIds());
+            shoppingCartMapper.removeByIdsOfUser(userId, dto.getCartItemIds());
         }
         return new StorefrontCheckoutResult(orderNo, amount);
+    }
+
+    /**
+     * 把优惠额按各行占比分摊回 {@code product_order.total_money}(最大余额法 / Hare 配额)。
+     *
+     * <p><b>为什么不能用「最后一行兜掉舍入余数」</b>:那样当行数多、优惠额小时,
+     * 前 n−1 行的四舍五入之和可能<b>超过</b>优惠额,末行分摊到负数 ——
+     * 实测 {@code gross=4300.03, discount=0.51, rows=[1984.18, 1681.68, 633.86, 0.31]}
+     * 会让 0.31 那行变成 <b>0.32</b>:优惠之后比原价还贵。这不是精度问题,是账不平。
+     *
+     * <p>本实现分三步:
+     * <ol>
+     *   <li>按 {@code 该行金额 / 小计 × 优惠额} 算精确份额(高精度),逐行<b>向下</b>取整到分;</li>
+     *   <li>余下的分(总差额是整数分)按<b>小数部分从大到小</b>依次补给各行,每行最多补 1 分;</li>
+     *   <li>补给后每行份额仍 ≤ 该行原价(因为 {@code 优惠 ≤ 小计} ⟹ 精确份额 ≤ 行金额,
+     *       且补 1 分的前提是该行小数部分 &gt; 0)。</li>
+     * </ol>
+     * 结果:{@code Σ(各行) == 优惠额} 精确成立,且没有任何一行变贵。
+     *
+     * <p>{@code discount} 为 0 时直接跳过 —— 不去改写已正确的行,减少无谓的 UPDATE。
+     */
+    private void applyDiscountToRows(String orderNo, BigDecimal gross, BigDecimal discount) {
+        if (discount == null || discount.signum() == 0 || gross.signum() == 0) {
+            return;
+        }
+        List<ProductOrder> rows = productOrderMapper.selectByOrderNo(orderNo);
+        if (rows == null || rows.isEmpty()) {
+            return;
+        }
+        int n = rows.size();
+        BigDecimal[] shares = new BigDecimal[n];
+        BigDecimal[] remainders = new BigDecimal[n];
+        BigDecimal allocated = BigDecimal.ZERO;
+        BigDecimal hundred = new BigDecimal(100);
+
+        for (int i = 0; i < n; i++) {
+            BigDecimal exact = rows.get(i).getTotalMoney().multiply(discount)
+                    .divide(gross, 8, RoundingMode.HALF_UP);
+            BigDecimal floor = exact.setScale(2, RoundingMode.DOWN);
+            shares[i] = floor;
+            remainders[i] = exact.subtract(floor);
+            allocated = allocated.add(floor);
+        }
+
+        // 还差多少分要补(优惠额是两位小数,补完后一定能整除)
+        long unitsLeft = discount.subtract(allocated).movePointRight(2).longValueExact();
+        if (unitsLeft > 0) {
+            // 按小数部分从大到小排序,同值时按行序,保证结果确定可测
+            Integer[] order = new Integer[n];
+            for (int i = 0; i < n; i++) {
+                order[i] = i;
+            }
+            java.util.Arrays.sort(order, (a, b) -> {
+                int cmp = remainders[b].compareTo(remainders[a]);
+                return cmp != 0 ? cmp : Integer.compare(a, b);
+            });
+            for (int k = 0; k < unitsLeft && k < n; k++) {
+                shares[order[k]] = shares[order[k]].add(new BigDecimal("0.01"));
+            }
+        }
+
+        for (int i = 0; i < n; i++) {
+            BigDecimal lineAmount = rows.get(i).getTotalMoney().subtract(shares[i]);
+            // 防御性下限:理论上 discount <= gross 保证这里不会为负,留一道以防上游口径变动
+            if (lineAmount.signum() < 0) {
+                lineAmount = BigDecimal.ZERO;
+            }
+            ProductOrder patch = new ProductOrder();
+            patch.setId(rows.get(i).getId());
+            patch.setTotalMoney(lineAmount);
+            productOrderMapper.updateById(patch);
+        }
     }
 
     /**

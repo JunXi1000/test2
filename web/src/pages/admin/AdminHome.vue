@@ -9,7 +9,9 @@ import {
 } from '@/api/modules/adminDashboard'
 import { useAsyncTask } from '@/composables/useAsyncTask'
 import ErrorState from '@/components/ui/state/ErrorState.vue'
+import EmptyState from '@/components/ui/state/EmptyState.vue'
 import StatCard from '@/components/ui/admin/StatCard.vue'
+import { Activity as ActivityIcon, DollarSign as DollarSignIcon } from 'lucide-vue-next'
 import { use, init, graphic, type ECharts } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
@@ -27,6 +29,8 @@ const {
 })
 const stats = ref<AdminStat[]>([])
 const recentUsers = ref<{ name: string; email: string; joinedAt: string }[]>([])
+/** 图表数据单独留一份：空数组时要渲染空态而不是一块空白 canvas 容器 */
+const revenueData = ref<{ date: string; value: number }[]>([])
 const chartRef = ref<HTMLElement | null>(null)
 let chartInstance: ECharts | null = null
 
@@ -40,11 +44,12 @@ async function fetchStats() {
 
     stats.value = data
     recentUsers.value = users
+    revenueData.value = chartData ?? []
 
     // Initialize Chart
-    if (chartData && chartRef.value) {
+    if (revenueData.value.length && chartRef.value) {
       await nextTick()
-      initChart(chartData)
+      initChart(revenueData.value)
     }
   })
 }
@@ -128,6 +133,13 @@ onUnmounted(() => {
       </div>
     </div>
     <ErrorState v-else-if="errorRef" :message="errorRef" @retry="fetchStats" />
+    <EmptyState
+      v-else-if="stats.length === 0"
+      :icon="ActivityIcon"
+      title="No statistics yet"
+      description="Platform metrics appear once there is activity to report."
+      class="admin-panel-card border-dashed"
+    />
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <StatCard
         v-for="stat in stats"
@@ -143,7 +155,16 @@ onUnmounted(() => {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="admin-panel-card">
         <h3 class="mb-6 font-semibold text-zinc-100">Revenue Overview</h3>
-        <div ref="chartRef" class="w-full h-80"></div>
+        <!-- 后端在无营收数据时返回空列表，图表区域会是一片空白 div。
+             这里补空态，避免「没数据」和「没加载出来」看起来一模一样。 -->
+        <EmptyState
+          v-if="!isLoadingRef && revenueData.length === 0"
+          :icon="DollarSignIcon"
+          title="No revenue data"
+          description="Revenue will appear here once orders are placed."
+          variant="compact"
+        />
+        <div v-else ref="chartRef" class="w-full h-80"></div>
       </div>
       <div class="admin-panel-card flex h-96 flex-col overflow-hidden">
         <div class="mb-4 flex shrink-0 items-center justify-between">
@@ -151,6 +172,11 @@ onUnmounted(() => {
           <span class="text-xs text-zinc-500">Real-time</span>
         </div>
         <div class="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          <EmptyState
+            v-if="recentUsers.length === 0"
+            title="No recent signups"
+            variant="compact"
+          />
           <div
             v-for="u in recentUsers"
             :key="u.email"

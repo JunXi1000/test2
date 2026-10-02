@@ -16,7 +16,6 @@ import Button from '@/components/ui/button/Button.vue'
 import {
   CheckCircle2,
   CreditCard,
-  Truck,
   ShieldCheck,
   Lock,
   MapPin,
@@ -38,7 +37,7 @@ import { savePaymentMethod } from '@/api/modules/payment'
 import { appendCheckoutOrder, type Order, type OrderItem } from '@/api/modules/orders'
 import { USE_MOCK } from '@/config/env'
 import { useLoyaltyStore } from '@/stores/loyalty'
-import { POINTS_PER_DOLLAR } from '@/api/modules/loyalty'
+// 不再 import POINTS_PER_DOLLAR：积分抵扣输入框已下线（G1 / BLK-E1），页面不再做任何折算
 
 const router = useRouter()
 const route = useRoute()
@@ -134,7 +133,7 @@ const {
 } = useCheckoutForm()
 
 // ── Order summary & promo（含积分抵扣）──
-// 三块状态（服务端摘要 / 手动优惠码 / 积分抵扣）整块在 useOrderSummary 里。
+// 三块状态（服务端摘要 / 手动优惠码 / 应付总额）整块在 useOrderSummary 里。
 // 下面几个别名是为了**不动模板**：组合式那边用干净的名字，页面沿用原先的 XXRef 叫法。
 const {
   summary: summaryRef,
@@ -143,19 +142,37 @@ const {
   fetchSummary,
   promoCode: promoCodeRef,
   promoApplied,
-  promoDiscount,
+  // 注意：**故意不要 promoDiscount** —— 那是 /checkout/promo 的只读回包，
+  // 与 summary.discount 是同一笔券优惠的两个来源，再用来算/显示就会重复计一次（BLK-4）。
   tieredDiscount,
-  pointsToUse,
-  pointsUsable,
-  maxPointsToUse,
-  pointsDiscount,
+  appliedDiscountCode,
+  // 也**故意不要任何积分抵扣状态**（G1 / BLK-E1）：后端没有积分概念，页面自算一层
+  // `total = ... − pointsDiscount` 会让显示额低于实扣。应付额只取下面的 `total`。
   total,
   applyPromo: onApplyPromo,
   removePromo,
 } = useOrderSummary({
   items: checkoutItems,
   getZip: () => formData.zip,
+  /** 只有**已生效**的码才发下去：没生效的码发出去，后端会按它核销（可能 400，也可能真扣） */
+  getCode: () => paymentDiscountCode.value,
+  /**
+   * items 变化触发重取的闸门（G1d / BLK-I1）：落单收尾期间不再重取。
+   * 那时清空购物车 / 清掉 directBuyItem 不是"用户改了订单"—— 直接购买模式下
+   * `checkoutItems` 会回落到购物车，否则会在跳 ThankYou 的路上白跑一次摘要请求。
+   */
+  shouldRefetch: () => !isCompletingOrder.value,
 })
+
+/**
+ * 要发给 `/checkout/summary` 与 `POST /payments/create` 的**同一个**优惠码。
+ *
+ * 提成 computed 而不是两处各写一遍三元：BLK-4 的根因就是「两处各有一套 code」——
+ * summary 收不到、payments/create 收不到，页面与实扣才会分叉。现在只有一个来源。
+ */
+const paymentDiscountCode = computed(() =>
+  promoApplied.value ? promoCodeRef.value.trim() : '',
+)
 
 // ── Init ──
 // 表单预填（调试钩子 / 登录态资料与默认地址）在 useCheckoutForm 里；
@@ -242,9 +259,12 @@ const finalizeOrder = async (finalOrderId: string) => {
     date: dateStr,
     total: total.value,
     subtotal: summaryRef.value.subtotal,
-    shippingFee: summaryRef.value.shipping,
-    tax: summaryRef.value.tax,
-    discount: summaryRef.value.discount + promoDiscount.value,
+    // 后端已把运费/税移出契约，这里按 0 落库，避免 undefined 写进订单记录
+    shippingFee: Number(summaryRef.value.shipping) || 0,
+    tax: Number(summaryRef.value.tax) || 0,
+    // 减免**只取服务端的 summary.discount**（后端按 code 核销出的就是这一笔）。
+    // 再加 promoDiscount 会把同一笔券优惠记两次：页面金额与实扣都对不上（BLK-4）。
+    discount: summaryRef.value.discount,
     status: 'In Transit',
     items,
     shipping: {
@@ -294,10 +314,14 @@ const finalizeOrder = async (finalOrderId: string) => {
     saveCardForNextTime.value = false
   }
 
-  // 阶段 5.1：扣减已用积分 → 累计消费 → 返积分（实付 $1 = 1 积分）
+  // 阶段 5.1：累计消费 → 返积分（实付 $1 = 1 积分）
+  //
+  // ⚠️ 这里**不再扣减积分**（G1 / BLK-E1）：积分抵扣的入口已整块下线，因为后端没有任何
+  // 积分概念（不收积分字段、也不会因此少收钱）。若还在这里 spendPoints，用户会白白少掉
+  // 一笔余额却一分钱没省 —— 比"显示额低于实扣"更直接的资损。
+  // 返积分（earnPoints）与累计消费保留：它们只增不减，且用的 paid 现在是服务端权威应付额。
   let earnedPoints = 0
   if (authStore.isAuthenticated) {
-    if (pointsToUse.value > 0) loyaltyStore.spendPoints(pointsToUse.value)
     const paid = total.value
     loyaltyStore.recordSpend(paid)
     earnedPoints = loyaltyStore.earnPoints(paid)
@@ -343,6 +367,8 @@ const {
   items: checkoutItems,
   formData,
   total,
+  // 与 getCode 同一个来源：后端据此核销，漏发就是「页面减了、扣款没减」（BLK-4）
+  discountCode: paymentDiscountCode,
   savedCard: selectedSavedCard,
   currentStep,
   isCompletingOrder,
@@ -980,34 +1006,19 @@ const inputClass = (field: string) =>
                 <span class="text-muted-foreground">{{ $t('cart.subtotal') }}</span>
                 <span>${{ formatPrice(summaryRef.subtotal) }}</span>
               </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.shipping') }}</span>
-                <span :class="summaryRef.shipping === 0 ? 'text-emerald-500' : ''">
-                  {{
-                    summaryRef.shipping === 0
-                      ? $t('cart.free')
-                      : `$${formatPrice(summaryRef.shipping)}`
-                  }}
-                </span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.tax') }}</span>
-                <span>${{ formatPrice(summaryRef.tax) }}</span>
-              </div>
+              <!-- 运费行与税费行已移除（2026-10-01）：后端不再返回这两个字段
+                   （运费模板尚未建模），渲染算不出来的数字比不显示更糟。 -->
+              <!-- 减免行：金额用服务端的 summary.discount（= tieredDiscount）。
+                   **不要**再渲染一行 promoDiscount —— 那是同一笔券优惠的另一个来源。 -->
               <div v-if="tieredDiscount > 0" class="flex justify-between text-sm">
                 <span class="text-muted-foreground">{{ $t('cart.tieredDiscount') }}</span>
                 <span class="text-emerald-500">- ${{ formatPrice(tieredDiscount) }}</span>
               </div>
-              <div v-if="promoDiscount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.promoCode') }}</span>
-                <span class="text-emerald-500">- ${{ formatPrice(promoDiscount) }}</span>
-              </div>
-              <div v-if="pointsDiscount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('checkout.loyaltyPoints') }}</span>
-                <span class="text-emerald-500">- ${{ formatPrice(pointsDiscount) }}</span>
-              </div>
+              <!-- 积分抵扣行已移除（2026-10-01，G1 / BLK-E1）：后端没有积分概念，
+                   渲染一行抵扣却不在 total 里生效就是自相矛盾。 -->
               <div class="flex justify-between text-lg font-bold pt-2 border-t border-border">
                 <span>{{ $t('cart.total') }}</span>
+                <!-- total 只来自服务端 summary.total（不再 − 积分）⇒ 与实扣同源 -->
                 <span class="text-primary">${{ formatPrice(total) }}</span>
               </div>
             </div>
@@ -1032,9 +1043,9 @@ const inputClass = (field: string) =>
               <div class="flex items-center gap-2">
                 <Tag class="w-4 h-4 text-emerald-600" />
                 <span class="text-sm font-medium text-emerald-700 dark:text-emerald-400">{{
-                  promoCodeRef.toUpperCase()
+                  (appliedDiscountCode || promoCodeRef).toUpperCase()
                 }}</span>
-                <span class="text-xs text-emerald-600">(-${{ formatPrice(promoDiscount) }})</span>
+                <span class="text-xs text-emerald-600">(-${{ formatPrice(tieredDiscount) }})</span>
               </div>
               <button
                 class="text-xs text-muted-foreground hover:text-destructive transition-colors"
@@ -1044,49 +1055,32 @@ const inputClass = (field: string) =>
               </button>
             </div>
 
-            <!-- 积分抵扣（阶段 5.1） -->
+            <!-- 积分：只读说明（2026-10-01，G1 / BLK-E1）
+                 原来这里是一个可用的抵扣输入框，但后端**完全没有积分概念**：
+                 `StorefrontCheckoutDTO` 只有 `code`，`/payments/create` 不收积分字段，
+                 `ProductOrderServiceImpl` 也只按 `code` 核销。也就是说输入框按下的抵扣
+                 只影响前端显示、不影响实扣 —— 这正是「页面显示额 < 实际扣款」。
+                 口径选择：**整块下线抵扣输入**（不是"保留输入但不参与计算"）——
+                 后者要么让 total 与输入框显示的数不一致（自相矛盾），要么留着一条
+                 将来被重新接回 total 的导线（BLK-4/BLK-E1 都是从这种"两处各算一份"长出来的）。
+                 保留余额的**只读展示**，这样用户知道积分还在、只是这单用不了。 -->
             <div
-              v-if="pointsUsable"
-              class="mt-4 p-3 rounded-xl border border-primary/20 bg-primary/5"
+              v-if="authStore.isAuthenticated && loyaltyStore.state.points > 0"
+              data-testid="points-not-redeemable"
+              class="mt-4 p-3 rounded-xl border border-border bg-secondary/30"
             >
-              <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center justify-between mb-1.5">
                 <div class="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles class="w-4 h-4 text-primary" />
+                  <Sparkles class="w-4 h-4 text-muted-foreground" />
                   {{ $t('checkout.loyaltyPoints') }}
                 </div>
                 <span class="text-xs text-muted-foreground">{{
                   $t('checkout.pointsAvailable', { points: loyaltyStore.state.points })
                 }}</span>
               </div>
-              <p class="text-xs text-muted-foreground mb-2">{{ $t('checkout.pointsHint') }}</p>
-              <div class="flex gap-2">
-                <input
-                  v-model.number="pointsToUse"
-                  type="number"
-                  min="0"
-                  :max="maxPointsToUse"
-                  :placeholder="String(POINTS_PER_DOLLAR)"
-                  class="flex-1 h-9 rounded-lg bg-background border border-input px-3 text-sm outline-none focus:border-primary transition-colors"
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  class="h-9"
-                  @click="pointsToUse = maxPointsToUse"
-                  >{{ $t('loyalty.useMax') }}</Button
-                >
-              </div>
-              <div
-                v-if="pointsDiscount > 0"
-                class="flex justify-between text-xs text-muted-foreground mt-2"
-              >
-                <span>{{
-                  $t('checkout.pointsApplied', { amount: pointsDiscount.toFixed(2) })
-                }}</span>
-                <button class="text-primary hover:underline" @click="pointsToUse = 0">
-                  {{ $t('common.remove') }}
-                </button>
-              </div>
+              <p class="text-xs text-muted-foreground">
+                {{ $t('checkout.pointsNotRedeemable') }}
+              </p>
             </div>
 
             <!-- Available coupons from wallet -->
@@ -1115,15 +1109,13 @@ const inputClass = (field: string) =>
               </div>
             </div>
 
-            <div class="mt-6 grid grid-cols-3 gap-2 text-xs text-muted-foreground text-center">
+            <div class="mt-6 grid grid-cols-2 gap-2 text-xs text-muted-foreground text-center">
               <div class="flex flex-col items-center gap-1">
                 <ShieldCheck class="w-4 h-4" />
                 <span>{{ $t('checkout.secure') }}</span>
               </div>
-              <div class="flex flex-col items-center gap-1">
-                <Truck class="w-4 h-4" />
-                <span>{{ $t('checkout.freeShip') }}</span>
-              </div>
+              <!-- 「Free Ship」徽章已移除（2026-10-01）：运费模板尚未建模，
+                   后端也不再返回运费字段，此时承诺免邮属于无法兑现的宣称。 -->
               <div class="flex flex-col items-center gap-1">
                 <CheckCircle2 class="w-4 h-4" />
                 <span>{{ $t('checkout.verified') }}</span>

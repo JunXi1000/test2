@@ -20,6 +20,8 @@ import java.util.Set;
  *
  * <p><b>公开(免登录)路径不在本表</b>:它们由
  * {@code SpringMvcConfig.excludePathPatterns} 声明,那些路径根本不会进入拦截器。
+ * 反过来说:<b>移出一条路径后必须在下面登记</b>,否则它会落进「默认拒绝」——
+ * 这正是 {@code /checkout/**} 新增规则的原因(见 {@code RULES} 里的注释)。
  *
  * <p><b>放行清单的取证依据(两条,缺一不可)</b>:
  * <ol>
@@ -67,6 +69,17 @@ public final class AuthzRules {
             new Rule("/payments/**", Set.of(USER)),
             new Rule("/returns/**", Set.of(USER)),
             new Rule("/stock-alerts/**", Set.of(USER)),
+
+            // ── 结算:整条结算流程(摘要 / 优惠码)需要登录 ──
+            // 此前 /checkout/summary 与 /checkout/promo 在 SpringMvcConfig 白名单里
+            // (拦截器不执行 → CurrentUserThreadLocal 恒空 → 券校验对已登录用户也报
+            // 「请先登录后再使用优惠码」)。移出白名单后必须在此登记,否则默认拒绝 403 ——
+            // 即「换了种死法」。两步缺一不可。
+            // 用 /checkout/** 而不是逐条列:该前缀下没有公开端点,整片都属结算流程。
+            // 角色只给 USER:结算页属买家域,下单处(ProductOrderServiceImpl
+            // .createStorefrontOrder)同样只认 type=USER。SHOP/ADMIN token 打到这里是 403
+            // 而不是 400,与「默认拒绝」的口径一致。
+            new Rule("/checkout/**", Set.of(USER)),
 
             // 购物车**只放行前端实际调用的 4 个端点**。同 Controller 下的
             // selectById / list / createOrder 前端 0 引用,其中 createOrder 对传入的

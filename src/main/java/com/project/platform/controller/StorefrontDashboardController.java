@@ -22,6 +22,11 @@ public class StorefrontDashboardController {
 
     /**
      * GET /dashboard/stats
+     *
+     * <p>2026-09-27 修复:「Pending」此前用减法推导
+     * {@code total - inTransit - completed - cancelled}(再套一个 Math.max(0, …)),
+     * 于是任何**不在那四个枚举里**的订单状态都会被算进 Pending ——
+     * 比如将来新增的「退款中」会被无声地报成「待付款」。改为按状态**显式计数**。
      */
     @GetMapping("/stats")
     public ResponseVO<List<Map<String, Object>>> getStats() {
@@ -32,16 +37,21 @@ public class StorefrontDashboardController {
         List<ProductOrder> orders = pageVO.getList();
 
         long total = orders.size();
-        long inTransit = orders.stream().filter(o -> "待发货".equals(o.getStatus()) || "待收货".equals(o.getStatus())).count();
-        long completed = orders.stream().filter(o -> "已完成".equals(o.getStatus())).count();
-        long cancelled = orders.stream().filter(o -> "已取消".equals(o.getStatus())).count();
+        long pending = countByStatus(orders, "待支付");
+        long inTransit = countByStatus(orders, "待发货") + countByStatus(orders, "待收货");
+        long completed = countByStatus(orders, "已完成");
+        long cancelled = countByStatus(orders, "已取消");
 
         List<Map<String, Object>> stats = new ArrayList<>();
         stats.add(buildStat("Total Orders", String.valueOf(total)));
         stats.add(buildStat("In Transit", String.valueOf(inTransit)));
-        stats.add(buildStat("Pending", String.valueOf(Math.max(0, total - inTransit - completed - cancelled))));
+        stats.add(buildStat("Pending", String.valueOf(pending)));
         stats.add(buildStat("Completed", String.valueOf(completed)));
         return ResponseVO.ok(stats);
+    }
+
+    private long countByStatus(List<ProductOrder> orders, String status) {
+        return orders.stream().filter(o -> status.equals(o.getStatus())).count();
     }
 
     private Map<String, Object> buildStat(String label, String value) {

@@ -56,6 +56,11 @@ function makeOptions() {
       cardNumber: '4242 4242 4242 4242',
     },
     total: ref(100),
+    /**
+     * 生效的优惠码。默认空串 = 没用券 —— **必填**：漏传就等于「页面显示了优惠、
+     * 后端不核销」（BLK-4），所以让它成为编译期就能抓住的错。
+     */
+    discountCode: ref(''),
     savedCard: ref<SavedPaymentMethod | null>(null),
     currentStep: ref(2),
     isCompletingOrder: ref(false),
@@ -84,7 +89,7 @@ describe('usePaymentFlow', () => {
     expect(flow.show3ds.value).toBe(false)
   })
 
-  it('payload 只传商品 id + 数量，金额由服务端重算；带 serverId 的行才进 cartItemIds', async () => {
+  it('payload 的商品项只传 id + 数量（金额由服务端重算）、券码照发；带 serverId 的行才进 cartItemIds', async () => {
     const options = makeOptions()
     const flow = usePaymentFlow(options)
 
@@ -95,8 +100,20 @@ describe('usePaymentFlow', () => {
     expect(payload.amount).toBe(100)
     expect(payload.cartItemIds).toEqual([99])
     expect(payload.shipping).toMatchObject({ name: 'Alex Doe', zip: '12345' })
+    // 没用券时也要把这个字段发出去（空串 = 不核销），后端 `isBlank()` 同样当未传
+    expect(payload.code).toBe('')
     // 价格不由前端算：payload 里不能出现单价
     expect(payload.items[0]).not.toHaveProperty('price')
+  })
+
+  it('用券：把生效的码发给 /payments/create（后端据此核销，BLK-4）', async () => {
+    const options = makeOptions()
+    options.discountCode.value = 'SAVE10'
+    const flow = usePaymentFlow(options)
+
+    await flow.handlePayment()
+
+    expect(mocks.createPaymentIntent.mock.calls[0][0].code).toBe('SAVE10')
   })
 
   it('无 serverId 的 guest 行不产生 cartItemIds 项（后端无从清除购物车行）', async () => {

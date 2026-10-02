@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Trash2, Minus, Plus, ArrowRight, ShoppingBag, Edit2, XCircle, Tag } from 'lucide-vue-next'
 import Button from '@/components/ui/button/Button.vue'
@@ -9,17 +9,15 @@ import { useAuthStore } from '@/stores/auth'
 import Skeleton from '@/components/ui/skeleton/Skeleton.vue'
 import EmptyState from '@/components/ui/state/EmptyState.vue'
 import { getProductById } from '@/api/modules/product'
-import { getTieredDiscount, getNextTier } from '@/api/modules/checkout'
 import type { Product } from '@/types/product'
 import { useToast } from '@/composables/useToast'
 import { usePromoCode } from '@/composables/usePromoCode'
+import { useCartSummary } from '@/composables/useCartSummary'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { formatPrice } from '@/utils/format'
 import { useRouter } from 'vue-router'
 
 const MAX_QUANTITY = 99
-const FREE_SHIPPING_THRESHOLD = 200
-const SHIPPING_FEE = 12
-const TAX_RATE = 0.08
 
 const cartStore = useCartStore()
 const authStore = useAuthStore()
@@ -27,44 +25,56 @@ const { toast } = useToast()
 const { t } = useI18n()
 const router = useRouter()
 
-const subtotal = computed(() => cartStore.subtotal)
-const shipping = computed(() => (subtotal.value >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE))
-const freeShippingRemaining = computed(() => {
-  const remaining = FREE_SHIPPING_THRESHOLD - subtotal.value
-  return remaining > 0 ? remaining : 0
+/** 摘要取数用的行（响应式映射，不是快照） */
+const summaryItems = computed(() => cartStore.items)
+// 满减档位（DISCOUNT_TIERS / getTieredDiscount / getNextTier）**已从本页移除**（2026-10-01）：
+// 后端不再返回运费/税/满减，「最优档」在前端算出来就是凭空造的一笔减免。金额统一走
+// useCartSummary → /checkout/summary（与结算页同一来源，见该组合式的注释）。
+//
+// 这里**不再单独声明本地小计**（G1b / D-1）：`subtotal` 曾经是 `cartStore.subtotal` 的别名，
+// 唯一消费者是模板里 `serverSubtotal || summarySubtotal` 那个 fallback —— 而 useCartSummary
+// 内部已经用同一个判据（serverLoaded）算好了展示用的小计（MIN-E1）。
+// 两条判据并存只会分叉，所以只留组合式那一条。
+const {
+  enabled: summaryEnabled,
+  isLoading: isSummaryLoading,
+  error: summaryError,
+  subtotal: summarySubtotal,
+  discount: summaryDiscount,
+  total: summaryTotal,
+  fetchSummary: fetchCartSummary,
+  resetSummary,
+} = useCartSummary({
+  items: summaryItems,
+  /**
+   * 与结算页 `getCode` 同形：只有**已生效**的码才发下去。
+   *
+   * 它同时服务三条重取路径（items 变化自动重取 / 登录后补取 / 重试），所以这里定义一次，
+   * 页面其它地方一律 `fetchCartSummary()` 无参调用 —— 免得又是"三处各写一遍同样的三元"。
+   * （`promoApplied`/`promoCode` 在下面才声明，但闭包只在取数时读，与 `Checkout.vue` 同构。）
+   */
+  getCode: () => (promoApplied.value ? promoCode.value.trim() : ''),
 })
-const tax = computed(() => +(subtotal.value * TAX_RATE).toFixed(2))
 
-// 满减活动（阶段 3.2）：自动匹配最优档，与优惠码叠加
-const tiered = computed(() => getTieredDiscount(subtotal.value))
-const tieredDiscount = computed(() => tiered.value.discount)
-const nextTier = computed(() => getNextTier(subtotal.value))
-const tierProgress = computed(() => {
-  if (!nextTier.value) return 100
-  return Math.min(100, Math.round((subtotal.value / nextTier.value.tier.threshold) * 100))
-})
+/** 减免只认服务端回的那个数（契约里它是必填，但按 0 兜底更稳） */
+const tieredDiscount = computed(() => summaryDiscount.value)
+const total = computed(() => summaryTotal.value)
 
-// 优惠码整块交给 usePromoCode（与结算页共用同一套分支）。`discount` 这个别名沿用页面
-// 原有的叫法，模板与 total 都不必改。
+// 优惠码整块交给 usePromoCode（与结算页共用同一套分支）。`onApplied` 让摘要在码
+// 生效/移除/失效后重取 —— 减免额一律由服务端给，前端不再自己算一份。
 const {
   promoCode,
   promoApplied,
-  promoDiscount: discount,
   applyPromo: handleApplyPromo,
   removePromo,
   reset: resetPromo,
 } = usePromoCode({
-  getSubtotal: () => subtotal.value,
+  getSubtotal: () => cartStore.subtotal,
   // 购物车这句文案与结算页的**不一样**，所以由调用方传进来（见 usePromoCode 的注释）
   alreadyAppliedDesc: t('cart.alreadyAppliedDesc'),
+  // 码已生效 ⇒ 上面的 getCode 会把它带上，这里不必再拼一次
+  onApplied: () => fetchCartSummary(),
 })
-
-const total = computed(
-  () =>
-    +(subtotal.value + shipping.value + tax.value - discount.value - tieredDiscount.value).toFixed(
-      2,
-    ),
-)
 
 const isLoadingRef = ref<boolean>(true)
 const editDialogVisible = ref(false)
@@ -85,6 +95,15 @@ onMounted(() => {
   setTimeout(() => {
     isLoadingRef.value = false
   }, 300)
+  // 未登录不发（/checkout/summary 已移出白名单，匿名 401 会被拦截器当成会话失效跳登录）
+  if (summaryEnabled.value) fetchCartSummary()
+})
+
+// 登录后补取一次：登录可能发生在另一个标签页 / 另一次导航，而 `onMounted` 只跑一次，
+// 不补取的话页面会一直停在本地小计。退出登录则复位，别把上个会话的金额留在屏幕上。
+watch(summaryEnabled, (on) => {
+  if (on) fetchCartSummary()
+  else resetSummary()
 })
 
 function incrementQuantity(item: CartItem) {
@@ -144,6 +163,27 @@ function handleCheckout() {
     return
   }
   router.push('/checkout')
+}
+
+/**
+ * 优惠码必须先登录。
+ *
+ * 原因不是"产品想要"，而是**本轮契约**：`/checkout/promo`（校验折扣）与
+ * `/checkout/summary`（算金额）都移出白名单，匿名一律 401。券是按用户发放的
+ * （后端 `CouponServiceImpl` 要证明「这张券是我的」），匿名去核销只能得到一个
+ * 永远用不掉的优惠额。所以在这里先拦，而不是让请求打到后端换一个 401。
+ */
+async function applyPromoWithAuth() {
+  if (!authStore.isAuthenticated) {
+    toast({
+      title: t('cart.loginRequired'),
+      description: t('cart.loginRequiredDesc'),
+      variant: 'destructive',
+    })
+    router.push({ name: 'Login', query: { redirect: '/cart' } })
+    return
+  }
+  await handleApplyPromo()
 }
 
 async function openEditDialog(item: CartItem) {
@@ -265,64 +305,10 @@ function selectColor(color: string) {
             </button>
           </div>
 
-          <!-- Free shipping progress -->
-          <div
-            v-if="freeShippingRemaining > 0"
-            class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 flex items-center gap-3"
-          >
-            <Tag class="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <p
-              class="text-sm text-emerald-700 dark:text-emerald-400"
-              v-html="
-                $t('cart.freeShippingMore', { amount: '$' + formatPrice(freeShippingRemaining) })
-              "
-            ></p>
-          </div>
-          <div
-            v-else
-            class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 flex items-center gap-3"
-          >
-            <Tag class="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <p
-              class="text-sm text-emerald-700 dark:text-emerald-400 font-medium"
-              v-html="$t('cart.freeShippingEarned')"
-            ></p>
-          </div>
-
-          <!-- Tiered discount progress (阶段 3.2) -->
-          <div class="rounded-lg border border-primary/30 bg-primary/5 p-3.5 space-y-2">
-            <div class="flex items-center gap-3">
-              <Tag class="w-4 h-4 text-primary flex-shrink-0" />
-              <div class="flex-1 min-w-0">
-                <template v-if="nextTier">
-                  <p
-                    class="text-sm text-foreground"
-                    v-html="
-                      $t('cart.tierMore', {
-                        amount: '$' + formatPrice(nextTier.remaining),
-                        discount: '$' + formatPrice(nextTier.tier.discount),
-                      })
-                    "
-                  ></p>
-                  <p class="text-xs text-muted-foreground mt-0.5">{{ nextTier.tier.label }}</p>
-                </template>
-                <template v-else>
-                  <p
-                    class="text-sm font-medium text-primary"
-                    v-html="$t('cart.tierMax', { discount: '$' + formatPrice(tieredDiscount) })"
-                  ></p>
-                  <p class="text-xs text-muted-foreground mt-0.5">{{ $t('cart.tierHint') }}</p>
-                </template>
-                <!-- Progress bar -->
-                <div class="mt-2 h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    class="h-full rounded-full bg-primary transition-all duration-500"
-                    :style="{ width: tierProgress + '%' }"
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <!-- 满减进度条已移除（2026-10-01）：后端不再有满减/运费/税三样，
+               「再买 $X 可减 $Y」的承诺无法兑现（也是 e2e 里
+               text=/more to save|Max tier unlocked/i 断言失效的原因，见 docs/TASK-002/05-FRONTEND-FIX.md）。
+               金额统一走 /checkout/summary。 -->
 
           <div
             v-for="item in cartStore.items"
@@ -432,33 +418,47 @@ function selectColor(color: string) {
                   >{{ $t('cart.subtotal') }} ({{ cartStore.totalItems }}
                   {{ cartStore.totalItems > 1 ? $t('common.items') : $t('common.item') }})</span
                 >
-                <span class="font-medium">${{ formatPrice(subtotal) }}</span>
+                <!-- 小计：判据只有一条 —— useCartSummary 内部按 serverLoaded 决定用服务端回包
+                     还是本地镜像（MIN-E1）。模板不再自己写 `serverSubtotal || local` 那种二次判断。 -->
+                <span class="font-medium">${{ formatPrice(summarySubtotal) }}</span>
               </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.shipping') }}</span>
-                <span :class="shipping === 0 ? 'font-medium text-emerald-500' : 'font-medium'">
-                  {{ shipping === 0 ? $t('cart.free') : `$${formatPrice(shipping)}` }}
-                </span>
-              </div>
-              <div class="flex justify-between text-sm">
-                <span class="text-muted-foreground"
-                  >{{ $t('cart.tax') }} ({{ Math.round(TAX_RATE * 100) }}%)</span
+              <!-- 运费行 / 税费行 / 本地自算的满减行已移除（2026-10-01，BLK-5）：
+                   后端只回 subtotal / discount / total，前端再自算 12 元运费 + 8% 税
+                   就是「购物车 689.52 ≠ 实扣 694.00」的来源。金额一律取 /checkout/summary。 -->
+
+              <template v-if="summaryEnabled">
+                <div
+                  v-if="isSummaryLoading"
+                  class="flex justify-between text-sm text-muted-foreground"
                 >
-                <span class="font-medium">${{ formatPrice(tax) }}</span>
-              </div>
-              <div v-if="tieredDiscount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.tieredDiscount') }}</span>
-                <span class="font-medium text-emerald-500"
-                  >- ${{ formatPrice(tieredDiscount) }}</span
-                >
-              </div>
-              <div v-if="discount > 0" class="flex justify-between text-sm">
-                <span class="text-muted-foreground">{{ $t('cart.promoCode') }}</span>
-                <span class="font-medium text-emerald-500">- ${{ formatPrice(discount) }}</span>
-              </div>
-              <div class="border-t border-border pt-4 flex justify-between items-center">
-                <span class="font-bold text-lg">{{ $t('cart.total') }}</span>
-                <span class="font-bold text-2xl text-primary">${{ formatPrice(total) }}</span>
+                  <Skeleton class="h-4 w-20 rounded-md" />
+                  <Skeleton class="h-4 w-16 rounded-md" />
+                </div>
+                <ErrorState
+                  v-else-if="summaryError"
+                  :message="summaryError"
+                  @retry="fetchCartSummary()"
+                />
+                <template v-else>
+                  <div v-if="tieredDiscount > 0" class="flex justify-between text-sm">
+                    <span class="text-muted-foreground">{{ $t('cart.tieredDiscount') }}</span>
+                    <span class="font-medium text-emerald-500"
+                      >- ${{ formatPrice(tieredDiscount) }}</span
+                    >
+                  </div>
+                  <div class="border-t border-border pt-4 flex justify-between items-center">
+                    <span class="font-bold text-lg">{{ $t('cart.total') }}</span>
+                    <span class="font-bold text-2xl text-primary">${{ formatPrice(total) }}</span>
+                  </div>
+                </template>
+              </template>
+
+              <!-- 匿名：/checkout/summary 已移出白名单（C0），取不到服务端金额。
+                   此时**不给一个可能不对的应付总额**，只说明登录后可看；下方 Checkout
+                   按钮本来也要求登录。 -->
+              <div v-else class="rounded-lg bg-secondary/40 px-3 py-2.5 space-y-1">
+                <p class="text-sm font-medium">{{ $t('cart.total') }}: —</p>
+                <p class="text-xs text-muted-foreground">{{ $t('cart.loginForTotal') }}</p>
               </div>
             </div>
 
@@ -469,9 +469,9 @@ function selectColor(color: string) {
                 type="text"
                 :placeholder="$t('cart.promoPlaceholder')"
                 class="flex-1 h-10 rounded-lg bg-secondary border border-transparent px-3 text-sm outline-none focus:border-primary transition-colors uppercase"
-                @keyup.enter="handleApplyPromo"
+                @keyup.enter="applyPromoWithAuth"
               />
-              <Button variant="outline" class="h-10" @click="handleApplyPromo">{{
+              <Button variant="outline" class="h-10" @click="applyPromoWithAuth">{{
                 $t('common.apply')
               }}</Button>
             </div>
@@ -484,7 +484,9 @@ function selectColor(color: string) {
                 <span class="text-sm font-medium text-emerald-700 dark:text-emerald-400">{{
                   promoCode.toUpperCase()
                 }}</span>
-                <span class="text-xs text-emerald-600">(-${{ formatPrice(discount) }})</span>
+                <span class="text-xs text-emerald-600"
+                  >(-${{ formatPrice(tieredDiscount) }})</span
+                >
               </div>
               <button
                 class="text-xs text-muted-foreground hover:text-destructive transition-colors"

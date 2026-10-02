@@ -1,6 +1,9 @@
 <template>
   <div class="merchant-page mx-auto w-full max-w-6xl">
+    <ErrorState v-if="errorRef" :message="errorRef" @retry="loadData" />
+
     <div
+      v-else
       class="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-sm ring-1 ring-zinc-100 dark:border-zinc-700/80 dark:bg-zinc-900/70 dark:ring-white/5"
     >
       <div
@@ -13,11 +16,28 @@
           type="primary"
           class="w-full shrink-0 sm:w-auto"
           :loading="saving"
+          :disabled="!isWriteImplemented"
+          :title="notImplementedHint"
           @click="handleSave"
         >
           <SaveIcon class="mr-2 h-4 w-4" />
           Save Changes
         </el-button>
+      </div>
+
+      <!-- 诚实降级（TASK-002 / C5）：PUT /merchant/settings 已改为 501。
+           店铺设置**读得到**（GET 仍返回配置），但写不进去 —— 不能让商家以为存上了。
+           仅在真实后端下提示；mock 是本地模拟，保留可保存的演示行为。 -->
+      <div
+        v-if="!isWriteImplemented"
+        data-testid="merchant-settings-write-unavailable"
+        class="flex items-start gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300/90 sm:px-5"
+      >
+        <AlertTriangleIcon class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Saving is not available yet: this endpoint is not implemented on the server, so nothing
+          would be stored. The values below are still read from the server.
+        </span>
       </div>
 
       <el-tabs v-model="activeTab" class="merchant-settings-tabs">
@@ -412,6 +432,7 @@ import {
   RotateCcw as RotateCcwIcon,
   Eye as EyeIcon,
   Star as StarIcon,
+  AlertTriangle as AlertTriangleIcon,
 } from 'lucide-vue-next'
 import {
   getMerchantSettings,
@@ -421,9 +442,15 @@ import {
 import { uploadFile } from '@/api/modules/upload'
 import { RUNTIME_USE_MOCK } from '@/config/env'
 import { useToast } from '@/composables/useToast'
+import { useAsyncTask } from '@/composables/useAsyncTask'
+import { useWriteEndpointAvailability } from '@/composables/useWriteEndpointAvailability'
+import { toErrorMessage } from '@/utils/error'
+import ErrorState from '@/components/ui/state/ErrorState.vue'
 import { readFileAsDataUrl } from '@/utils/readFileAsDataUrl'
 
 const { toast } = useToast()
+// PUT /merchant/settings 已按契约 C5 改为 501：真实后端下必须禁用 + 说明（见组合式注释）
+const { isWriteImplemented, notImplementedHint } = useWriteEndpointAvailability()
 
 const responseTimePresets = [
   '< 30 minutes',
@@ -550,22 +577,42 @@ watch(
   },
 )
 
+// 取数失败时不出表单，只给可重试的错误态 —— 否则商家看到的是一张全空的可编辑表单，
+// 顺手点「Save Changes」就把空值/默认值写回服务端，覆盖掉真实配置。
+// 与 admin/Settings.vue 同构。
+const {
+  error: errorRef,
+  run,
+} = useAsyncTask({
+  fallbackMessage: 'Failed to load settings',
+})
+
 const loadData = async () => {
-  try {
-    const data = await getMerchantSettings()
-    Object.assign(form, normalizeSettings(data))
-  } catch {
-    toast({ title: 'Failed to load settings', variant: 'destructive' })
-  }
+  const result = await run(() => getMerchantSettings())
+  if (result.ok) Object.assign(form, normalizeSettings(result.value))
 }
 
 const handleSave = async () => {
+  // 双保险：按钮在未实现时已禁用，这里再挡一次
+  if (!isWriteImplemented.value) {
+    toast({
+      title: 'Saving is not available yet',
+      description: notImplementedHint.value,
+      variant: 'warning',
+    })
+    return
+  }
   saving.value = true
   try {
     await updateMerchantSettings(form)
     toast({ title: 'Settings saved successfully', variant: 'success' })
-  } catch {
-    toast({ title: 'Failed to save settings', variant: 'destructive' })
+  } catch (e) {
+    // 保留后端给的具体原因（501 的「尚未实现…」就在 e.message 里），不要吞成固定文案
+    toast({
+      title: 'Failed to save settings',
+      description: toErrorMessage(e, 'Please try again.'),
+      variant: 'destructive',
+    })
   } finally {
     saving.value = false
   }

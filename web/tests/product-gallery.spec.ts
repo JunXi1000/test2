@@ -10,10 +10,10 @@ import { test, expect, type Page } from '@playwright/test'
  * 为什么补：阶段 7g 把图集整块搬进了 `<ProductGallery>` + `useProductGallery`
  * （162 行模板 + 约 260 行脚本），而图片路径原本没有断言覆盖。
  *
- * **刻意不断言图片是否真的加载成功**：这些是外链图（unsplash / picsum），E2E 环境里
- * 能不能拉到取决于网络。图集本身带失败转移链（原图 → picsum → 备选 → 内联占位图），
- * 所以「图没加载出来」不是失败 —— 断言它反而会把用例变成看天吃饭。
- * 这里只断言**结构**与**交互**：src 变了、选中态变了、放大镜出现了。
+ * **刻意不断言图片是否真的加载成功**：mock 的图是外链（unsplash），E2E 环境里能不能拉到
+ * 取决于网络。图集本身带失败兜底（原图 → 内联占位图），所以「图没加载出来」不是失败 ——
+ * 断言它反而会把用例变成看天吃饭。
+ * 这里只断言**结构**与**交互**：选中态变了、放大镜出现了。
  */
 
 async function seedMock(page: Page) {
@@ -52,12 +52,13 @@ test.describe('商品详情 · 图集', () => {
     await gotoGallery(page)
 
     // **刻意不断言主图 src 变化** —— 这条曾经这么写，是错的：
-    //   1. `api/modules/product.ts` 把 mock 的 images 注成 `[image, image, image]`（同一个 URL 三份），
-    //      所以「图片→图片」的切换在 src 上根本看不出来；
-    //   2. src 还会被外链图失败转移改写（`resolveImageSrc` 按 slot 的 cursor 取候选）。
-    // 两条合起来，那条断言只在「失败转移碰巧改了 src」时通过 —— 靠网络脸色，属假通过。
-    //
+    //   `api/modules/product.ts` 的 mock 分支以前把 images 注成 `[image, image, image]`（同一 URL 三份），
+    //   于是「图片→图片」的切换在 src 上根本看不出来（该重复已于 2026-10 去掉，现在 mock 与真实后端一致：
+    //   只回一张 `image`），src 还会被失败兜底改写（`resolveImageSrc` 按 slot 的 cursor 取候选）。
     // 能确定性观测的是**选中态**：点谁谁高亮，且同一时刻只有一个是高亮的。
+    //
+    // 商品 id=12 有演示视频（`id % 4 === 0`），图集 = [图片(0), 视频(1)] 两项，
+    // 而当前选中项是 0，所以这里点**视频**那格来完成"切到另一项"的验证。
     const activeCount = () =>
       page
         .locator('button[data-thumb-index]')
@@ -65,10 +66,10 @@ test.describe('商品详情 · 图集', () => {
 
     expect(await activeCount()).toBe(1)
 
-    const imageThumb = page.locator('button[data-thumb-kind="image"][data-thumb-index="2"]')
-    await imageThumb.click()
+    const videoThumb = page.locator('button[data-thumb-kind="video"]').first()
+    await videoThumb.click()
 
-    await expect(imageThumb).toHaveClass(/border-primary/)
+    await expect(videoThumb).toHaveClass(/border-primary/)
     expect(await activeCount()).toBe(1)
     await expect(page.locator('button[data-thumb-index="0"]')).not.toHaveClass(/border-primary/)
   })

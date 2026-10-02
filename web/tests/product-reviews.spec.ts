@@ -1,18 +1,32 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * 商品详情页「评价区」E2E（mock 模式，不需要后端）。
+ * 商品详情页「评价区」E2E。
  *
- * 为什么单独建这个文件：阶段 7f 把评价区从 `ProductDetail.vue` 整块搬进了
- * `useProductReviews` + `<ReviewSection>`（389 行模板 + 约 490 行脚本），
- * 而这块**此前没有任何 E2E**（`admin-lists.spec.ts` 里那几条 review 测试是后台审核列表，
- * 另一个页面）。搬完才补护栏，顺序不如阶段 5 那样「先护栏后重构」，所以这里把
- * 「搬完仍然可用」的判据写全一点。
+ * ## 本文件在 TASK-002 被**整体改判**（原 13 条断言已失效）
  *
- * 不往 `features.spec.ts` 堆 —— 那是「什么都测一点」的大文件（见 REFACTOR_PLAN 阶段 0）。
+ * 原文件断言「渲染 8 条种子评价」并围绕它们做筛选/排序/投票/回复/LoadMore。
+ * 但本批已刻意**关闭伪造评价**：`web/src/api/modules/reviews.ts` 的
+ * `SEED_REVIEWS_ENABLED = false`，评价区因此渲染**诚实空态**。
  *
- * 选择器约定：能按 role/text 就按，避免绑定 class。评价卡本身没有 data-testid，
- * 所以用「用户名」这类稳定文案定位。
+ * **处置原则（Lead 裁决）**：把这些断言改写为断言「诚实空态」，**不跳过、不保留伪造评价断言**。
+ * 理由与「不得为绿灯恢复已删除的错误语义」是同一条：
+ *   - 保留 = 把已删除的行为钉住，测试会替一个不再存在的产品行为背书；
+ *   - 跳过 = 隐藏真实产品行为，读者无从知道评价区现在是空的。
+ *
+ * ⚠️ **可见行为变更（需向用户披露）**：商品详情页**不再展示演示评价**（此前 8 条编造评价）。
+ * 这是有意的诚实降级 —— 后端评价端点就位后把开关翻回 `true` 即可恢复，
+ * `useProductReviews` 的合并/水合/迁移逻辑全部原样保留。
+ *
+ * ## 仍然覆盖的（真实、不依赖种子）
+ * - 空态文案、`0 reviews` 计数、筛选控件仍可用且不报错；
+ * - 登录用户**可以写评价**：提交后立刻出现、计数变 `1 reviews`、可删除、刷新后仍在（localStorage）；
+ * - 未登录写评价 → 引导登录。
+ *
+ * ## 明确**不再覆盖**（随种子一起下线，属已知缺口）
+ * Load More 分页、星级筛选到非空集、搜索命中作者/正文、"With Images" 只看带图、
+ * Most Helpful 排序、helpful 投票、回复**种子**评价、带图评价灯箱。
+ * 这些都需要**真实评价数据**才有意义 —— 后端评价端点落地后应连同种子一起恢复。
  */
 
 /** mock 开关必须在应用启动前写入：RUNTIME_USE_MOCK 优先于 VITE_USE_MOCK */
@@ -51,8 +65,11 @@ async function gotoReviews(page: Page) {
   return root
 }
 
-/** 种子评价的 8 位作者 —— 断言「渲染了哪几条」时用 */
-const SEED_AUTHORS = [
+/**
+ * 已下线的**演示种子**作者。保留这份名单是为了**反向断言**：它们一个都不该出现
+ * （这正是"伪造评价已关闭"的可观测证据）。
+ */
+const RETIRED_SEED_AUTHORS = [
   'Alex Chen',
   'Sarah Miller',
   'Jordan Wang',
@@ -63,130 +80,46 @@ const SEED_AUTHORS = [
   'Rachel Torres',
 ]
 
-test.describe('商品详情 · 评价区', () => {
+const EMPTY_TEXT = 'No reviews yet. Be the first to share your experience.'
+
+test.describe('商品详情 · 评价区（匿名）—— 诚实空态', () => {
   test.beforeEach(async ({ page }) => {
     await seedSession(page)
   })
 
-  test('渲染种子评价：首屏 6 条，其余靠 Load More', async ({ page }) => {
+  test('禁用演示种子后渲染诚实空态：0 条评价 + 空态文案', async ({ page }) => {
     const root = await gotoReviews(page)
 
-    await expect(root.getByText(/8 reviews/)).toBeVisible()
-    for (const name of SEED_AUTHORS.slice(0, 6)) {
-      await expect(root.getByText(name, { exact: true })).toBeVisible()
-    }
-    // 第 7、8 条要翻页才出来
-    await expect(root.getByText('David Kim', { exact: true })).toBeHidden()
-    await expect(root.getByRole('button', { name: /Load More Reviews/ })).toBeVisible()
+    await expect(root.getByText(EMPTY_TEXT)).toBeVisible()
+    await expect(root.getByText('0 reviews')).toBeVisible()
+    // 空态下不该出现「清空筛选」—— 没有任何评价被筛掉,重置按钮是无意义的
+    await expect(root.getByText('Clear filters')).toHaveCount(0)
   })
 
-  test('Load More 把剩下的评价放出来，按钮随之消失', async ({ page }) => {
+  test('演示种子作者一个都不出现（反向断言:伪造评价确实关闭）', async ({ page }) => {
     const root = await gotoReviews(page)
 
-    await root.getByRole('button', { name: /Load More Reviews/ }).click()
-
-    await expect(root.getByText('David Kim', { exact: true })).toBeVisible()
-    await expect(root.getByText('Rachel Torres', { exact: true })).toBeVisible()
-    await expect(root.getByRole('button', { name: /Load More Reviews/ })).toBeHidden()
-  })
-
-  test('评分分布按 5→1 列出五档', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    // 分布条每档形如 [星数][星标][横条][条数]
-    for (const star of ['5', '4', '3', '2', '1']) {
-      await expect(root.locator(`text="${star}"`).first()).toBeVisible()
+    for (const name of RETIRED_SEED_AUTHORS) {
+      await expect(root.getByText(name, { exact: true })).toHaveCount(0)
     }
   })
 
-  test('星级筛选：点 5★ 后只剩 5 星评价', async ({ page }) => {
+  test('没有评价时筛选与搜索控件仍在，且操作不报错', async ({ page }) => {
     const root = await gotoReviews(page)
 
-    await root.getByRole('button', { name: '5★' }).click()
+    // 控件仍渲染（模板未按"有评价"条件隐藏）
+    await expect(root.getByPlaceholder('Search reviews...')).toBeVisible()
+    await expect(root.getByRole('button', { name: '5★' })).toBeVisible()
+    await expect(root.getByRole('button', { name: 'With Images' })).toBeVisible()
 
-    // 种子里的 5 星是 Alex Chen / Jordan Wang / Michael Brown
-    await expect(root.getByText('Alex Chen', { exact: true })).toBeVisible()
-    await expect(root.getByText('Sarah Miller', { exact: true })).toBeHidden()
-    await expect(root.getByText('Lisa Park', { exact: true })).toBeHidden()
-  })
-
-  test('搜索命中作者名', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    await root.getByPlaceholder('Search reviews...').fill('Sarah')
-
-    await expect(root.getByText('Sarah Miller', { exact: true })).toBeVisible()
-    await expect(root.getByText('Alex Chen', { exact: true })).toBeHidden()
-  })
-
-  test('搜索命中正文（不只是作者名）', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    // 'expectations' 只出现在 Alex Chen 那条正文里，不在任何作者名中
-    await root.getByPlaceholder('Search reviews...').fill('expectations')
-
-    await expect(root.getByText('Alex Chen', { exact: true })).toBeVisible()
-    await expect(root.getByText('Sarah Miller', { exact: true })).toBeHidden()
-  })
-
-  test('"With Images" 只留带图评价', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    await root.getByRole('button', { name: 'With Images' }).click()
-
-    // 种子里只有 Michael Brown 带图
-    await expect(root.getByText('Michael Brown', { exact: true })).toBeVisible()
-    await expect(root.getByText('Alex Chen', { exact: true })).toBeHidden()
-  })
-
-  test('筛选到空集时显示空态与「清空筛选」，点了能恢复', async ({ page }) => {
-    const root = await gotoReviews(page)
-
+    // 空集上操作：仍是空态、不得抛错或白屏
     await root.getByPlaceholder('Search reviews...').fill('zzz-no-such-review')
-
-    await expect(root.getByText('No reviews match your filters.')).toBeVisible()
-    await root.getByText('Clear filters').click()
-    await expect(root.getByText('Alex Chen', { exact: true })).toBeVisible()
+    await root.getByRole('button', { name: '5★' }).click()
+    await expect(root.getByText(EMPTY_TEXT)).toBeVisible()
+    await expect(root.getByText('0 reviews')).toBeVisible()
   })
 
-  test('排序切到 Most Helpful 后，helpful 最多的那条排第一', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    await root.locator('select').selectOption('most-helpful')
-
-    // 种子里 Michael Brown 是 20（最高）。用第一张卡的文本判断
-    const firstCard = root.locator('.rounded-xl.border.border-border.bg-card').first()
-    await expect(firstCard).toContainText('Michael Brown')
-  })
-
-  test('helpful 投票 +1，且同一评价只能投一次', async ({ page }) => {
-    const root = await gotoReviews(page)
-    // lucide 图标自带 lucide-<name> class，比按文案定位稳
-    const voteButton = root.locator('button:has(svg.lucide-thumbs-up)').first()
-
-    const before = Number((await voteButton.innerText()).trim())
-    await voteButton.click()
-
-    await expect(voteButton).toHaveText(String(before + 1))
-    // 再点一次：提示已投，计数不变
-    await voteButton.click()
-    await expect(page.getByText('Already marked helpful')).toBeVisible()
-    await expect(voteButton).toHaveText(String(before + 1))
-  })
-
-  test('未登录点 Reply 会引导登录，而不是静默失败', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    await root
-      .getByRole('button', { name: /^Reply/ })
-      .first()
-      .click()
-
-    await expect(page.getByText('You need to log in to reply.')).toBeVisible()
-    await expect(page).toHaveURL(/\/login/)
-  })
-
-  test('未登录写评价：提示并跳登录', async ({ page }) => {
+  test('未登录写评价：引导登录', async ({ page }) => {
     const root = await gotoReviews(page)
 
     await root.getByRole('button', { name: 'WRITE A REVIEW' }).click()
@@ -195,28 +128,17 @@ test.describe('商品详情 · 评价区', () => {
 
     await expect(page).toHaveURL(/\/login/)
   })
-
-  test('带图评价的图片可点开灯箱，点背景关闭', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    // Michael Brown 那条带图
-    await root.getByRole('button', { name: 'With Images' }).click()
-    await root.locator('img.cursor-zoom-in').first().click()
-
-    const lightbox = page.locator('.backdrop-blur-sm')
-    await expect(lightbox).toBeVisible()
-    await lightbox.click({ position: { x: 10, y: 10 } })
-    await expect(lightbox).toBeHidden()
-  })
 })
 
-test.describe('商品详情 · 评价区（登录态）', () => {
+test.describe('商品详情 · 评价区（登录态）—— 唯一数据来源是用户自己写的', () => {
   test.beforeEach(async ({ page }) => {
     await seedSession(page, { loggedIn: true })
   })
 
-  test('登录后可以写评价，提交后立刻出现在最上面并计入总数', async ({ page }) => {
+  test('登录后写评价：提交后立刻出现、计数从 0 变 1、可删除', async ({ page }) => {
     const root = await gotoReviews(page)
+
+    await expect(root.getByText('0 reviews')).toBeVisible()
 
     await root.getByRole('button', { name: 'WRITE A REVIEW' }).click()
     await root.getByPlaceholder('Share your experience with this product...').fill('E2E 写的评价')
@@ -224,27 +146,14 @@ test.describe('商品详情 · 评价区（登录态）', () => {
 
     await expect(page.getByText('Review submitted')).toBeVisible()
     await expect(root.getByText('E2E 写的评价')).toBeVisible()
-    await expect(root.getByText(/9 reviews/)).toBeVisible()
+    await expect(root.getByText('1 reviews')).toBeVisible()
     // 自己写的评价有删除按钮
     await expect(root.getByTitle('Delete your review')).toBeVisible()
+    // 空态随数据出现而消失
+    await expect(root.getByText(EMPTY_TEXT)).toHaveCount(0)
   })
 
-  test('登录后可以回复一条**种子**评价，且该评价不会重复出现', async ({ page }) => {
-    const root = await gotoReviews(page)
-
-    await expect(root.getByText(/8 reviews/)).toBeVisible()
-    await root.locator('button:has(svg.lucide-reply)').first().click()
-    await root.getByPlaceholder('Write a reply...').fill('谢谢反馈')
-    // 「Reply」既是每张卡的操作按钮也是提交按钮，按 role+name 会撞上 6 个 —— 用 testid
-    await root.getByTestId('review-reply-submit').click()
-
-    await expect(page.getByText('Reply posted')).toBeVisible()
-    // 关键：回复种子评价会把种子克隆进用户区。若两处都渲染，作者名会出现两次
-    await expect(root.getByText('Sarah Miller', { exact: true })).toHaveCount(1)
-    await expect(root.getByText('谢谢反馈')).toBeVisible()
-  })
-
-  test('刷新后自己写的评价与回复仍在（localStorage 持久化）', async ({ page }) => {
+  test('刷新后自己写的评价仍在（localStorage 持久化）', async ({ page }) => {
     const root = await gotoReviews(page)
     await root.getByRole('button', { name: 'WRITE A REVIEW' }).click()
     await root.getByPlaceholder('Share your experience with this product...').fill('持久化检查')
@@ -255,5 +164,6 @@ test.describe('商品详情 · 评价区（登录态）', () => {
 
     const again = page.locator('#reviews-section')
     await expect(again.getByText('持久化检查')).toBeVisible({ timeout: 15_000 })
+    await expect(again.getByText('1 reviews')).toBeVisible()
   })
 })

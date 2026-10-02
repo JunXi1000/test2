@@ -10,6 +10,14 @@ export interface PaymentCreatePayload {
   channel?: string
   /** 下单成功后待清除的购物车行 id(登录态购物车的 serverId,可选) */
   cartItemIds?: number[]
+  /**
+   * 本单要核销的优惠码(可选)。
+   *
+   * 后端 `ProductOrderServiceImpl.createStorefrontOrder` **只在收到 `code` 非空时**
+   * 才核销优惠并把减免计进实付;结算页把同一个码也发给 `/checkout/summary`,
+   * 两处一致才能保证「页面显示额 == 实际扣款」(AC-04.2 / BLK-4)。
+   */
+  code?: string
   shipping: {
     name: string
     address: string

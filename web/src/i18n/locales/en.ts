@@ -166,14 +166,12 @@ export default {
     hidePassword: 'Hide password',
   },
   home: {
-    recommended: 'Recommended for You',
-    recentlyViewed: 'Recently Viewed',
+    // 2026-10：recommended / recommendedHint / recentlyViewed / clearHistory 四个键
+    // 随首页那两个板块一起删除，别再把它们加回来（没有界面在用了）。
     flashSale: 'Flash Sale',
     browseByCategory: 'Browse by Category',
     popularProducts: 'Popular Products',
     newArrivals: 'New Arrivals',
-    recommendedHint: 'Based on your browsing &amp; wishlist',
-    clearHistory: 'Clear History',
   },
   cart: {
     title: 'Shopping Cart',
@@ -218,6 +216,9 @@ export default {
     promoRemovedDesc: 'Discount has been removed.',
     loginRequired: 'Login required',
     loginRequiredDesc: 'Please sign in to proceed to checkout.',
+    // 购物车金额改由 /checkout/summary（需登录）给出后的占位说明 —— 匿名时不显示一个
+    // 可能不对的应付总额，改说明为什么看不到（见 docs/TASK-002/05-FRONTEND-FIX.md）
+    loginForTotal: 'Sign in to see your order total. It is calculated on our side.',
     itemUpdated: 'Cart updated',
     itemUpdatedDesc: 'Item options have been changed.',
     selectionRequired: 'Selection required',
@@ -329,6 +330,11 @@ export default {
     pointsAvailable: '{points} pts available',
     pointsApplied: 'Loyalty discount: ${amount}',
     pointsHint: '100 points = $1 off, applied at payment.',
+    // 积分抵扣入口已下线（G1 / BLK-E1）：后端没有积分概念，输入框按下的抵扣不会体现在
+    // 实扣里，只会让页面显示额低于实际扣款。余额改为只读展示 + 这句说明。
+    // 注意 pointsApplied / pointsHint 保留未删：页面不再渲染它们，但删 key 属于无关改动。
+    pointsNotRedeemable:
+      'Redeeming points is not available yet, so they cannot be applied to this order. Your balance is kept, and you will still earn points from this purchase.',
   },
   store: {
     follow: 'Follow',

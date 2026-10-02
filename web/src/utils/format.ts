@@ -13,7 +13,24 @@
  * 本地函数（两份是这个、两份是 Plain），现已全部换成本模块的对应导出，**显示零变化**。
  */
 export function formatPrice(n: number) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return toAmount(n).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * 金额入参归一：`undefined` / `null` / `NaN` / `Infinity` 一律按 0 处理。
+ *
+ * 为什么需要（`formatPricePlain` 早就为同一目的做了 `Number(price ?? 0)`，这里补齐它）：
+ * 结算页消费 `/checkout/summary` 的响应，而后端正在把运费/税移出契约。一旦某个字段真的
+ * 没回来，`undefined.toLocaleString()` 与 `NaN.toLocaleString()` 都会把 **"NaN"** 直接
+ * 印到资损页面上。宁可显示 `$0.00`，也不要让 NaN 出现在结算页。
+ * 对合法数字**零影响**。
+ */
+function toAmount(n: number | undefined | null): number {
+  const v = Number(n)
+  return Number.isFinite(v) ? v : 0
 }
 
 /**
@@ -27,5 +44,5 @@ export function formatPrice(n: number) {
  * 不该显示 `NaN`。
  */
 export function formatPricePlain(price: number | undefined): string {
-  return Number(price ?? 0).toLocaleString('en-US')
+  return toAmount(price).toLocaleString('en-US')
 }

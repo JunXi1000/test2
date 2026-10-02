@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  看板 / 目录聚合查询(全部只读)。
+
+  「已支付」口径集中在本文件唯一一处片段 paidOrderFilter —— 改营收口径只改这一行,
+  不要在别处复制条件。用白名单(status IN ...)而非 NOT IN,是刻意的 fail-closed:
+  将来新增的状态默认不计入营收。
+-->
+<mapper namespace="com.project.platform.mapper.AnalyticsMapper">
+
+    <!-- 已支付订单行(排除「待支付」「已取消」);配合可选的 shop_id / 时间窗 -->
+    <sql id="paidOrderFilter">
+        AND product_order.status IN ('待发货', '待收货', '已完成')
+        <if test="shopId != null">
+            AND product_order.shop_id = #{shopId}
+        </if>
+        <if test="since != null">
+            AND product_order.create_time <![CDATA[ >= ]]> #{since}
+        </if>
+    </sql>
+
+    <!-- 搜索条件(POST /search 的 q + category) —— 分面各维度共用,保证「点哪个分面口径都一样」 -->
+    <sql id="searchFilters">
+        <where>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND product.name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="productTypeId != null">
+                AND product.product_type_id = #{productTypeId}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 按自然日聚合的结果映射:别名避开 date/value 这类易与关键字/类型撞名的列名 -->
+    <resultMap id="dailyRevenueMap" type="com.project.platform.vo.RevenuePointVO">
+        <result property="date" column="stat_day"/>
+        <result property="value" column="stat_value"/>
+    </resultMap>
+
+    <!-- ══════════════════ 收入 / 订单 ══════════════════ -->
+
+    <select id="sumPaidRevenue" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(product_order.total_money), 0)
+        FROM product_order
+        WHERE 1 = 1
+        <include refid="paidOrderFilter"/>
+    </select>
+
+    <select id="countPaidOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM product_order
+        WHERE 1 = 1
+        <include refid="paidOrderFilter"/>
+    </select>
+
+    <select id="countOrders" resultType="int">
+        SELECT COUNT(*)
+        FROM product_order
+        WHERE 1 = 1
+        <if test="shopId != null">
+            AND product_order.shop_id = #{shopId}
+        </if>
+    </select>
+
+    <!--
+      订单**单数**(非行数)。去重键用 COALESCE(order_no, CONCAT('legacy-', id)):
+      存量数据里 Phase 2 之前的订单行 order_no 为 NULL、各自成组,而 COUNT(DISTINCT order_no)
+      会跳过 NULL —— 直接用会把那批历史订单整批漏计,统计偏低。
+      CONCAT 在 MySQL 与 H2(MODE=MySQL)下都可用,故测试与生产行为一致。
+    -->
+    <select id="countDistinctPaidOrders" resultType="int">
+        SELECT COUNT(DISTINCT COALESCE(product_order.order_no,
+                                        CONCAT('legacy-', product_order.id)))
+        FROM product_order
+        WHERE 1 = 1
+        <include refid="paidOrderFilter"/>
+    </select>
+
+    <select id="countDistinctOrders" resultType="int">
+        SELECT COUNT(DISTINCT COALESCE(product_order.order_no,
+                                        CONCAT('legacy-', product_order.id)))
+        FROM product_order
+        WHERE 1 = 1
+        <if test="shopId != null">
+            AND product_order.shop_id = #{shopId}
+        </if>
+    </select>
+
+    <!--
+      按自然日聚合。DATE(create_time) 在 MySQL 与 H2(MODE=MySQL)下都可用,
+      故测试库与生产库行为一致(测试跑的是真 H2,不是 mock)。
+      返回的行只覆盖「当天有已支付订单」的日期,缺日期由服务层补 0。
+    -->
+    <select id="sumRevenueByDay" resultMap="dailyRevenueMap">
+        SELECT DATE(product_order.create_time) AS stat_day,
+               COALESCE(SUM(product_order.total_money), 0) AS stat_value
+        FROM product_order
+        WHERE 1 = 1
+        <include refid="paidOrderFilter"/>
+        GROUP BY DATE(product_order.create_time)
+        ORDER BY stat_day
+    </select>
+
+    <!-- 没有已支付订单的店铺不在结果里,由服务层按 0 兜底(故不需要 LEFT JOIN) -->
+    <select id="sumRevenueByShop" resultType="com.project.platform.vo.ShopRevenueVO">
+        SELECT product_order.shop_id AS shopId,
+               COALESCE(SUM(product_order.total_money), 0) AS revenue
+        FROM product_order
+        WHERE product_order.shop_id IS NOT NULL
+        <include refid="paidOrderFilter"/>
+        GROUP BY product_order.shop_id
+    </select>
+
+    <!-- ══════════════════ 计数 ══════════════════ -->
+
+    <select id="countProducts" resultType="int">
+        SELECT COUNT(*)
+        FROM product
+        <where>
+            <if test="shopId != null">
+                product.shop_id = #{shopId}
+            </if>
+        </where>
+    </select>
+
+    <select id="countEnabledUsers" resultType="int">
+        SELECT COUNT(*) FROM user WHERE status = '启用'
+    </select>
+
+    <select id="countUsersCreatedSince" resultType="int">
+        SELECT COUNT(*)
+        FROM user
+        <where>
+            create_time <![CDATA[ >= ]]> #{since}
+        </where>
+    </select>
+
+    <select id="sumSalesVolume" resultType="int">
+        SELECT COALESCE(SUM(product.sales_volume), 0)
+        FROM product
+        <where>
+            <if test="shopId != null">
+                product.shop_id = #{shopId}
+            </if>
+        </where>
+    </select>
+
+    <select id="countDistinctOrderingUsers" resultType="int">
+        SELECT COUNT(DISTINCT user_id)
+        FROM product_order
+        <where>
+            user_id IS NOT NULL
+            AND create_time <![CDATA[ >= ]]> #{since}
+        </where>
+    </select>
+
+    <!-- ══════════════════ 目录 / 搜索 ══════════════════ -->
+
+    <select id="countByProductType" resultType="com.project.platform.vo.CategoryCountVO">
+        SELECT product_type.name AS name, COUNT(product.id) AS count
+        FROM product
+        JOIN product_type ON product.product_type_id = product_type.id
+        <include refid="searchFilters"/>
+        GROUP BY product_type.id, product_type.name
+        ORDER BY count DESC, product_type.name
+    </select>
+
+    <!--
+      价格分桶。桶序号 0~4 的边界必须与 PriceBucketCountVO 的类注释保持一致。
+      用 CASE 而不是 BETWEEN 链,是为了让「无上界」这一档不需要 NULL 拼接。
+    -->
+    <select id="countByPriceBucket" resultType="com.project.platform.vo.PriceBucketCountVO">
+        SELECT CASE
+                   WHEN product.price &lt; 50 THEN 0
+                   WHEN product.price &lt; 200 THEN 1
+                   WHEN product.price &lt; 500 THEN 2
+                   WHEN product.price &lt; 1000 THEN 3
+                   ELSE 4
+                   END AS bucket,
+               COUNT(*) AS count
+        FROM product
+        <include refid="searchFilters"/>
+        GROUP BY bucket
+    </select>
+
+    <!--
+      「评分 ≥ N 星」的商品数。评分只挂在 product_order_evaluate 上(无 shop_id),
+      一个商品可能有多条评价,故按商品去重 —— 任一评价达标即计入。
+    -->
+    <select id="countProductsRatedAtLeast" resultType="int">
+        SELECT COUNT(DISTINCT product.id)
+        FROM product
+        JOIN product_order_evaluate ON product_order_evaluate.product_id = product.id
+        <where>
+            <if test="keyword != null and keyword.trim() != ''">
+                AND product.name LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="productTypeId != null">
+                AND product.product_type_id = #{productTypeId}
+            </if>
+            AND product_order_evaluate.rate <![CDATA[ >= ]]> #{minRate}
+        </where>
+    </select>
+
+    <!-- 销量为 0 的不算「热门」;销量并列时按 id 升序,保证返回稳定可测 -->
+    <select id="topSellingProductNames" resultType="java.lang.String">
+        SELECT product.name
+        FROM product
+        WHERE product.sales_volume > 0
+        AND product.name IS NOT NULL
+        AND product.name != ''
+        ORDER BY product.sales_volume DESC, product.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- ══════════════════ 店铺公开页 ══════════════════ -->
+
+    <!--
+      店铺评价聚合。无评价时 AVG 返回 NULL → avgRating 为 null(不是 0:
+      0 分会被读成「差评」),调用方需自己处理。
+      好评率按「4 星及以上」计算,分母用 COALESCE 防除零。
+    -->
+    <select id="statShopRating" resultType="com.project.platform.vo.ShopRatingVO">
+        SELECT AVG(product_order_evaluate.rate)                AS avgRating,
+               COUNT(product_order_evaluate.id)                AS totalReviews,
+               COALESCE(SUM(CASE WHEN product_order_evaluate.rate >= 4 THEN 1 ELSE 0 END) * 100
+                        / NULLIF(COUNT(product_order_evaluate.id), 0), 0) AS satisfactionRate
+        FROM product_order_evaluate
+        JOIN product ON product_order_evaluate.product_id = product.id
+        WHERE product.shop_id = #{shopId}
+    </select>
+
+</mapper>

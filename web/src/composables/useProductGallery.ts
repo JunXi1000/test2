@@ -6,8 +6,6 @@ import type { Product } from '@/types/product'
 export type GalleryItem = { kind: 'image'; src: string } | { kind: 'video'; src: string }
 
 export interface UseProductGalleryOptions {
-  /** 用来给 picsum 备选图生成稳定 seed —— 同一个商品的备选图不该每次都换 */
-  productId: number
   product: Ref<Product | null>
   /** 选中颜色会影响主图（变体图优先）；卡片槽位 key 也带它，切换颜色要重新走失败转移链 */
   selectedColor: Ref<{ name: string; value?: string } | null>
@@ -23,15 +21,15 @@ export interface UseProductGalleryOptions {
 }
 
 /**
- * 商品图集：主图/视频混排、切换、缩略图、悬停放大镜，以及**外链图失败转移**。
+ * 商品图集：主图/视频混排、切换、缩略图、悬停放大镜，以及**图片失败兜底**。
  *
- * 失败转移链是这块最不显然的部分：每张图按 slot 记住自己失败到第几级
- * （`imageFailoverCursor`），原图挂了换 picsum，再挂换备选 seed，最后落到内联占位图。
+ * 失败兜底是这块最不显然的部分：每张图按 slot 记住自己失败到第几级
+ * （`imageFailoverCursor`），原图挂了就落内联占位图。
  * 用 slot 而不是 URL 做键，是因为同一个 URL 可能出现在多个位置（主图 + 缩略图），
  * 各自的重试进度要独立。
  */
 export function useProductGallery(options: UseProductGalleryOptions) {
-  const { productId, product, selectedColor, heroCardRef, thumbnailStripRef } = options
+  const { product, selectedColor, heroCardRef, thumbnailStripRef } = options
 
   const currentImageIndex = ref(0)
 
@@ -86,26 +84,32 @@ export function useProductGallery(options: UseProductGalleryOptions) {
     resolveImageSrc(mainImageSlotKey.value, currentImage.value || IMAGE_FALLBACK),
   )
 
-  // ── 外链图失败转移 ──
+  // ── 图片失败兜底 ──
   const imageFailoverCursor = ref<Record<string, number>>({})
   const isDevMode = import.meta.env.DEV
   const devImageFailTotal = ref(0)
   const devImageFailByUrl = ref<Record<string, number>>({})
 
-  function buildImageCandidates(primarySrc: string, slotKey: string) {
-    const sanitizedPrimary = String(primarySrc || '').trim()
-    const seed = encodeURIComponent(`product-${productId}-${slotKey}`)
-    const candidates = [
-      sanitizedPrimary,
-      `https://picsum.photos/seed/${seed}/1200/900`,
-      `https://picsum.photos/seed/${seed}-alt/1200/900`,
-    ].filter(Boolean)
-    candidates.push(IMAGE_FALLBACK)
-    return candidates
+  /**
+   * 候选图序列：**只有原图与内联占位图两级**。
+   *
+   * 2026-10 移除了这里原本的两级 picsum 备选（原图 → picsum 主 seed → picsum 备选 seed → 占位图）。
+   * 起因：示例数据的商品图是 `/img/p1.jpg` 这类路径，而 `web/public/` 下没有 `img/` 目录 ——
+   * 而 Vite 是 SPA，未匹配路径会**回落到 index.html 并返回 HTTP 200 + text/html**，
+   * 于是一张 HTML 被当成图片、解码失败、触发 @error、再对外打两次 picsum.photos。
+   * picsum 是 302 跳转 + 取图两跳、单张约 1.5s，每次打开详情页都在 Network 面板里"一直请求"；
+   * 更糟的是它会把一张**与本商品无关的随机风景照**当作商品图显示，
+   * 比明确写着 "Image unavailable" 的占位图更容易误导。现在失败即落占位图：零外部请求、语义诚实。
+   *
+   * 保留"分级候选"这个形状（而不是直接把 src 写死成占位图），是为了游标仍按 slot 记进度；
+   * 以后若要再加**本地**候选图（如 `/img/placeholder.jpg`），往数组里插一项即可。
+   */
+  function buildImageCandidates(primarySrc: string) {
+    return [String(primarySrc || '').trim(), IMAGE_FALLBACK].filter(Boolean)
   }
 
   function resolveImageSrc(slotKey: string, primarySrc: string) {
-    const candidates = buildImageCandidates(primarySrc, slotKey)
+    const candidates = buildImageCandidates(primarySrc)
     const cursor = imageFailoverCursor.value[slotKey] ?? 0
     return candidates[Math.min(cursor, candidates.length - 1)]
   }
@@ -117,7 +121,7 @@ export function useProductGallery(options: UseProductGalleryOptions) {
   function onImageError(event: Event, slotKey: string, primarySrc: string) {
     const target = event.target as HTMLImageElement
     if (!target) return
-    const candidates = buildImageCandidates(primarySrc, slotKey)
+    const candidates = buildImageCandidates(primarySrc)
     const currentCursor = imageFailoverCursor.value[slotKey] ?? 0
     const nextCursor = Math.min(currentCursor + 1, candidates.length - 1)
     const failedSrc = target.currentSrc || target.src || primarySrc

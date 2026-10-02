@@ -172,9 +172,25 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/Cart.vue'),
       },
       {
+        /**
+         * 结算页必须登录（2026-10-01，TASK-002 / C0）。
+         *
+         * 这里加 `requiresAuth` 不是"顺手收紧"，而是修一个真实的错误流程：
+         * `/checkout/summary` 与 `/checkout/promo` 已按 C0 移出白名单 ⇒ 匿名调用返回 401，
+         * 而 `api/http.ts` 的 401 拦截器把 401 当作**会话过期**处理：清 token、跳登录。
+         * 于是匿名访客只要打开结算页，就会被当成"登录过期"踢出去 —— 而路由守卫本来
+         * 能在**发请求之前**干净地跳 `?redirect=/checkout`。守卫做这件事比拦截器做更准确。
+         *
+         * 角色限 `user`：结算/支付是买家动作，商家/管理员账号没有买家购物车
+         * （与 `dashboard` 一致），避免他们误入后触发一堆 403/401。
+         *
+         * `/cart` **保持公开**：购物车可以匿名浏览（本地小计 + 登录后可见总额，
+         * 见 `composables/useCartSummary.ts`），它不发任何非白名单请求。
+         */
         path: 'checkout',
         name: 'Checkout',
         component: () => import('@/pages/Checkout.vue'),
+        meta: { requiresAuth: true, role: 'user' },
       },
       {
         path: 'signup',

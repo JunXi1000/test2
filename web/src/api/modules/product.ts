@@ -356,7 +356,11 @@ export async function getProductById(id: number): Promise<Product> {
 
     const enriched: Product = {
       ...item,
-      images: [item.image, item.image, item.image],
+      // 只给一张。这里曾经写 `[item.image, item.image, item.image]`，
+      // 但真实后端并不返回 `images`（它给的是 mainImg / imgList 两个字符串），
+      // 运行时的图集实际就是 `[item.image]` 一张。重复三份只会造出 3 个指向同一 URL
+      // 的相同缩略图，并把图集相关请求与失败兜底的 slot 数一起乘 3 —— 与生产行为不符。
+      images: [item.image],
       video: HAS_DEMO_VIDEO(item.id) ? DEMO_VIDEO_URL : undefined,
       description: variant.description,
       rating: +(3.8 + (id % 13) * 0.1).toFixed(1),

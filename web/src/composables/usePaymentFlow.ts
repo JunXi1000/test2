@@ -30,6 +30,14 @@ export interface UsePaymentFlowOptions {
   formData: PaymentShippingForm
   /** 实付金额（已扣积分） */
   total: Ref<number>
+  /**
+   * 本次下单要核销的优惠码（**已生效的那个**，没有则空串）。
+   *
+   * 必须与发给 `/checkout/summary` 的是同一个码：后端只有在 `code` 非空时才核销并把
+   * 减免计进实付，所以漏发就等于「页面显示了优惠、扣款不优惠」（BLK-4）。
+   * 传 `Ref<string>` 而不是值：用户可能在支付前移除/换码，payload 要取「此刻」的值。
+   */
+  discountCode: Ref<string>
   /** 选中的已保存卡；非空走 token 扣款并跳过卡号 */
   savedCard: Ref<SavedPaymentMethod | null>
   /** 步骤游标。网关拒付 / 3DS 失败时由本组合式置回 1（支付步） */
@@ -57,7 +65,8 @@ export interface UsePaymentFlowOptions {
  * 「拒付 → 写错误 → toast → 退回支付步」和一份 catch，只有变量名不同。
  */
 export function usePaymentFlow(options: UsePaymentFlowOptions) {
-  const { items, formData, total, savedCard, currentStep, isCompletingOrder, finalize } = options
+  const { items, formData, total, discountCode, savedCard, currentStep, isCompletingOrder, finalize } =
+    options
   const { toast } = useToast()
   const { t } = useI18n()
 
@@ -128,6 +137,9 @@ export function usePaymentFlow(options: UsePaymentFlowOptions) {
         items: items.value.map((it) => ({ productId: it.id, quantity: it.quantity })),
         amount: total.value,
         currency: 'USD',
+        // 已生效的优惠码:后端据此核销并把减免计进实付。**必须**与 /checkout/summary
+        // 收到的是同一个码,否则页面显示额与实际扣款不符(BLK-4)。空串等价于不用券。
+        code: discountCode.value,
         // 模拟银行卡网关;cartItemIds 让后端下单成功后清除对应购物车行(仅登录态有 serverId)
         channel: 'card',
         cartItemIds: items.value.map((it) => it.serverId).filter((id): id is number => !!id),

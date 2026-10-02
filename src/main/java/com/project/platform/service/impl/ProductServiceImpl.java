@@ -125,6 +125,14 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    public List<Product> salesVolumeTopByShopId(Integer shopId, int size) {
+        if (shopId == null) {
+            return List.of();
+        }
+        return productMapper.salesVolumeTopByShopId(shopId, clampTopSize(size));
+    }
+
+    @Override
     public List<Product> recommended(Integer size) {
         int n = clampTopSize(size == null ? 10 : size);
         List<Product> productList = list();

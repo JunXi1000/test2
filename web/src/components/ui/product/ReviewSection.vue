@@ -275,9 +275,18 @@ onMounted(loadPersistedReviews)
     <EmptyState
       v-if="filteredReviews.length === 0"
       variant="compact"
-      description="No reviews match your filters."
+      :description="
+        mergedReviews.length === 0
+          ? 'No reviews yet. Be the first to share your experience.'
+          : 'No reviews match your filters.'
+      "
     >
-      <button class="text-xs text-primary hover:underline mt-1" @click="resetReviewFilters">
+      <!-- 只有「有评价但被筛掉」才需要重置按钮；一个评价都没有时重置是无意义的 -->
+      <button
+        v-if="mergedReviews.length > 0"
+        class="text-xs text-primary hover:underline mt-1"
+        @click="resetReviewFilters"
+      >
         Clear filters
       </button>
     </EmptyState>

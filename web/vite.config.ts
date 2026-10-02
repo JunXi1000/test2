@@ -12,9 +12,38 @@ export default defineConfig({
     vueJsx(),
     Components({
       dts: 'src/components.d.ts',
-      resolvers: [ElementPlusResolver()],
+      // importStyle: false —— 样式改为在 main.ts 里**一次性全量引入**（见那里的长注释）。
+      //
+      // 起因（实测）：默认的按需样式会把每个组件展开成
+      // `element-plus/es/components/<组件>/style/css` 这类深层导入。这些路径在 Vite 启动时
+      // **不在依赖预构建清单里**，只能用到哪个才发现哪个；每发现一个新的，Vite 就重跑预构建
+      // 并打印 `optimized dependencies changed. reloading` —— 也就是**整页强制刷新**。
+      // 实测前端日志里 11 分钟内出现了 **8 次**，症状是「一进新页面就卡很久、请求暴增」：
+      // 刷新会重新下载并重新执行全部首屏模块（53 个 / 3.1 MB 未压缩代码），页面状态全丢。
+      // 全量引入后这些深层样式模块根本不在图里，重载循环随之消失。
+      resolvers: [ElementPlusResolver({ importStyle: false })],
     }),
   ],
+  optimizeDeps: {
+    // 把「启动时无法自动发现、却会在运行期才被 import」的依赖**显式**列出来。
+    //
+    // 不列会怎样：Vite 在运行期发现新依赖 → 重新预构建 → `optimized dependencies changed.
+    // reloading` → 整页刷新。`element-plus/es` 正是实测日志里第一个被这样发现的
+    // （首次打开任意含 el-* 的页面时），提前声明可连这一次重载也省掉。
+    // echarts 的四个子路径同理：只有 admin 仪表盘会用到，进入它之前都是「未发现」状态。
+    include: [
+      'element-plus/es',
+      'echarts/core',
+      'echarts/charts',
+      'echarts/components',
+      'echarts/renderers',
+      'lucide-vue-next',
+      'axios',
+      'lodash-es',
+      '@vueuse/core',
+      'vue-i18n',
+    ],
+  },
   server: {
     // 绑 IPv4 回环，而不是 host: true。
     //

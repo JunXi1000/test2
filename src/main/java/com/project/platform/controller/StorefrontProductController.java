@@ -2,6 +2,7 @@ package com.project.platform.controller;
 
 import com.project.platform.entity.Product;
 import com.project.platform.entity.ProductType;
+import com.project.platform.service.AnalyticsService;
 import com.project.platform.service.ProductService;
 import com.project.platform.service.ProductTypeService;
 import com.project.platform.utils.PageParams;
@@ -27,6 +28,9 @@ public class StorefrontProductController {
 
     @Resource
     private ProductTypeService productTypeService;
+
+    @Resource
+    private AnalyticsService analyticsService;
 
     /**
      * GET /products?category=&q=&sort=price-asc|price-desc|default&page=&limit=
@@ -75,17 +79,13 @@ public class StorefrontProductController {
 
     /**
      * GET /products/category-counts
+     *
+     * <p>2026-09-27 起为真实聚合(此前每个分类恒为 0,注释写着 "Placeholder")。
+     * 返回全部分类(含 0 件的)+ 首项 "All"(全站商品数),顺序与分类表一致。
      */
     @GetMapping("/category-counts")
     public ResponseVO<Map<String, Integer>> getCategoryCounts() {
-        List<ProductType> types = productTypeService.list();
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        // Placeholder — could be wired to ProductMapper.selectTypeCount()
-        counts.put("All", 0);
-        for (ProductType pt : types) {
-            counts.put(pt.getName(), 0);
-        }
-        return ResponseVO.ok(counts);
+        return ResponseVO.ok(analyticsService.categoryCounts());
     }
 
     /**
