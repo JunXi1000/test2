@@ -1,19 +1,23 @@
 # ─────────────────────────────────────────────────────────────────────────
 # Nexus Market 开发环境编排
-#   - 镜像只含运行环境(JDK/Maven/Node/MySQL),不含项目代码
+#   - 镜像只含运行环境(JDK/Maven/Node/MySQL + 已预热的依赖),不含项目代码
 #   - 代码通过 ../ → /workspace 挂载;改代码即时生效,无需重建镜像
 #   - 首次启动自动初始化 MySQL 并导入建表脚本(见 entrypoint.sh)
 #
-# 用法:
-#   cd docker && docker compose up -d --build    # 构建并后台启动
-#   docker compose exec dev bash                 # 进入容器
-#   docker compose down                          # 停止(加 -v 连 mysql 数据卷一起删)
+# ── 给「刚 clone 下来的人」──────────────────────────────────────────────
+#   在**仓库根目录**执行(Windows 双击 start.bat 即可):
+#     ./start.sh          # 拉镜像 → 起容器 → 等前后端就绪 → 打印地址
+#     ./stop.sh           # 停止(数据保留)
+#   或手动:
+#     docker compose -f docker/docker-compose.yml pull    # 拉取环境镜像(优先)
+#     docker compose -f docker/docker-compose.yml up -d   # 启动(拉不到才本地构建)
 #
-# 发布为「他人可拉取」镜像:
-#   docker compose build                         # 或直接 docker build ../ -f Dockerfile
-#   docker tag nexus-market/dev-env:1.0 <你的registry>/nexus-dev-env:1.0
-#   docker push <你的registry>/nexus-dev-env:1.0
-#   他人: docker pull <你的registry>/nexus-dev-env:1.0
+# ── 给「维护者」:构建并推送到 ghcr.io ──────────────────────────────────
+#     docker login ghcr.io -u <你的GitHub用户名>          # 口令用 PAT(classic,勾 write:packages)
+#     docker compose -f docker/docker-compose.yml build
+#     docker compose -f docker/docker-compose.yml push
+#   或直接用脚本: docker/scripts/publish-image.sh [tag]
+#   推完记得把 GHCR 上的 package 可见性改成 **public**,否则别人 pull 要登录。
 # ─────────────────────────────────────────────────────────────────────────
 # ⚠️ 本文件**只用于本机开发环境** —— 唯一的服务就叫 `dev`(容器 nexus-dev),
 #    里面所有默认值都是本地弱值(见下方 environment 段的说明)。
@@ -31,8 +35,26 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: nexus-market/dev-env:1.0
+    image: ${DEV_ENV_IMAGE:-ghcr.io/junxi1000/nexus-dev-env:1.0}
     container_name: nexus-dev
+    # ── entrypoint 用**挂载进来的仓库副本**,不是镜像里 COPY 进去的那份 ──
+    # 起因:Dockerfile 的 `COPY docker/entrypoint.sh` 把脚本固化进构建产物,仓库随后改了它也
+    # 测不出来。镜像里那份跑的是 `npm run dev`(绑 127.0.0.1),而 Docker 的 5173:5173 是把流量
+    # DNAT 到容器 eth0 —— 于是「容器一起来,前端在宿主机就打不开」,且 `docker compose up -d`
+    # 复用旧镜像,照抄 README 也修不好(README 写的 `--build` 才能换掉它)。
+    # 挂载之后 entrypoint.sh 归仓库管:改完 `docker compose up -d` 重建容器即生效,无需 --build。
+    #
+    # 用 `tr -d '\r'` 过一道再执行,是**必需的**而非洁癖:现在跑的是**工作区副本**,而本仓库位于
+    # OneDrive 目录、工作区文件普遍是 CRLF(.gitattributes 里 eol=lf 只覆盖了少数文件,且对已检出的
+    # 文件不追溯)。CR 会让 `set -e` 变成 `set -e\r` → bash 直接报 `set: -: invalid option`。
+    # 实测:printf 'set -e\r\n...' | bash → 「invalid option」。
+    # 注意 `.gitattributes` 已写 `docker/entrypoint.sh text eol=lf`,入库内容仍是 LF;这里防的是
+    # 本地被编辑器/同步客户端写回 CRLF 的情况。
+    # 另外用 `bash` 而非直接执行,以绕开 Windows 挂载卷上可执行位不可靠的问题。
+    entrypoint:
+      - /bin/bash
+      - -c
+      - tr -d '\r' < /workspace/docker/entrypoint.sh > /tmp/entrypoint.sh && exec /bin/bash /tmp/entrypoint.sh
     environment:
       TZ: Asia/Shanghai
       # ── 下面四项都给了**本地默认值**,clone 下来 docker compose up 即可跑 ──

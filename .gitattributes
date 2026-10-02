@@ -2,9 +2,15 @@
 #   - *.sh:shebang(#!/usr/bin/env bash)遇 CRLF 会变成 bash\r 导致容器崩溃
 #   - Dockerfile: 反斜杠续行遇 CRLF 会解析失败
 #   - docker-compose.yml: YAML 统一 LF
+# 反方向:.bat 必须 CRLF —— cmd.exe 解析多行 if( ... ) 块时依赖 CRLF,
+# 而 .ps1 用 CRLF 更贴近 Windows 习惯(PowerShell 两种都能读)。
 * text=auto
 *.sh text eol=lf
 Dockerfile text eol=lf
 docker/Dockerfile text eol=lf
 docker/docker-compose.yml text eol=lf
 docker/entrypoint.sh text eol=lf
+
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+

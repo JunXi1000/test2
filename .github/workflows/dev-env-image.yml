@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────
+# 构建并推送「开发环境镜像」到 GitHub Container Registry (ghcr.io)
+#
+# 为什么要有这个工作流:
+#   镜像里装的是 JDK/Maven/Node/MySQL **和预热好的依赖**,单架构约 1.6-1.9GB。
+#   让每个使用者自己在本地构建,等于每人重复下几百 MB 的 apt/npm/maven 包、等十分钟,
+#   还要求他们的网络能连上 archive.apache.org / deb.nodesource.com。
+#   集中构建一次、大家 pull 才是「clone 下来就能开工」的正确形态。
+#
+# 触发条件:
+#   · 改了镜像相关的输入文件(Dockerfile / entrypoint / pom.xml / package-lock.json)自动跑;
+#   · 也可以在 Actions 页面手动触发(workflow_dispatch)并指定 tag。
+#
+# ⚠️ 首次推送后必做一步:GitHub → Profile → Packages → nexus-dev-env → Package settings
+#    把可见性改成 **public**。GHCR 的包默认私有,不改的话别人 `docker pull` 会 401。
+#    (仓库本身公开不代表包公开 —— 这是两套独立设置,也是最容易漏的一步。)
+# ─────────────────────────────────────────────────────────────────────────
+name: dev-env image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '镜像标签(默认 1.0)'
+        required: false
+        default: '1.0'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/Dockerfile'
+      - 'docker/entrypoint.sh'
+      - 'docker/docker-compose.yml'
+      - 'pom.xml'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - '.github/workflows/dev-env-image.yml'
+
+# GITHUB_TOKEN 需要写 packages 才能推镜像;contents 只读即可。
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 镜像名必须全小写,而 github.repository_owner 可能是 JunXi1000 这种大小写混合,
+      # 直接用会得到 "repository name must be lowercase" 的报错。
+      # Actions 表达式没有 toLower(),所以用 runner 的 bash 参数扩展来归一化。
+      - name: Resolve image name
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexus-dev-env" >> "$GITHUB_ENV"
+          echo "TAG=${{ github.event.inputs.tag || '1.0' }}" >> "$GITHUB_ENV"
+
+      - name: Show target
+        run: echo "will publish $IMAGE:$TAG"
+
+      # QEMU 让 x86 runner 能构建 arm64 层:Apple Silicon 的 Mac 才能原生跑,
+      # 否则要在模拟下启动(能用,但后端 Maven 编译明显更慢)。
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.TAG }}
+            ${{ env.IMAGE }}:latest
+          # 依赖预热层很重(apt + maven + npm),缓存能把它从十几分钟压到一两分钟。
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

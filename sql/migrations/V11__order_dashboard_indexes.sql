@@ -1,0 +1,94 @@
+-- ============================================================================
+-- V11: product_order 看板复合索引补齐
+-- 日期: 2026-09-28  (与「后端 04b-SCHEMA-REQUIREMENTS §4」的交叉核对产物)
+--
+-- 来源:后端 Agent 的《04b-SCHEMA-REQUIREMENTS》§4 要求三条索引:
+--   idx_order_status_time(status, create_time)      → **V4 已有**,见下
+--   idx_order_shop_status(shop_id, status, create_time)  → 本次补
+--   idx_order_user_time(user_id, create_time)       → 本次补
+--
+-- ── 一、逐条核对结果 ──────────────────────────────────────────────────────
+-- 先按后端写的形状「重算」了一遍 product_order 现有索引能不能顶:
+--
+--   idx_order_no(order_no)            V3  —— 服务 COUNT(DISTINCT order_no),够用
+--   idx_user_id(user_id)              V4  —— 只够「限定单用户」,**不带时间窗**
+--   idx_shop_id(shop_id)              V4  —— 只够「限定单商家」,**不带状态与时间窗**
+--   idx_status_create_time(status, create_time)  V4
+--   idx_create_time(create_time)      V9  —— 不带 status / shop_id 前导
+--
+-- 再照着 AnalyticsMapper.xml 真实 SQL 逐条比对(paidOrderFilter L13-21):
+--
+--   sumPaidRevenue / countPaidOrders / countDistinctPaidOrders / sumRevenueByDay
+--     WHERE status IN ('待发货','待收货','已完成')          ← status 前导,idx_status_create_time 可用
+--          [AND shop_id = ?]                                ← ⚠️ 加上后最左前缀失效
+--          [AND create_time >= ?]
+--
+--   countOrders / countDistinctOrders
+--     WHERE shop_id = ?                                    ← 只有 idx_shop_id 单列,够用
+--
+--   countDistinctOrderingUsers (L149-156)
+--     WHERE user_id IS NOT NULL AND create_time >= ?
+--       SELECT COUNT(DISTINCT user_id)                     ← ⚠️ 没有一条索引同时覆盖
+--
+-- ── 二、结论 ──────────────────────────────────────────────────────────────
+-- 后端要的三条里:
+--   ① idx_order_status_time(status, create_time)
+--      **V4__constraints_and_indexes.sql L53 已经建了**(名 idx_status_create_time),
+--      不必重复建。缺的那条是「叠加 shop_id 之后」的最左前缀失效问题 —— 见 ③。
+--
+--   ② idx_order_shop_status(shop_id, status, create_time)  ✅ 本次补
+--      服务的正是上面第一组 SQL 的「全平台/商家双口径」形态:
+--        WHERE shop_id = ? AND status IN ('待发货','待收货','已完成') AND create_time >= ?
+--      有了它,MySQL 可以在 (shop_id, status) 定位后**对 create_time 做范围扫描**;
+--      只有 idx_shop_id 的话,得先按 shop_id 取回该商家**全部**订单行,
+--      再逐行过滤 status 与 create_time —— 商家订单量越大退化越明显。
+--
+--   ③ idx_order_user_time(user_id, create_time)  ✅ 本次补
+--      服务 countDistinctOrderingUsers 的 COUNT(DISTINCT user_id) + 时间窗:
+--        user_id 作为前导列去重,create_time 作为第二列承载区间,
+--        MySQL 可在此索引上做 **loose index scan**(松散索引扫描)求 distinct 数,
+--        免去全表扫 + 临时去重。
+--      顺带服务「某用户某时间窗内的订单列表」这一类查询。
+--
+-- ── 三、为什么不 DROP 掉被覆盖的单列索引 ──────────────────────────────────
+-- idx_shop_id / idx_user_id 虽然是上面两条索引的最左前缀,但**保留**:
+--   · 单列索引更窄,二级数量更少,「WHERE shop_id = ?」这种简单查询(计数、归属校验)
+--     走它更省;
+--   · 复合索引列数多,在 Buffer Pool 紧张时更容易被换出;
+--   · 删索引是破坏性操作,且收益不确定。
+-- 与 V9 回滚脚本同理:两条都只做 ADD KEY,回滚是纯结构回退。
+--
+-- ── 四、幂等性与执行方式 ──────────────────────────────────────────────────
+-- MySQL 8 的 ADD KEY 没有 IF NOT EXISTS,**不可重复执行**(重复执行报 1061)。
+--   mysql --default-character-set=utf8mb4 -u<user> -p<pwd> <db> < sql/migrations/V11__order_dashboard_indexes.sql
+-- 要重跑请先执行 rollback 脚本。
+-- 回滚:sql/migrations/rollback/V11__order_dashboard_indexes.sql
+-- ============================================================================
+
+ALTER TABLE `product_order` ADD KEY `idx_ord_shop_status_time` (`shop_id`, `status`, `create_time`);
+
+ALTER TABLE `product_order` ADD KEY `idx_ord_user_time` (`user_id`, `create_time`);
+
+-- ─────────────────────────── 执行后验证 ───────────────────────────
+--   SHOW INDEX FROM product_order;
+--   -- product_order 应有 7 条索引,含本次两条:
+--   --   idx_order_no / idx_user_id / idx_shop_id / idx_status_create_time
+--   --   / idx_create_time / idx_ord_shop_status_time / idx_ord_user_time
+--
+--   -- 确认没有重复建的(后端 §4 要的 idx_order_status_time 已被
+--   -- V4 的 idx_status_create_time 覆盖,不应再建一条同形状的):
+--   SHOW INDEX FROM product_order WHERE Column_name = 'status';
+--
+--   -- 商家看板主路径的执行计划:应走 idx_ord_shop_status_time,
+--   -- 且 Extra 不再出现 Using temporary(全表扫形态)
+--   EXPLAIN SELECT COALESCE(SUM(total_money),0)
+--     FROM product_order
+--    WHERE status IN ('待发货','待收货','已完成')
+--      AND shop_id = 1 AND create_time >= '2026-09-01';
+--
+--   -- 活跃用户去重:应走 idx_ord_user_time(可能显示 Using index for loose scan)
+--   EXPLAIN SELECT COUNT(DISTINCT user_id) FROM product_order
+--    WHERE user_id IS NOT NULL AND create_time >= '2026-09-01';
+--
+-- ⚠️ 索引不改变任何查询结果,只改变执行计划 —— 补索引无数据风险。
+-- 再跑一次应用闸门(mvn -B clean test)确认无回归。

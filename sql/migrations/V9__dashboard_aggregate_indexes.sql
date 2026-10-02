@@ -1,0 +1,64 @@
+-- ============================================================================
+-- V9: 看板聚合所需的时间索引
+-- 日期: 2026-09-28  (与 Phase 3「仪表盘统计真实化」配套)
+--
+-- 背景:V4__constraints_and_indexes.sql 建了
+--       product_order.idx_status_create_time (status, create_time),
+--       它服务于 OrderTimeoutTask 每 60s 跑的那条 `WHERE status = ? AND create_time < ?`
+--       —— 有 status 前导,能用上。
+--       但**看板的收入趋势图不带 status 前导**:
+--         SELECT DATE(create_time) AS d, SUM(total_money) AS gmv
+--           FROM product_order
+--          WHERE create_time >= ? AND create_time < ?
+--          GROUP BY DATE(create_time) ORDER BY d;
+--       按最左前缀规则,idx_status_create_time 在这里**用不上**,
+--       优化器只能全表扫 + filesort。本脚本补这一条。
+--
+-- ── 逐条设计依据(每个索引都要能指到具体查询) ─────────────────────────────
+-- ① product_order.idx_create_time (create_time)
+--    服务的查询:
+--      · GET /admin/dashboard/revenue-chart —— 按日分桶的收入曲线(上例)
+--      · GET /admin/dashboard/stats       —— 近 7/30 天 GMV 区间求和
+--      · GET /merchant/dashboard/stats     —— 商家维度同款区间聚合
+--    注意:商家维度聚合还同时带 shop_id,那时应走 idx_shop_id;
+--    本索引专门解决「**全平台按时间窗口**」这一路(无 shop_id、无 status 前导)。
+--
+-- ② product_browsing_history.idx_create_time (create_time)
+--    服务的查询:
+--      · GET /admin/dashboard/stats 的 "Active Now" —— 近 N 分钟内有浏览行为的去重用户数
+--        SELECT COUNT(DISTINCT user_id) FROM product_browsing_history
+--         WHERE create_time >= ?;
+--      · 商家看板的访客数同理(join product 拿 shop_id 后按时间窗过滤)
+--    V4 已建的 idx_user_id(user_id) 只在「限定单个用户」时有用,
+--    对「限定一个时间窗口、跨所有用户」的聚合同样用不上(不是前导列)。
+--
+-- ── 为什么不加更多 ────────────────────────────────────────────────────────
+-- · 不为 product_order.total_money / product.sales_volume 建索引:
+--   这些只出现在 SUM/ORDER BY 的**聚合结果**里,不作为过滤条件,建索引不被使用。
+-- · 不为 product.name 建索引:`WHERE name LIKE '%kw%'` 是前导通配,索引无效;
+--   全文检索是 ES 的活(REQUIREMENTS-GAP §3.1),不该用索引硬凑。
+-- · 不建覆盖索引:bmit 反范式化会随列变更失效,收益不如维护成本。
+--
+-- ── 幂等性与执行方式 ──────────────────────────────────────────────────────
+-- MySQL 8 的 ADD KEY 没有 IF NOT EXISTS,**不可重复执行**(重复执行报 1061)。
+--   mysql --default-character-set=utf8mb4 -u<user> -p<pwd> <db> < sql/migrations/V9__dashboard_aggregate_indexes.sql
+-- 要重跑请先执行 rollback 脚本。
+-- 回滚:sql/migrations/rollback/V9__dashboard_aggregate_indexes.sql
+-- ============================================================================
+
+ALTER TABLE `product_order` ADD KEY `idx_create_time` (`create_time`);
+
+ALTER TABLE `product_browsing_history` ADD KEY `idx_create_time` (`create_time`);
+
+-- ─────────────────────────── 执行后验证 ───────────────────────────
+--   SHOW INDEX FROM product_order;              -- 应含 idx_create_time
+--   SHOW INDEX FROM product_browsing_history;   -- 应含 idx_create_time
+--   -- 确认没有与既有索引重复:
+--   --   product_order 既有 idx_order_no / idx_user_id / idx_shop_id / idx_status_create_time
+--   --   product_browsing_history 既有 idx_user_id / idx_product_id
+--   -- EXPLAIN SELECT DATE(create_time), SUM(total_money) FROM product_order
+--   --   WHERE create_time >= '2026-09-01' AND create_time < '2026-10-01'
+--   --   GROUP BY DATE(create_time);
+--   -- 在数据量足够时,Extra 应出现 Using index(覆盖)或 Using where,
+--   -- 且**不应**再出现 Using temporary + Using filesort 的全表扫形态。
+-- 再跑一次应用闸门(mvn -B clean test)确认无回归。

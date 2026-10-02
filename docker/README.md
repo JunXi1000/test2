@@ -1,130 +1,114 @@
-# Nexus Market 全栈开发环境镜像
+# Nexus Market 开发环境镜像
 
-把**前后端运行所需环境**打包成**一个 Docker 镜像**。项目代码**不打包进镜像**——运行时不改代码、只挂载卷,任何人拉取这一个镜像就能在本项目上开发/构建/启动前后端。
+> **本文只讲「镜像本身」**：里面装了什么、依赖怎么预热、怎么构建与发布。
+> **怎么把项目跑起来（一键启动 / 常用命令 / 环境变量 / 裸机启动 / 故障排查）见
+> [../docs/STARTUP.md](../docs/STARTUP.md)** —— 那份是启动事宜的唯一权威文档。
 
-## 镜像内容
+把**前后端运行所需环境**打包成**一个 Docker 镜像**：JDK 17 + Maven 3.9.9 + Node 24 + MySQL 8，
+**外加预下载好的 Maven / npm 依赖**。项目代码**不打包进镜像**——运行时以卷挂载到 `/workspace`，
+改代码即时生效，无需重建镜像。
+
+镜像名：`ghcr.io/junxi1000/nexus-dev-env:1.0`（可用 `DEV_ENV_IMAGE` 覆盖）。
+
+---
+
+## 1. 镜像内容
 
 | 组件 | 版本 | 用途 |
 |------|------|------|
-| JDK | 17(eclipse-temurin:17-jdk) | 后端 Spring Boot 3.2.10 |
-| Maven | 3.9.9(固定) | 后端构建 / `mvn spring-boot:run` / `mvn test` |
-| Node + npm | 24.x(NodeSource) | 前端 Vite 5 / `npm install` / `npm run dev:lan` |
-| MySQL | 8(mysql-server) | 后端数据库,镜像内启动,端口 3306 |
-| 工具 | git / curl / wget / vim / unzip / tzdata(Asia/Shanghai) | 通用开发辅助 |
+| JDK | 17（`eclipse-temurin:17-jdk`，Ubuntu 26.04 基础） | 后端 Spring Boot 3.2.10 |
+| Maven | 3.9.9（固定版本） | 后端构建 / `mvn spring-boot:run` / `mvn test` |
+| Node + npm | 24.x（NodeSource） | 前端 Vite 5 |
+| MySQL | 8.4（`mysql-server`） | 后端数据库，容器内 3306 |
+| 工具 | git / curl / wget / vim / unzip / tzdata（Asia/Shanghai） | 通用辅助 |
+| **预热依赖** | `/root/.m2`（Maven）+ `/opt/prewarm/web-node_modules`（npm） | 免掉首次 5–10 分钟的依赖下载 |
 
-启动后容器内**自动完成**:
-1. 初始化并启动 MySQL(`0.0.0.0:3306`,root 密码默认 `123456`);
-2. 创建项目库 `template_v3`(utf8mb4);
-3. **首次运行**若检测到挂载的项目 `sql/` 目录,按依赖顺序自动导入建表脚本(均带 `--default-character-set=utf8mb4`):
-   `schema.sql(基础 14 表+演示种子,含 admin 账号) → chat.sql → migration-2026-08-08-phase1.sql → migrations/V*.sql(BCrypt/金额精度/order_no+payment)`。
+镜像各层由 [Dockerfile](Dockerfile) 定义；入口脚本 [entrypoint.sh](entrypoint.sh) 负责建库、导脚本、
+恢复前端依赖、拉起前后端。
 
-内置**演示账号**(密码统一 `123456`):
+---
 
-| 角色 | 账号 | 余额/说明 |
-|------|------|-----------|
-| 后台管理员 | `admin` | 管理后台 |
-| 商城用户 | `user1` / `user2` | 余额 1000 / 500,可走钱包余额支付 |
-| 商家 | `shop1` / `shop2` | 商家后台,含 3 个演示商品 |
+## 2. 依赖预热（Dockerfile 第 5 步）
 
-> `sql/schema.sql` 是「迁移前」基线(不含 payment、product_order 无 order_no),由 `V3` 增量补齐;`conversation/message` 由 `chat.sql`、通知/优惠 6 表由 `phase1` 负责,各文件职责不重叠。
+**目的**：让**别人 `docker pull` 之后首次启动约 2 分钟**，而不是现下载几百 MB 依赖等 5–10 分钟。
 
-## 构建 / 推送 / 拉取
+**做法**：构建时只用 `pom.xml` / `web/package.json` / `web/package-lock.json` 把依赖抓下来
+（`mvn dependency:go-offline` 与 `npm ci`），产物放进 `/root/.m2` 与 `/opt/prewarm/`。
 
-```bash
-# 构建(在项目根目录)
-docker build -f docker/Dockerfile -t nexus-dev-env:1.0 .
+- **为什么不 `COPY src`**：一旦 COPY 源码，改任何一行 Java 都会让这一层缓存失效、整个依赖下载重跑。
+  只依赖清单文件则「改业务代码不触发重新预热」。
+- **体积代价**：预热让镜像多出约 **0.58 GB**（Maven `/root/.m2` 约 121–158 MB +
+  前端 `node_modules` 423 MB），整体镜像实测 **2.68 GB**。第一次 pull 慢一点，之后一直快。
+- **版本漂移**：改了 `pom.xml` 或 `web/package-lock.json`，必须**重新构建并推送**镜像，
+  否则镜像里预热的是旧依赖。运行期 entrypoint 有前后端两道兜底（见下）。
+- **Playwright 浏览器刻意不烤**（`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`）：它会多出几百 MB，
+  而 e2e 流程本来就是按需 `npx playwright install chromium`。
 
-# 打标签并推送到你的仓库(供他人拉取)
-docker tag nexus-dev-env:1.0 <你的registry>/nexus-dev-env:1.0
-docker push <你的registry>/nexus-dev-env:1.0
+**运行期如何用上预热**：
 
-# 他人只需拉取这一个镜像
-docker pull <你的registry>/nexus-dev-env:1.0
-```
+| | 机制 |
+|---|---|
+| Maven | compose 的 `m2cache:/root/.m2` 命名卷在**首次创建**时会用镜像里那份内容初始化 |
+| 前端 | entrypoint 的 `seed_frontend_deps()` 把 `/opt/prewarm/web-node_modules` 秒级 `cp` 到命名卷 |
 
-## 使用方式
+前端带**指纹校验**：镜像里存了 `package-lock.json` 的 sha256，只有当工作区的锁文件指纹也一致时才敢
+直接用预热结果；不一致就回退 `npm ci --prefer-offline`——宁可多等一两分钟，也不拿依赖树不对的
+`node_modules` 去起 Vite（那种错不会说「依赖不对」，只会变成一堆看不懂的 plugin 报错）。
 
-### A. Docker Compose(推荐)
+---
 
-```bash
-cd docker
-docker compose up -d --build     # 首次构建 + 后台启动(自动导库)
-docker compose exec dev bash     # 进入容器
-```
+## 3. 构建与发布（维护者）
 
-### B. 单容器 docker run
+使用者不该自己构建。发布一次，所有人 `pull`：
 
 ```bash
-docker run -d --name nexus-dev \
-  -p 127.0.0.1:3306:3306 -p 1000:1000 -p 5173:5173 \
-  -e MYSQL_ROOT_PASSWORD=123456 \
-  -e MYSQL_DATABASE=template_v3 \
-  -v /绝对路径/本项目:/workspace \
-  -v mysql-data:/var/lib/mysql \
-  <你的registry>/nexus-dev-env:1.0
-
-docker exec -it nexus-dev bash   # 进入容器
+docker login ghcr.io -u <你的GitHub用户名>   # 口令用 PAT(classic,勾 write:packages)
+bash docker/scripts/publish-image.sh 1.0     # 构建并推送
+MULTIARCH=1 bash docker/scripts/publish-image.sh 1.0   # 同时出 amd64 + arm64
 ```
 
-## 容器内启动前后端
+或交给 CI：推 `main` 时只要动了镜像输入文件就自动构建推送（默认双架构），
+也可在 Actions 页面手动触发 —— 见 [../.github/workflows/dev-env-image.yml](../.github/workflows/dev-env-image.yml)。
 
-**默认 `AUTO_START=true`,容器启动即自动拉起后端+前端,无需手动命令。** 顺序是先起后端、**等它就绪(轮询 `:1000`,最多 300s)再起前端**——因为前端 Vite 约 1s 就绪而后端要 ~60s(首次 5-10min),并行起会撞上"后端未监听→代理 500"的启动窗口期,首页报错。首次启动会下载 Maven/Node 依赖并编译(约 5-10 分钟,缓存进 `m2cache`/`node_modules` 卷,之后秒级)。日志:`/var/log/backend.log`、`/var/log/frontend.log`(容器内 `tail -f` 查看)。改代码后**后端不会热重载**,需重启后端;前端 Vite 自动热更新。
+要双架构的原因：Windows/Linux 上本机构建出的是 amd64 镜像，Apple Silicon 的 Mac 只能在模拟下跑
+（能用，但后端 Maven 编译明显更慢）。
+
+> ⚠️ **最容易漏的一步**：GHCR 的包**默认私有**。推完去
+> GitHub → 你的 Profile → **Packages** → `nexus-dev-env` → Package settings → 改成 **public**。
+> 不改的话别人 `docker pull` 会 401，而报错信息里并不会提到「包是私有的」。
+> （仓库公开 ≠ 包公开，这是两套独立设置。）
+
+只在本机构建（不推送）：
 
 ```bash
-# 后端(端口 1000,连接容器内 MySQL localhost:3306)
-cd /workspace
-mvn spring-boot:run
-
-# 前端(端口 5173)
-cd /workspace/web
-npm install        # 首次;依赖装入 node_modules 命名卷,重启不重装
-npm run dev:lan    # 容器内必须用 dev:lan(vite --host),不能用 dev —— 见下方说明
-
-# 后端测试(H2,无需 MySQL)
-cd /workspace
-mvn test
+bash dev.sh build            # 或 docker compose -f docker/docker-compose.yml build
 ```
 
-浏览器访问 `http://localhost:5173`;前端通过 `http://127.0.0.1:1000` 调后端(端口已 publish 到宿主机)。
+---
 
-> ⚠️ **容器内跑前端必须用 `npm run dev:lan`(= `vite --host`),不能用 `npm run dev`。**
-> `dev` 按 `vite.config.ts` 绑 `127.0.0.1`,那在**裸机**上是对的;但 Docker 的 `5173:5173`
-> 是把流量 DNAT 到容器 **eth0**(`172.x.x.x`),不是容器内的回环 —— 只绑回环时宿主机
-> `curl localhost:5173` 拿到 `Empty reply`(exit 52),容器内 `curl 127.0.0.1:5173` 却是 200,
-> 极易误判成"没启动"。`--host` 仍然监听回环,故容器内 Playwright 的
-> `baseURL: http://localhost:5173` 不受影响。`entrypoint.sh` 的 `AUTO_START` 走的就是 `dev:lan`。
-> ⚠️ 顺带一提:`--host` 会绑容器内所有网卡,而 `5173` 的映射又是裸的(绑 `0.0.0.0`),
-> 两条叠加 ⇒ **dev server 对局域网开放**。见文末「`1000` / `5173` 呢?」。
+## 4. 已知局限与设计取舍
 
-## 环境变量
+- **`dependency:go-offline` 不是 100% 完整**：它按 POM **静态解析**，个别运行期才用到的构件不在其中。
+  实测首次 `mvn spring-boot:run` 会补下约 21 个文件（`spring-tx`、`byte-buddy`、`jboss-logging` 等），
+  合计不到 1 MB、耗时几秒。**完全离线**的环境才会因此启动失败——那种情况下在有网机器上重建镜像即可。
+- **`m2cache` 空卷不会自动重新预热**：Docker 只在**首次创建**命名卷时才用镜像内容初始化。
+  若留着一个先前创建的**空** `m2cache` 卷，Maven 会重新下载。处置：`docker volume rm docker_m2cache`
+  （**别**顺手 `down -v`，那会连数据库一起清掉）。
+- **entrypoint 用的是挂载进来的那份**，不是 Dockerfile 里 `COPY` 的：烤进镜像的脚本会与仓库漂移
+  （曾导致「容器一起来、前端在宿主机就打不开」），而 `docker compose up -d` 复用旧镜像，照抄文档也修不好。
+  代价是改 `entrypoint.sh` 后必须重建容器，收益是它归仓库管、改完即刻生效。
+- **`node_modules` 单独挂命名卷**：宿主机若是 Windows，其 `node_modules` 里 esbuild/sass 等是 win32 二进制，
+  容器（Linux）用不了。命名卷隔离后，容器内装 Linux 版，互不干扰。
+- **MySQL 用 `mysql_native_password`**：两个原因叠加——Ubuntu 26.04 带的 MySQL 8.4 **默认禁用**了该插件
+  （故 entrypoint 显式传 `--mysql-native-password=ON`），而项目 JDBC URL 又未配 `allowPublicKeyRetrieval`，
+  非 SSL 下 `caching_sha2_password` 会连接失败。
 
-运行时用 `-e` / compose `environment:` 覆盖:
+---
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `MYSQL_ROOT_PASSWORD` | `123456` | MySQL root 密码(与应用默认 `SPRING_DATASOURCE_PASSWORD` 一致) |
-| `MYSQL_DATABASE` | `template_v3` | 自动创建的项目库 |
-| `MYSQL_DATA_DIR` | `/var/lib/mysql` | MySQL 数据目录(挂载卷可持久化) |
-| `AUTO_START` | `true` | 容器启动时自动拉起前后端(`mvn spring-boot:run` + `npm run dev:lan`);纯环境用设 `false` |
-| `AUTO_START_WAIT_BACKEND` | `true` | 起前端前先等后端就绪(轮询 `:1000`,最多 300s),避免打开页面撞上代理 500;想立刻用前端可设 `false` |
-| `SPRING_DATASOURCE_URL` | 容器内默认 | 后端如需连其他库可覆盖(见 compose 注释) |
+## 5. 端口与安全
 
-> 后端 `application.yaml` 默认读 `SPRING_DATASOURCE_URL` 等环境变量;容器内直连 `localhost:3306` 即可,通常无需覆盖。
+端口映射、局域网暴露范围与生产注意事项统一写在
+[../docs/STARTUP.md §10](../docs/STARTUP.md) —— 这里不重复，避免两份文档说法不一致。
 
-## 常见问题
-
-- **为什么 node_modules 单独挂卷?** 宿主机若是 Windows,其 `node_modules` 内 esbuild/sass 等为 win32 二进制,容器(Linux)无法使用。compose 用命名卷 `node_modules:/workspace/web/node_modules` 隔离,容器内 `npm install` 安装 Linux 版,互不干扰。
-- **中文乱码 / 双重编码?** 导库一律带 `--default-character-set=utf8mb4`(entrypoint 已内置)。手动导库请保持该参数。
-- **root 为什么用 mysql_native_password?** 项目 JDBC URL 未配 `allowPublicKeyRetrieval`,非 SSL 下 `caching_sha2_password` 会导致连接失败;8.0 的 `mysql_native_password` 兼容现有代码,无需改任何配置。
-- **找回密码验证码会被直接返回?** 仅演示模式(dev profile,容器默认)为了页面展示会回显 6 位验证码;生产/默认已关闭(`expose-reset-code: ${EXPOSE_RESET_CODE:false}`,prod profile 显式 `false`),接入真实短信/邮件后验证码应走下发。需要时可 `-e EXPOSE_RESET_CODE=true/false` 覆盖。
-- **改代码要重建镜像吗?** 不需要。代码是卷挂载的,容器内改动即生效;镜像只更新环境(`docker compose up -d --build`)。
-- **Docker VM 内存不足?** 本机 Docker Desktop VM 同时跑多个容器(ES/Kibana/多个 MySQL)会 OOM。开发本镜像时请停用无关容器。
-- **MySQL 端口为什么只绑回环?** MySQL 默认密码是弱口令 `123456`,compose 用 `127.0.0.1:3306:3306` 只暴露给宿主机(本机 Navicat 可连),不暴露到局域网。若需他人远程连库,请先用 `-e MYSQL_ROOT_PASSWORD=强密码` 覆盖再改映射。
-- **`1000` / `5173` 呢?** ⚠️ **它们没有绑回环。** compose 里是裸的 `"1000:1000"` / `"5173:5173"`,
-  Docker 默认绑 `0.0.0.0` ⇒ **同一局域网的其它设备可以访问后端 API 与 Vite dev server**。
-  实测 `docker ps` 的端口列就是这样:`0.0.0.0:1000->1000/tcp`、`0.0.0.0:5173->5173/tcp`
-  (只有 3306 是 `127.0.0.1:3306->3306/tcp`)。这是本机开发环境一直以来的状态,**不是某次改动引入的**。
-  想收敛:给这两个映射加 `127.0.0.1:` 前缀,代价是**失去手机/其它机器访问 dev server 的能力**。
-  其中 **dev server 那条尤其值得权衡** —— 它会提供源码,且历史上有过文件读取类 CVE
-  (2025 年 `?raw` / `fs.deny` 绕过那一族);`server.fs.strict` 保持默认开启,但它挡不住那类绕过。
-- **已有数据的 MySQL 卷?** 删掉 `mysql-data` 卷并重启才会重新初始化导库:`docker compose down -v`(会清空数据库)。
+简言之：**只有 MySQL 绑回环**，`1000` 与 `5173` 是裸映射（局域网可达），
+且**本 compose 只用于本机开发，不要用于生产**。

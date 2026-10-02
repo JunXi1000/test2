@@ -5,6 +5,13 @@
 --     这两项由 migrations/V3__phase2_order_payment.sql 增量添加。
 --   * conversation/message 由 chat.sql 负责;通知/优惠 6 表由
 --     migration-2026-08-08-phase1.sql 负责。
+--   * Phase 3(TASK-000-C)的结构由下列迁移增量添加,本文件同样**不含**它们:
+--       V6  merchant_wallet / merchant_wallet_transaction  商家钱包与流水
+--       V7  admin_setting / merchant_setting                平台与店铺设置
+--       V8  product_order_evaluate + review_status 等 4 列  评价审核
+--       V9  product_order / product_browsing_history 两条时间索引  看板聚合
+--       V10 product.status / shipping_address.is_default    商品上下架与默认地址
+--     逐条设计依据见 docs/TASK-000/03-DATABASE.md。
 --   * admin 账号种子行内联于下方(密码 BCrypt,与 user/shop 种子一致)。
 --   * 演示账号密码统一 123456(DB 存 BCrypt 哈希),V1__security.sql 幂等兜底。
 --   * 含中文,导入必须带 --default-character-set=utf8mb4,否则双重编码乱码。
@@ -28,8 +35,13 @@ CREATE TABLE IF NOT EXISTS `admin` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='后台管理员';
 
 -- admin 种子账号:admin / 123456(BCrypt 哈希,与 user/shop 一致)
+--
+-- 头像指向仓库里入库的占位图 uploads/demo-avatar.png(见 .gitignore 的例外说明)。
+-- 原先写的是 8826e8c280cb3bec6a4fbeb61514ee74.png —— 上传接口按内容 MD5 命名的产物,
+-- 只在作者的机器上存在,全新 clone 后必然 404,而 DefaultLayout 是 v-if="user.avatar"
+-- 才渲染 img,于是 admin 顶栏显示成裂图而不是回退图标。
 INSERT INTO `admin` (`id`, `username`, `password`, `nickname`, `avatar_url`, `tel`, `email`, `status`) VALUES
-(1, 'admin', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '管理员', 'http://localhost:1000/file/8826e8c280cb3bec6a4fbeb61514ee74.png', '123456', '123456@javadh.com', '启用');
+(1, 'admin', '$2b$10$XgIBI2rnaZ.4I4rWj27B1uXkCX6L9xuJ.0jLkevXa0Scgvczw.mbW', '管理员', 'http://localhost:1000/file/demo-avatar.png', '123456', '123456@javadh.com', '启用');
 
 -- ----------------------------
 -- 商城用户

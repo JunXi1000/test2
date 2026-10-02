@@ -20,9 +20,18 @@ web/node_modules/
 
 # 运行时上传数据(不入库)
 uploads/*
+# 例外:这条是 sql/schema.sql 里 admin 种子头像所指的占位图。
+# 没有它,全新 clone 起来后 /file/demo-avatar.png 恒 404,而 DefaultLayout 是
+# `v-if="user.avatar"` 才渲染 img(否则回退图标)—— 于是 admin 顶栏显示成裂图。
+# 注意不能用原文件名 8826e8c280cb3bec6a4fbeb61514ee74.png:上传接口按**内容 MD5** 命名,
+# 我们造不出同哈希的文件,顶着那个名字入库等于在数据里写一句假话。
+!uploads/demo-avatar.png
 
 # 测试残留产物(不入库)
 test-results/
 
 # 本地密钥/口令(不入库;模板见 docker/.env.example)
 docker/.env
+
+# 本地 Agent 编排提示词(个人工作文件,与项目无关,不入库)
+Agent-System-Prompt.txt
